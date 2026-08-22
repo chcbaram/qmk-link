@@ -1,0 +1,48 @@
+{
+  "folders": [
+    {
+      "name": "firm-sdk",
+      "path": "../../firm-sdk"
+    },
+    {
+      "name": "docs",
+      "path": "../../docs"
+    },
+    {
+      "name": "qmk-link",
+      "path": "../"
+    }
+  ],
+  "settings": {
+    "C_Cpp.autoAddFileAssociations": false,
+    "C_Cpp.default.compileCommands": "${workspaceFolder:qmk-link}/build/compile_commands.json",
+    "files.exclude": {
+      "**/.DS_Store": true,
+      "**/.hg": true,
+      "**/.svn": true,
+      "**/CVS": true,
+      "**/prj": true,
+      "**/Thumbs.db": true
+    },
+    "search.exclude": {
+      "**/build": true,
+      "**/pico-sdk": true,
+      "**/upstream": true,
+      "**/.picotool": true
+    },
+    "files.watcherExclude": {
+      "**/build/**": true,
+      "**/pico-sdk/**": true,
+      "**/upstream/**": true,
+      "**/.picotool/**": true
+    },
+    "cortex-debug.variableUseNaturalFormat": true
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-vscode.cpptools",
+      "ms-vscode.cmake-tools",
+      "marus25.cortex-debug"
+    ]
+  }
+}

@@ -1,0 +1,106 @@
+{
+  // 다운로드는 firm-sdk/tools/flash.py 하나로 모든 OS 를 처리한다.
+  // picotool 바이너리를 OS 별로 동봉하지 않는다.
+  "version": "2.0.0",
+  "tasks": [
+    // ── 빌드 ────────────────────────────────────────────────────────────
+    {
+      "label": "build-configure",
+      "type": "shell",
+      "detail": "빌드 디렉토리를 구성한다. 한 번만 하면 된다",
+      "windows": {
+        "command": "cmake -S . -B build -G 'MinGW Makefiles'"
+      },
+      "command": "cmake -S . -B build",
+      "problemMatcher": []
+    },
+    {
+      "label": "build-build",
+      "type": "shell",
+      "windows": {
+        "command": "cmake -S . -B build -G 'MinGW Makefiles'; cmake --build build -j16"
+      },
+      "command": "cmake -S . -B build; cmake --build build -j16",
+      "problemMatcher": [
+        "$gcc"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "build-clean",
+      "type": "shell",
+      "command": "cmake --build build --target clean",
+      "problemMatcher": []
+    },
+    {
+      "label": "build-rebuild",
+      "type": "shell",
+      "detail": "build 디렉토리를 지우고 처음부터 빌드",
+      "windows": {
+        "command": "if (Test-Path build) { Remove-Item -Recurse -Force build }; cmake -S . -B build -G 'MinGW Makefiles'; cmake --build build -j16"
+      },
+      "command": "rm -rf build; cmake -S . -B build; cmake --build build -j16",
+      "problemMatcher": [
+        "$gcc"
+      ]
+    },
+
+    // ── 다운로드 ────────────────────────────────────────────────────────
+    {
+      "label": "flash-download",
+      "type": "shell",
+      "detail": "uf2 를 보드에 굽는다. BOOTSEL 이 아니면 1200bps touch 로 재부팅시킨다",
+      "dependsOn": "build-build",
+      "windows": {
+        "command": "python ../firm-sdk/tools/flash.py build/src/qmk-link.uf2"
+      },
+      "command": "python3 ../firm-sdk/tools/flash.py build/src/qmk-link.uf2",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "clear": true
+      }
+    },
+    {
+      "label": "flash-list",
+      "type": "shell",
+      "detail": "감지된 BOOTSEL 볼륨과 시리얼 포트를 보여준다",
+      "windows": {
+        "command": "python ../firm-sdk/tools/flash.py --list"
+      },
+      "command": "python3 ../firm-sdk/tools/flash.py --list",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "clear": true
+      }
+    },
+
+    // ── 유틸 ────────────────────────────────────────────────────────────
+    {
+      "label": "util-size",
+      "type": "shell",
+      "detail": "섹션별 크기",
+      "command": "arm-none-eabi-size -A build/src/qmk-link.elf",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "clear": true
+      }
+    },
+    {
+      "label": "util-info",
+      "type": "shell",
+      "detail": "uf2 의 타깃 칩 · 보드 · SDK 버전을 확인한다",
+      "command": "../firm-sdk/.picotool/picotool/picotool info -a build/src/qmk-link.uf2",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "clear": true
+      }
+    }
+  ]
+}

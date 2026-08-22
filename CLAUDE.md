@@ -1,0 +1,51 @@
+# qmk-link
+
+RP2350-USB-A 보드로 만드는 **USB 키보드 변환기**.
+USB-A 에 꽂은 일반 키보드를 QMK 로 처리해 PC 에는 VIA / Vial 키보드로 보이게 한다.
+
+## 작업 시작 전
+
+**[`firmware/docs/00-context.md`](firmware/docs/00-context.md) 를 먼저 읽는다.**
+
+그 문서에 이 저장소를 봐서는 알 수 없는 것들이 있다 —
+참조 프로젝트의 로컬 경로, 확정된 결정과 그 이유, 하지 않기로 한 것,
+열린 질문, 그리고 지금 어느 단계인지.
+
+문서 목록은 [`firmware/docs/README.md`](firmware/docs/README.md).
+핀을 만지기 전에는 [`firmware/docs/hardware.md`](firmware/docs/hardware.md) 를 본다.
+
+## 규칙
+
+### 문서
+
+- 문서 파일명은 **소문자 kebab-case**. `README.md`, `CLAUDE.md` 만 예외
+- **단계를 끝내면** `firmware/docs/00-context.md` 의 "현재 위치" 와
+  `firmware/docs/roadmap.md` 의 상태를 갱신한다
+- 결정을 바꾸면 `00-context.md` 의 "확정된 결정과 이유" 에 **이유까지** 남긴다.
+  같은 논의를 두 번 하지 않기 위해서다
+- 단계 문서는 틀을 지킨다 — 목표 / 배경·근거 / 설계 / 구현 항목 / 완료 판정 / 열린 질문
+
+### 코드
+
+- 계층은 `main → bsp → hw → ap`. `baram-hola-mini` 관례를 따른다
+- 기능 on/off 는 프로젝트의 `src/hw/hw_def.h` 의 `_USE_HW_*` 로 한다.
+  드라이버는 그 매크로로 자기 자신을 감싼다
+- 핀 상수는 `src/bsp/board/qmk_link.h` 에만 둔다. 드라이버에 숫자를 박지 않는다
+- 주석과 문서는 한국어
+
+### 빌드
+
+```bash
+cd firmware/qmk-link
+cmake -S . -B build
+cmake --build build -j16
+python3 ../firm-sdk/tools/flash.py build/src/qmk-link.uf2
+```
+
+- `PICO_SDK_PATH` 환경변수를 쓰지 않는다. CMakeLists 가 서브모듈 경로를 직접 지정한다
+- 서브모듈은 `--recursive` 로 받지 않는다 (무선용까지 받아 338MB 가 된다).
+  → [`firmware/docs/00-context.md`](firmware/docs/00-context.md#클론-직후)
+
+### 커밋
+
+- 커밋 메시지에 Claude 서명을 넣지 않는다
