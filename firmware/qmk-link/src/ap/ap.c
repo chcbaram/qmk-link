@@ -3,8 +3,8 @@
 
 
 #ifdef _USE_HW_USBH
-static bool apIsKeyDown(const usbh_hid_report_t *p_report);
-static void apUpdateKeyboard(void);
+static bool isKeyDown(const usbh_hid_report_t *p_report);
+static void updateKeyboard(void);
 #endif
 
 
@@ -22,7 +22,7 @@ void apMain(void)
   while(1)
   {
 #ifdef _USE_HW_USBH
-    apUpdateKeyboard();
+    updateKeyboard();
 #endif
 
     ledStatusUpdate();
@@ -42,13 +42,13 @@ void apMain(void)
 // 지금은 키가 눌렸는지만 보고 LED 를 반짝인다.
 //
 // 이 루프가 없으면 core1 이 채운 큐가 가득 차서 계속 버려진다.
-void apUpdateKeyboard(void)
+void updateKeyboard(void)
 {
   usbh_hid_report_t report;
 
   while(usbhHidGetReport(&report) == true)
   {
-    if (apIsKeyDown(&report) == true)
+    if (isKeyDown(&report) == true)
     {
       ledStatusKeyEvent();
     }
@@ -61,7 +61,7 @@ void apUpdateKeyboard(void)
 //
 // 키를 떼거나 아무 변화가 없는 리포트는 무시한다.
 // 이 키보드는 폴링마다 리포트를 올려서 그냥 세면 계속 반짝인다.
-bool apIsKeyDown(const usbh_hid_report_t *p_report)
+bool isKeyDown(const usbh_hid_report_t *p_report)
 {
   static uint8_t pre_data[8] = {0, };
   bool is_down = false;
