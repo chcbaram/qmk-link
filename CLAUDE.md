@@ -57,4 +57,6 @@ python3 ../firm-sdk/tools/flash.py build/src/qmk-link.uf2
 
 ### 커밋
 
+- **브랜치를 만들지 않는다. `main` 에 바로 커밋한다.** 1인 프로젝트다
+- 단계 구분은 브랜치가 아니라 `step-NN-xxx` 태그로 한다
 - 커밋 메시지에 Claude 서명을 넣지 않는다
