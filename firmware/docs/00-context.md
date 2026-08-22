@@ -32,8 +32,14 @@ PC 에는 **VIA / Vial 로 편집 가능한 키보드**로 보이게 한다.
 | **완료** | **04 HID DEVICE** — HID kbd/extra/raw + CDC 복합. 패스스루로 PC 타이핑 확인 |
 | **다음** | **05 QMK** — `fetch_upstream.py` + `qmk/via/port/` + `link/` (HID report → 가상 매트릭스) |
 
-03 단계 실측: FLASH 약 161 KB uf2 / RAM 36 KB. FLASH 2MB 대비 여유 충분.
-CDC 는 `2E8A:F001 QMK-LINK` 로 열거된다. `clk_sys` 는 CLI 에서 120,000,000 Hz 확인.
+04 단계 실측: FLASH 82,668 B / 2 MB (3.94%), RAM 37,028 B / 512 KB (7.06%).
+`0483:5305 QMK-LINK` 로 열거된다 — HID(keyboard / extra / raw) + CDC 복합 장치.
+`clk_sys` 는 CLI 에서 120,000,000 Hz 확인.
+
+**지금 동작하는 것**: HHKB Lite 2 를 USB-A 에 꽂고 타이핑하면 PC 에 그대로 입력된다.
+QMK 는 아직 없다 — `ap.c` 의 `updateKeyboard()` 가 리포트를 그대로 넘기는 패스스루다.
+
+**미검증**: 마우스 패스스루(USB 마우스 없음), BIOS 화면, Windows / Linux.
 
 BOOTSEL 진입 경로 (전부 실기 확인):
 1. `flash.py` 의 CDC 1200bps touch — 버튼 없이 굽는다
