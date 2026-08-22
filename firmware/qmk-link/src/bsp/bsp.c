@@ -1,4 +1,6 @@
 #include "bsp.h"
+#include "hw_def.h"
+#include "cli.h"
 
 
 // Pico-PIO-USB 는 clk_sys 가 120MHz 의 배수여야 한다.
@@ -22,7 +24,19 @@ bool bspInit(void)
 
 void delay(uint32_t time_ms)
 {
-  sleep_ms(time_ms);
+  uint32_t pre_time;
+
+  pre_time = millis();
+
+  // 기다리는 동안 cliLoopIdle() 을 돌린다.
+  // 이 보드는 CLI 가 USB CDC 위에 있어서 tud_task() 가 멈추면 연결이 끊긴다.
+  // delay() 를 쓰는 쪽은 그 사이 USB 처리가 재진입할 수 있음을 전제해야 한다.
+  while (millis() - pre_time < time_ms)
+  {
+#ifdef _USE_HW_CLI
+    cliLoopIdle();
+#endif
+  }
 }
 
 uint32_t millis(void)

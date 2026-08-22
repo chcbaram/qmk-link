@@ -7,8 +7,16 @@
 
 #include "hw_def.h"
 
+#include "reset.h"
 #include "led.h"
 #include "ws2812.h"
+#include "uart.h"
+#include "cli.h"
+#include "cli_gui.h"
+#include "log.h"
+#include "swtimer.h"
+#include "usb.h"
+#include "qbuffer.h"
 
 
 bool hwInit(void);

@@ -27,14 +27,17 @@ PC 에는 **VIA / Vial 로 편집 가능한 키보드**로 보이게 한다.
 | | |
 |---|---|
 | **완료** | **01 LED** — 프로젝트 골격, firm-sdk, 빌드/다운로드 경로, 120MHz 클럭 |
-| **다음** | **02 CLI/CDC** — USB device CDC + cli/log/swtimer + 1200bps touch 리부트 |
+| **완료** | **02 CLI/CDC** — USB CDC + CLI/log/swtimer, 1200bps touch, 더블클릭 리셋 |
+| **다음** | **03 USB HOST** — Pico-PIO-USB + TinyUSB host(RHPort1), core1 전용 태스크 |
 
-01 단계 실측: FLASH 8,496 B / 2 MB (0.41%), RAM 4,416 B / 512 KB (0.84%)
+02 단계 실측: FLASH 53,548 B / 2 MB (2.55%), RAM 17,276 B / 512 KB (3.30%)
+CDC 는 `2E8A:F001 QMK-LINK` 로 열거된다. `clk_sys` 는 CLI 에서 120,000,000 Hz 확인.
 
-실기 검증 완료 — WS2812 초록 점멸 확인, `flash.py` 로 다운로드 성공.
-`flash.py` 의 **1200bps touch 경로도 실제로 동작**하는 것을 확인했다
-(보드에 올라가 있던 pico-sdk CDC 펌웨어를 BOOTSEL 로 재부팅시켜 구웠다).
-단 01단계 펌웨어 자체는 CDC 가 없어 지금은 Key1(BOOTSEL) 을 눌러야 한다 — 02단계에서 해소된다.
+BOOTSEL 진입 경로 (전부 실기 확인):
+1. `flash.py` 의 CDC 1200bps touch — 버튼 없이 굽는다
+2. Key2(Reset) 빠르게 두 번 — `pico_bootsel_via_double_reset`
+3. Key1(BOOTSEL) + Key2(Reset) — 하드웨어. 펌웨어가 뻗어도 된다
+4. CLI `reset boot`
 
 ---
 
@@ -101,6 +104,10 @@ VSCode 는 `firmware/qmk-link/prj/qmk-link.code-workspace` 를 연다.
 |---|---|
 | **clk_sys = 120MHz** | Pico-PIO-USB 는 120MHz 의 배수를 요구한다. RP2350 기본값 150MHz 로는 동작하지 않는다. 나중에 바꾸면 그 사이 초기화된 PIO/USB 클럭이 어긋나므로 1단계부터 `bspInit()` 맨 앞에서 확정한다 |
 | **USB-A 는 R13 제거가 전제** | R13(1.5K, D+ 풀업)이 실장되어 있었고 제거했다. 두면 빈 포트가 "FS 장치 연결됨"으로 보이고 LS 키보드 판별이 깨진다. 같은 측정으로 `GPIO12 = D+`, `GPIO13 = D−` 를 확증했다 → [hardware.md](hardware.md#r10--r13--usb-a-포트의-풀업-해결됨) |
+| **`common/` 은 손대지 않는다** | 다른 baram 프로젝트와 공유하는 자산이다. 바꿔야 하면 **먼저 확인받는다.** 현재 `src/common/` 은 전부 원본과 바이트 단위로 동일하다 (`cli.*` · `led.h` · `log.*` · `uart.h` · `ws2812.h` · `qbuffer.*` 는 hola-mini, `swtimer.h` · `reset.h` 는 nano-ch32h417). 헤더는 공유본을 쓰되 **구현은 이 보드에 필요한 것만** 한다 |
+| **백그라운드 처리는 `delay()` 에 태운다** | `bsp.c` 의 `delay()` 가 `cliLoopIdle()` 을 돌린다 (NU87-TinyDK 관례). 그래야 기존 코드를 안 고치고도 USB 가 계속 돈다. 한때 `cliDelay()` 를 새로 만들고 `cliKeepLoop()` 을 고쳤다가, 이 관례를 따르는 쪽으로 되돌렸다 |
+| **CRLF 는 지원하지 않는다** | `CLI_KEY_ENTER` 는 CR 만 본다. 호스트 도구가 CR 만 보내면 된다. LF 무시를 넣어 봤지만 정작 `cliKeepLoop()` 중단은 못 고쳐서 되돌렸다 |
+| **리셋 더블클릭은 SDK 라이브러리로** | RP2350 은 RUN 리셋 때 RAM 전원이 내려간다(실측). SRAM · watchdog scratch · POWMAN scratch 전부 지워진다. RP2350 전용 `POWMAN_CHIP_RESET.DOUBLE_TAP` 비트를 `pico_bootsel_via_double_reset` 이 쓴다 |
 | **WS2812 전송 순서 = R,G,B** | 표준 WS2812B 는 G,R,B 지만 이 보드 부품은 R,G,B 다. 실기에서 확인했다(초록을 보냈는데 빨강이 켜짐). `hw_def.h` 의 `HW_WS2812_ORDER_RGB` 로 분리했다 |
 | **커스텀 보드 헤더** (`src/bsp/board/qmk_link.h`) | `pico2` 를 쓰면 flash 가 4MB 로 잘못 잡힌다. 실제는 W25Q16JV = 2MB |
 | **`pico_stdio_usb` 미사용** | 자체 device descriptor 를 갖고 있어 우리 HID descriptor 와 공존이 안 된다. CDC 는 2단계에서 직접 만든다 |
@@ -150,7 +157,6 @@ VSCode 는 `firmware/qmk-link/prj/qmk-link.code-workspace` 를 연다.
 | VID / PID | 8단계 | `info.json` / `vial.json` 과 반드시 일치해야 한다 |
 | **hola-mini 포트 ↔ QMK 0.33.13 API 차이** | 5단계 | hola-mini 가 이식한 QMK 는 0.33.13 보다 한참 이전이다. `keycodes.h` 재편 · `keyboard.c` 스캔 흐름 · `eeconfig` 레이아웃 등에서 차이가 날 수 있다. 착수 시 **먼저 컴파일 가능 여부부터 확인**하고, 차이가 크면 QMK 리비전을 내릴지 포트를 올릴지 정한다 |
 | sparse-checkout 범위 | 5단계 | `quantum/` 만으로 부족하면 `sparse-checkout set` 에 경로를 추가한다. `keyboards/` 만 빠지면 크기는 여전히 작다 |
-| clk_sys 가 실제 120MHz 인지 | 2단계 | 01단계에는 관측 수단이 없어 점멸 주기로 갈음했다. CLI 에서 `clock_get_hz(clk_sys)` 를 찍어 확인한다 |
 | Windows / Linux 에서 `flash.py` | 해당 OS 실기가 있을 때 | macOS 에서만 검증했다. `setup-windows.md` · `setup-linux.md` 도 미검증이다 |
 
 ---

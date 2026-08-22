@@ -1,4 +1,5 @@
 #include "ws2812.h"
+#include "cli.h"
 
 
 #ifdef _USE_HW_WS2812
@@ -14,6 +15,11 @@ typedef struct
 
 static ws2812_t ws2812;
 static PIO pio = HW_WS2812_PIO;
+
+
+#ifdef _USE_HW_CLI
+static void cliCmd(cli_args_t *args);
+#endif
 
 
 
@@ -32,6 +38,10 @@ bool ws2812Init(void)
   ws2812_program_init(pio, HW_WS2812_SM, offset, HW_WS2812_PIN, 800000, false);
 
   ws2812Refresh();
+
+#ifdef _USE_HW_CLI
+  cliAdd("ws2812", cliCmd);
+#endif
 
   return true;
 }
@@ -70,5 +80,63 @@ bool ws2812Refresh(void)
 
   return true;
 }
+
+
+#ifdef _USE_HW_CLI
+void cliCmd(cli_args_t *args)
+{
+  bool ret = false;
+
+  if (args->argc == 5 && args->isStr(0, "set"))
+  {
+    uint8_t ch;
+    ws_color_t rgb;
+
+    ch = constrain(args->getData(1), 0, WS2812_MAX_CH-1);
+    memset(&rgb, 0, sizeof(rgb));
+    rgb.rgb.r = args->getData(2);
+    rgb.rgb.g = args->getData(3);
+    rgb.rgb.b = args->getData(4);
+
+    ws2812SetColor(ch, rgb.data);
+    ws2812Refresh();
+    cliPrintf("ch%d r%d g%d b%d\n", ch, rgb.rgb.r, rgb.rgb.g, rgb.rgb.b);
+    ret = true;
+  }
+
+  if (args->argc == 2 && args->isStr(0, "test"))
+  {
+    uint8_t ch;
+    ws_color_t rgb[3];
+    const char *name[3] = {"red", "green", "blue"};
+
+    ch = constrain(args->getData(1), 0, WS2812_MAX_CH-1);
+    memset(&rgb, 0, sizeof(rgb));
+    rgb[0].rgb.r = 64;
+    rgb[1].rgb.g = 64;
+    rgb[2].rgb.b = 64;
+
+    // 전송 순서가 맞는지 눈으로 확인하는 용도다.
+    // 이 보드는 R,G,B 순이라 hw_def.h 의 HW_WS2812_ORDER_RGB 로 잡아 뒀다.
+    for (int i=0; i<3; i++)
+    {
+      cliPrintf("%s\n", name[i]);
+      ws2812SetColor(ch, rgb[i].data);
+      ws2812Refresh();
+      delay(700);
+    }
+    ws2812SetColor(ch, 0);
+    ws2812Refresh();
+
+    ret = true;
+  }
+
+  if (ret != true)
+  {
+    cliPrintf("ws2812 set CH[0~%d] R[0~255] G[0~255] B[0~255]\n", WS2812_MAX_CH-1);
+    cliPrintf("ws2812 test CH[0~%d]\n", WS2812_MAX_CH-1);
+  }
+}
+#endif
 
 #endif

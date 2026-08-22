@@ -1,4 +1,5 @@
 #include "led.h"
+#include "cli.h"
 
 
 #ifdef _USE_HW_LED
@@ -24,6 +25,11 @@ static const led_tbl_t led_tbl[LED_MAX_CH] =
 static bool led_state[LED_MAX_CH];
 
 
+#ifdef _USE_HW_CLI
+static void cliCmd(cli_args_t *args);
+#endif
+
+
 
 
 bool ledInit(void)
@@ -32,6 +38,10 @@ bool ledInit(void)
   {
     ledOff(i);
   }
+
+#ifdef _USE_HW_CLI
+  cliAdd("led", cliCmd);
+#endif
 
   return true;
 }
@@ -63,5 +73,45 @@ void ledToggle(uint8_t ch)
   else
     ledOn(ch);
 }
+
+
+#ifdef _USE_HW_CLI
+void cliCmd(cli_args_t *args)
+{
+  bool ret = false;
+
+  if (args->argc == 2 && args->isStr(0, "on"))
+  {
+    uint8_t ch = constrain(args->getData(1), 0, LED_MAX_CH-1);
+    ledOn(ch);
+    ret = true;
+  }
+
+  if (args->argc == 2 && args->isStr(0, "off"))
+  {
+    uint8_t ch = constrain(args->getData(1), 0, LED_MAX_CH-1);
+    ledOff(ch);
+    ret = true;
+  }
+
+  if (args->argc == 2 && args->isStr(0, "toggle"))
+  {
+    uint8_t ch = constrain(args->getData(1), 0, LED_MAX_CH-1);
+    for (int i=0; i<10; i++)
+    {
+      ledToggle(ch);
+      delay(200);
+    }
+    ret = true;
+  }
+
+  if (ret == false)
+  {
+    cliPrintf("led on     CH[0~%d]\n", LED_MAX_CH-1);
+    cliPrintf("led off    CH[0~%d]\n", LED_MAX_CH-1);
+    cliPrintf("led toggle CH[0~%d]\n", LED_MAX_CH-1);
+  }
+}
+#endif
 
 #endif
