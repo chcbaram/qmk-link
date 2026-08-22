@@ -67,9 +67,8 @@
 #endif
 
 //------------- CLASS -------------//
-// 04단계에서 CFG_TUD_HID 3 (keyboard / extra / raw) 이 여기 붙는다.
 #define CFG_TUD_CDC               1
-#define CFG_TUD_HID               0
+#define CFG_TUD_HID               3      // keyboard / extra / raw
 #define CFG_TUD_MSC               0
 #define CFG_TUD_MIDI              0
 #define CFG_TUD_VENDOR            0
@@ -77,6 +76,9 @@
 #define CFG_TUD_CDC_RX_BUFSIZE    256
 #define CFG_TUD_CDC_TX_BUFSIZE    256
 #define CFG_TUD_CDC_EP_BUFSIZE    64
+
+// 가장 큰 HID 리포트(NKRO 32바이트, raw 32바이트)에 맞춘다.
+#define CFG_TUD_HID_EP_BUFSIZE    32
 
 //--------------------------------------------------------------------
 // HOST  (USB-A, PIO USB)

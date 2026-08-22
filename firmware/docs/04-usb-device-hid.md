@@ -1,6 +1,6 @@
 # 04-usb-device-hid — PC 에 키보드로 보인다
 
-**상태: ⬜ 미착수** — 구현 상세는 착수할 때 채운다.
+**상태: ✅ 완료** (마우스 패스스루만 미검증)
 
 ## 목표
 
@@ -79,13 +79,14 @@ boot report 8바이트를 그대로 옮긴다. 키코드 변환도, 레이어도
 
 ## 구현 항목
 
-- [ ] `tusb_config.h` — `CFG_TUD_HID 3`
-- [ ] `usbd_desc.c` — **인터페이스 순서 재배치** (부트 키보드를 IF0 으로), PID 상향
-- [ ] `usbd_hid.c` — 리포트 디스크립터 3벌 (Keyboard / Extra / Raw), `tud_hid_*` 콜백
-- [ ] `ap.c` 의 `updateKeyboard()` — host 리포트를 device 로 패스스루
-- [ ] 마우스 패스스루 — host 쪽 `HID_ITF_PROTOCOL_MOUSE` 처리
-- [ ] `tud_hid_set_report_cb` — CapsLock 등 LED 리포트 수신 → `led_status` 로
-- [ ] CLI `usb info` 갱신
+- [x] `tusb_config.h` — `CFG_TUD_HID 3`, `CFG_TUD_HID_EP_BUFSIZE 32`
+- [x] `usbd_desc.c` — 인터페이스 재배치(부트 키보드 IF0), 리포트 디스크립터 3벌, VID/PID
+- [x] `usbd_hid.c` — `tud_hid_*` 콜백, 키보드 · 마우스 송신 헬퍼, 호스트 LED 수신
+- [x] `ap.c` 의 `updateKeyboard()` — host 리포트를 device 로 패스스루
+- [x] 마우스 패스스루 코드 — `HID_ITF_PROTOCOL_MOUSE` 처리 (**실기 미검증**)
+- [x] `tud_hid_set_report_cb` — CapsLock → `led_status` 가 보라로 표시
+- [x] CLI `usb info` 에 `hid ready` / `host led` 추가
+- [x] `firm-sdk/tools/flash.py` — 새 VID/PID 로 갱신
 
 ## 완료 판정
 
@@ -96,11 +97,40 @@ boot report 8바이트를 그대로 옮긴다. 키코드 변환도, 레이어도
 4. BIOS / 부트로더 화면에서도 동작한다 (boot protocol)
 5. Windows · macOS · Linux 에서 각각 인식된다
 
+## 알아 둘 것 — 변환기의 근본적인 제약
+
+**키보드가 USB 로 보내지 않는 것은 받을 수 없다.**
+
+HHKB Lite 2 로 실측했다. `usbh dump` 를 켜고 Fn 을 단독으로 눌러 봤을 때
+**리포트가 하나도 올라오지 않았다.** Fn 은 키보드 자체 MCU 가 내부에서 처리하고
+조합의 **결과 키코드만** 내보낸다.
+
+실제로 관측된 것:
+
+| 리포트 | 의미 |
+|---|---|
+| `3A` ~ `41` | F1 ~ F8 (Fn + 숫자) |
+| `80` / `81` | Keyboard Volume Up / Down (consumer 페이지가 아니라 **keyboard 페이지**다) |
+| 모디파이어 `04` | Left Alt |
+
+따라서:
+
+- **재매핑은 된다.** `Fn+2 → F2` 가 올라오면 QMK 에서 그 F2 를 다른 것으로 바꿀 수 있다
+- **Fn 을 레이어 키로 쓸 수는 없다.** 대신 잘 안 쓰는 키(F7 · F8 등)를 레이어 키로
+  지정하는 우회는 가능하다
+- `0x80` / `0x81` 은 QMK 의 `KC_KB_VOLUME_UP` / `KC_KB_VOLUME_DOWN` 이다.
+  05단계에서 consumer 미디어키로 변환해 주면 더 널리 먹힌다
+
+이 제약은 키보드마다 다르다. 어떤 키보드는 Fn 을 벤더 정의 usage 로 별도 인터페이스에
+내보내기도 한다 — `usbh info` 에 인터페이스가 두 개 이상 잡히면 그런 경우다.
+
 ## 열린 질문
 
 | 항목 | 내용 |
 |---|---|
 | NKRO | boot protocol 로는 6키까지다. Extra 인터페이스에 NKRO 리포트를 둘지 05단계에서 판단 |
 | 리포트 지연 | host→device 를 코어 간 큐로 넘기므로 지연이 생긴다. 실측해서 1ms 안에 드는지 확인 |
+| keyboard 페이지 볼륨키 | `0x80`/`0x81` 을 consumer 페이지로 바꿔 줄지 (05단계) |
+| report protocol 장치 | 지금은 boot protocol(`HID_ITF_PROTOCOL_KEYBOARD`/`MOUSE`)만 다룬다. 그 외는 무시한다. 05단계에서 리포트 디스크립터 파싱 |
 | suspend / resume | PC 가 자면 어떻게 할지. 08단계로 이월 가능 |
 | USB-A 키보드가 없을 때 | HID 인터페이스는 그대로 노출한다. 리포트만 안 나간다 |

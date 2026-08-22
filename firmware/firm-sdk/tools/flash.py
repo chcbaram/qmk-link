@@ -38,8 +38,10 @@ from pathlib import Path
 BOOTROM_VID = 0x2E8A
 BOOTROM_PID_RP2350 = 0x000F
 
-# 실행 중인 펌웨어의 CDC 포트 (2단계에서 확정한다)
-FW_VID = 0x2E8A
+# 실행 중인 펌웨어의 CDC 포트.
+# 04단계에서 VID/PID 를 0483:5305 로 바꿨다 (다른 baram 키보드와 안 겹치는 값).
+FW_VID = 0x0483
+FW_PID = 0x5305
 
 # INFO_UF2.TXT 의 Board-ID 에 이 문자열이 들어가면 우리 대상으로 본다
 BOARD_ID_HINTS = ("RP2350", "RP2040", "RPI-RP2")
@@ -152,6 +154,10 @@ def pick_port(explicit=None):
                 return explicit
         return explicit          # 목록에 없어도 사용자가 지정했으면 그대로 쓴다
 
+    # VID/PID 가 정확히 맞는 것을 먼저 고른다.
+    for dev, _, vid, pid in ports:
+        if vid == FW_VID and pid == FW_PID:
+            return dev
     for dev, _, vid, _ in ports:
         if vid == FW_VID:
             return dev
@@ -216,7 +222,7 @@ def cmd_list():
         except ImportError:
             print("  (pyserial 없음 — pip3 install pyserial)")
     for dev, desc, vid, pid in ports:
-        mark = " *" if vid == FW_VID else "  "
+        mark = " *" if (vid == FW_VID and pid == FW_PID) else "  "
         ids = f"{vid:04X}:{pid:04X}" if vid else "----:----"
         print(f" {mark} {dev:24s} {ids}  {desc}")
     return 0

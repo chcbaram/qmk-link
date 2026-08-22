@@ -7,6 +7,7 @@
 
 
 extern void usbdDescInit(void);
+#include "usbd_hid.h"
 
 static bool is_init = false;
 
@@ -21,6 +22,7 @@ static void cliCmd(cli_args_t *args);
 bool usbInit(void)
 {
   usbdDescInit();
+  usbdHidInit();
 
   tud_init(BOARD_TUD_RHPORT);
 
@@ -88,6 +90,11 @@ void cliCmd(cli_args_t *args)
     cliPrintf("connected : %d\n", tud_connected());
     cliPrintf("suspended : %d\n", tud_suspended());
     cliPrintf("cdc conn  : %d\n", tud_cdc_connected());
+    cliPrintf("hid ready : kbd %d  extra %d  raw %d\n",
+              usbdHidIsReady(HID_ITF_KEYBOARD),
+              usbdHidIsReady(HID_ITF_EXTRA),
+              usbdHidIsReady(HID_ITF_RAW));
+    cliPrintf("host led  : 0x%02X\n", usbdHidGetLed());
     ret = true;
   }
 

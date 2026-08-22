@@ -11,11 +11,14 @@
 
 //-- USB
 //
-// 개발용 임시 VID/PID. 08단계에서 확정하고 info.json / vial.json 과 맞춘다.
+// 다른 baram 키보드와 겹치지 않는 값.
+//   0x5200 hs-k / 0x5201 45k-hs / 0x5207 qmk-8k / 0x5211 convex
+//   0x5220 Lucky65 / 0x5230 hola-mini / 0x5300 esp32-qmk / 0x5301 qmk-h7s
+//   0x5304 wish-he  <- 직전 최신
 //
 #define _USE_HW_USB
-#define      HW_USB_VID             0x2E8A      // Raspberry Pi
-#define      HW_USB_PID             0xF001
+#define      HW_USB_VID             0x0483
+#define      HW_USB_PID             0x5305
 
 //-- RESET
 //

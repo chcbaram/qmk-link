@@ -1,5 +1,6 @@
 #include "ap.h"
 #include "led_status.h"
+#include "usbd_hid.h"
 
 
 #ifdef _USE_HW_USBH
@@ -35,11 +36,10 @@ void apMain(void)
 
 #ifdef _USE_HW_USBH
 
-// USB-A 에서 올라온 리포트를 꺼낸다.
+// USB-A 에서 올라온 리포트를 꺼내 PC 로 그대로 넘긴다.
 //
-// 04단계에서는 여기서 꺼낸 것을 그대로 PC 로 넘기고,
-// 05단계에서는 ap/modules/link 가 가상 매트릭스로 바꾼다.
-// 지금은 키가 눌렸는지만 보고 LED 를 반짝인다.
+// 05단계에서는 ap/modules/link 가 가상 매트릭스로 바꿔 QMK 에 넣는다.
+// 지금은 QMK 없이 "USB 연장선" 이다.
 //
 // 이 루프가 없으면 core1 이 채운 큐가 가득 차서 계속 버려진다.
 void updateKeyboard(void)
@@ -48,9 +48,34 @@ void updateKeyboard(void)
 
   while(usbhHidGetReport(&report) == true)
   {
-    if (isKeyDown(&report) == true)
+    switch(report.protocol)
     {
-      ledStatusKeyEvent();
+      case HID_ITF_PROTOCOL_KEYBOARD:
+        if (report.len >= 8)
+        {
+          usbdHidSendKeyboard(report.data);
+        }
+        if (isKeyDown(&report) == true)
+        {
+          ledStatusKeyEvent();
+        }
+        break;
+
+      case HID_ITF_PROTOCOL_MOUSE:
+        // boot mouse 리포트 : [0] 버튼 [1] X [2] Y [3] 휠
+        if (report.len >= 3)
+        {
+          usbdHidSendMouse(report.data[0],
+                           (int8_t)report.data[1],
+                           (int8_t)report.data[2],
+                           (report.len >= 4) ? (int8_t)report.data[3] : 0,
+                           0);
+        }
+        break;
+
+      default:
+        // report protocol 장치는 05단계에서 디스크립터를 파싱해 다룬다.
+        break;
     }
   }
 }
