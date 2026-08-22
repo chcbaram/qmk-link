@@ -52,6 +52,9 @@ BOOTSEL 진입 경로 (전부 실기 확인):
 | `~/hdd/git/nano-ch32h417/firmware` | `firm-sdk` / `firm-prj` 폴더 관례, CMakeLists 골격, `.vscode/tasks.json` 스타일 |
 | `~/hdd/git/NU87-TinyDK/firmware` | `firm-sdk/README.md` 톤, `tools/*.py` 파이썬 도구 관례(`flash.py`, `list_ports.py`, `sync_sdk.py`) |
 | `~/hdd/git/rp2040_fw` | **보드 헤더를 `src/bsp/board/` 에 두는 관례** |
+| `~/hdd/git/wish-he/firmware/wish-he` | **USB descriptor 인터페이스 배치**. `src/hw/driver/usb/cherryusb/usb_desc.h` 주석에 IF0 함정과 인터페이스 순서 근거가 적혀 있다 |
+| `~/hdd/git/convex/firmware/convex-qmk` | **마우스 · consumer · system 을 한 인터페이스에 리포트 ID 로 담는 구성**. `src/hw/driver/usb/usb_hid/usbd_hid.c` |
+| `~/hdd/git/baram-kbd-tester` | USB **호스트** 쪽 관례. `src/hw/driver/usbh/` 배치 |
 
 ---
 
@@ -109,6 +112,8 @@ VSCode 는 `firmware/qmk-link/prj/qmk-link.code-workspace` 를 연다.
 | **백그라운드 처리는 `delay()` 에 태운다** | `bsp.c` 의 `delay()` 가 `cliLoopIdle()` 을 돌린다 (NU87-TinyDK 관례). 그래야 기존 코드를 안 고치고도 USB 가 계속 돈다. 한때 `cliDelay()` 를 새로 만들고 `cliKeepLoop()` 을 고쳤다가, 이 관례를 따르는 쪽으로 되돌렸다 |
 | **CRLF 는 지원하지 않는다** | `CLI_KEY_ENTER` 는 CR 만 본다. 호스트 도구가 CR 만 보내면 된다. LF 무시를 넣어 봤지만 정작 `cliKeepLoop()` 중단은 못 고쳐서 되돌렸다 |
 | **리셋 더블클릭은 SDK 라이브러리로** | RP2350 은 RUN 리셋 때 RAM 전원이 내려간다(실측). SRAM · watchdog scratch · POWMAN scratch 전부 지워진다. RP2350 전용 `POWMAN_CHIP_RESET.DOUBLE_TAP` 비트를 `pico_bootsel_via_double_reset` 이 쓴다 |
+| **부트 키보드는 IF0 이어야 한다** | 일부 BIOS 가 IF0 만 본다 (wish-he 의 `usb_desc.h` 에 기록된 함정). 04단계에서 CDC 를 뒤로 밀고 키보드를 IF0 으로 옮긴다 |
+| **HID 리포트 ID 는 QMK 값** | mouse 2 / system 3 / consumer 4 / NKRO 6. `qmk/port/protocol/report.h` 와 어긋나면 05단계에서 곤란해진다 |
 | **허브 지원은 필수다** | `CFG_TUH_HUB=1`. HHKB Lite 2 처럼 허브 내장 키보드가 흔하다. 끄면 연결은 감지되는데 열거가 끝나지 않는다 |
 | **PIO USB 가 pio0 를 통째로 쓴다** | SM 0·1·2 + DMA ch0. 그래서 WS2812 는 pio1 이다 |
 | **PIO USB 는 core1 전용** | 타이밍 때문이다. 알람풀도 core1 에서 만들어야 SOF 가 core1 에서 돈다. 코어 간 리포트 전달은 `pico/util/queue.h` |
@@ -156,7 +161,8 @@ VSCode 는 `firmware/qmk-link/prj/qmk-link.code-workspace` 를 연다.
 | 항목 | 언제 결정 | 내용 |
 |---|---|---|
 | boot vs report protocol | 3단계 | report protocol 이 NKRO 를 살리지만 리포트 디스크립터 파싱이 필요하다 |
-| VID / PID | 8단계 | `info.json` / `vial.json` 과 반드시 일치해야 한다 |
+| VID / PID | 8단계 | `info.json` / `vial.json` 과 반드시 일치해야 한다. 04단계에서 descriptor 가 바뀌므로 PID 를 한 번 올린다 |
+| **EEPROM 쓰기 vs core1** | 6단계 | flash 를 쓰는 동안 XIP 가 멈추는데 core1 이 PIO USB 를 돌고 있다. `flash_safe_execute()` + `multicore_lockout_victim_init()` 로 core1 을 잠가야 한다. **06단계 착수 시 이것부터 실험한다** |
 | **hola-mini 포트 ↔ QMK 0.33.13 API 차이** | 5단계 | hola-mini 가 이식한 QMK 는 0.33.13 보다 한참 이전이다. `keycodes.h` 재편 · `keyboard.c` 스캔 흐름 · `eeconfig` 레이아웃 등에서 차이가 날 수 있다. 착수 시 **먼저 컴파일 가능 여부부터 확인**하고, 차이가 크면 QMK 리비전을 내릴지 포트를 올릴지 정한다 |
 | sparse-checkout 범위 | 5단계 | `quantum/` 만으로 부족하면 `sparse-checkout set` 에 경로를 추가한다. `keyboards/` 만 빠지면 크기는 여전히 작다 |
 | Windows / Linux 에서 `flash.py` | 해당 OS 실기가 있을 때 | macOS 에서만 검증했다. `setup-windows.md` · `setup-linux.md` 도 미검증이다 |

@@ -18,15 +18,53 @@ USB 양쪽(host / device)이 다 동작한다는 걸 확인하고 나서 키 처
 
 → [usb-stack.md](usb-stack.md#pc-쪽-복합-장치-구성)
 
+### 인터페이스 배치 — 부트 키보드가 IF0 이어야 한다
+
+`wish-he` 의 `usb_desc.h` 에 이 함정이 기록되어 있다:
+
+> IF0 HID 부트 키보드 ★ 반드시 첫 번째 — 일부 BIOS 가 IF0 만 본다
+> 인터페이스를 더할 때마다 CDC 번호가 밀린다. 등록 순서 때문에 CDC 가 IF0 을
+> 가져가 기술자와 어긋난 적이 있다.
+
+**02단계에서는 CDC 가 IF0 이다. 이번에 순서를 바꾼다.**
+
 ```
-IAD ─ CDC (comm + data)       : CLI · 로그        (02단계에서 이미 있음)
-HID Keyboard                   : boot protocol 호환
-HID Extra                      : consumer / system control, NKRO
-HID Raw (usage page 0xFF60)    : VIA / Vial 통신 (06~07단계에서 쓴다)
-Vendor (RESET)                 : picotool 호환용   (02단계에서 이미 있음)
+IF0  HID Keyboard   boot protocol, 리포트 ID 없음      EP IN  0x81
+IF1  HID Extra      mouse / system / consumer / NKRO   EP IN  0x82
+IF2  HID Raw        VIA · Vial (usage page 0xFF60)     EP IN  0x83 / OUT 0x03
+IF3  CDC 제어       ┐ IAD 로 묶인다                     EP IN  0x84
+IF4  CDC 데이터     ┘                                   EP IN  0x85 / OUT 0x05
+IF5  Vendor RESET   picotool 호환. 제어 전송만          (엔드포인트 없음)
 ```
 
-`CFG_TUD_HID 3`. Windows 에서 CDC + HID 복합 장치를 제대로 잡으려면 **IAD** 가 필수다.
+호스트 도구는 인터페이스 번호가 아니라 usage page 로 찾으므로 번호가 밀려도 상관없다.
+**단, descriptor 가 바뀌므로 PID 를 올린다** — 호스트가 이전 구성을 캐시하고 있으면 꼬인다.
+
+### 리포트 ID — QMK 값을 그대로 쓴다
+
+`qmk/port/protocol/report.h` 의 `enum hid_report_ids` 와 같아야 한다.
+05단계에서 QMK 를 올릴 때 어긋나면 곤란하다.
+
+| ID | 용도 | 인터페이스 |
+|---|---|---|
+| — | Keyboard (boot 8바이트) | IF0, 리포트 ID 없음 |
+| 2 | Mouse | IF1 |
+| 3 | System Control | IF1 |
+| 4 | Consumer (미디어키) | IF1 |
+| 6 | NKRO | IF1 |
+
+`convex` 가 같은 구성이다 (EXK 인터페이스에 system + consumer + mouse 를 리포트 ID 로 나눠 담음).
+`hola-mini` 는 키보드 인터페이스에 keyboard + mouse 를 담고 consumer/system 이 없다 —
+그쪽은 따르지 않는다.
+
+### 마우스는 두 가지 용도다
+
+1. **QMK 마우스키** — 키보드 키로 커서를 움직인다 (05~06단계 `MOUSEKEY_ENABLE`)
+2. **마우스 패스스루** — 허브를 켰으므로 키보드 뒷면 포트에 마우스를 꽂을 수 있다.
+   그 입력을 PC 로 넘긴다
+
+둘 다 device 쪽 마우스 리포트가 필요하고, 그래서 이번 단계에 넣는다.
+호스트 쪽 마우스 수신은 `tuh_hid_interface_protocol() == HID_ITF_PROTOCOL_MOUSE` 로 구분한다.
 
 이번 단계에서 raw HID 는 **엔드포인트만 뚫어 두고 응답은 하지 않는다** (06단계에서 채운다).
 
@@ -42,17 +80,19 @@ boot report 8바이트를 그대로 옮긴다. 키코드 변환도, 레이어도
 ## 구현 항목
 
 - [ ] `tusb_config.h` — `CFG_TUD_HID 3`
-- [ ] `usbd_desc.c` — HID descriptor 3개 + IAD 유지
-- [ ] `hw/driver/usb/usbd_hid.c` — 리포트 디스크립터, `tud_hid_*` 콜백
-- [ ] `ap/modules/link/` — host 리포트 → device 리포트 패스스루
-- [ ] `tud_hid_set_report_cb` — LED (CapsLock 등) 수신, WS2812 로 표시
-- [ ] CLI `usb info` — mounted / suspended / 리포트 카운트
+- [ ] `usbd_desc.c` — **인터페이스 순서 재배치** (부트 키보드를 IF0 으로), PID 상향
+- [ ] `usbd_hid.c` — 리포트 디스크립터 3벌 (Keyboard / Extra / Raw), `tud_hid_*` 콜백
+- [ ] `ap.c` 의 `updateKeyboard()` — host 리포트를 device 로 패스스루
+- [ ] 마우스 패스스루 — host 쪽 `HID_ITF_PROTOCOL_MOUSE` 처리
+- [ ] `tud_hid_set_report_cb` — CapsLock 등 LED 리포트 수신 → `led_status` 로
+- [ ] CLI `usb info` 갱신
 
 ## 완료 판정
 
 1. Type-C 를 PC 에 꽂으면 **키보드 + 시리얼 포트**로 동시에 인식된다
 2. USB-A 에 키보드를 꽂고 타이핑하면 **PC 에 그대로 입력된다**
 3. CapsLock 을 누르면 호스트가 LED 리포트를 보내고 WS2812 색이 바뀐다
+3b. 키보드 뒷면 포트에 마우스를 꽂으면 PC 에서 커서가 움직인다
 4. BIOS / 부트로더 화면에서도 동작한다 (boot protocol)
 5. Windows · macOS · Linux 에서 각각 인식된다
 

@@ -21,14 +21,30 @@ usage page `0xFF60`, usage `0x61`. IN/OUT 각 32바이트.
 QMK 의 `via.c` 가 프로토콜을 처리하므로 우리가 할 일은
 `raw_hid_receive()` / `raw_hid_send()` 를 TinyUSB 에 연결하는 것뿐이다.
 
-### EEPROM 에뮬레이션
+### EEPROM 에뮬레이션 — 이 단계의 핵심 리스크
 
-RP2350 에는 EEPROM 이 없다. flash 마지막 섹터를 쓴다.
+VIA / Vial 은 키맵을 장치에 저장한다. RP2350 에는 EEPROM 이 없으니 flash 로 흉내낸다.
+`hw/driver/eeprom.c` (hola-mini 판을 가져온다) + QMK 의 `eeconfig` / `dynamic_keymap`.
 
-- `hw/driver/eeprom.c` — flash 기반. hola-mini 판을 가져온다
-- **XIP 주의**: flash 쓰기 중에는 코드 실행이 멈춘다.
-  듀얼코어라 `flash_safe_execute()` 또는 `multicore_lockout` 이 필요하다.
-  core1 이 `tuh_task()` 를 돌고 있으므로 **이 부분이 이 단계의 핵심 리스크다.**
+**문제는 XIP 다.** flash 를 지우거나 쓰는 동안에는 flash 에서 코드를 실행할 수 없다.
+그런데 03단계에서 **core1 이 PIO USB 를 돌고 있다.** core1 이 그 사이에 flash 코드를
+실행하면 그대로 죽는다. USB 호스트 타이밍도 깨진다.
+
+pico-sdk 가 주는 수단:
+
+| 방법 | 내용 |
+|---|---|
+| `flash_safe_execute()` | 다른 코어를 잠그고(`multicore_lockout`) flash 작업을 한 뒤 푼다. **1순위** |
+| `multicore_lockout_victim_init()` | core1 이 잠길 준비를 해 둬야 한다. `usbhCore1Main()` 초기에 부른다 |
+| RAM 함수 | flash 루틴을 `__not_in_flash_func` 로 두는 것만으로는 부족하다. core1 도 막아야 한다 |
+
+정해야 할 것:
+- core1 을 잠근 동안 USB 호스트가 끊기는 시간이 얼마나 되나 (섹터 지우기 ~수십 ms)
+- 그 사이 PC 쪽 device 도 멈춘다. 호스트가 장치를 놓치지 않을 만큼 짧은가
+- 키 입력이 없는 타이밍에만 쓰는 식으로 피할 수 있나
+- 저장 빈도 — VIA 는 키 하나 바꿀 때마다 쓴다. 캐시해 두고 모아서 쓸지
+
+**착수하면 이것부터 실험한다.** 여기서 막히면 06단계 전체가 막힌다.
 
 ### QMK 옵션
 
