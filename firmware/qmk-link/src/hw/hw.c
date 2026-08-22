@@ -52,6 +52,11 @@ bool hwInit(void)
   swtimerInit();
 #endif
 
+#ifdef _USE_HW_USBH
+  // core1 을 띄운다. 다른 초기화가 끝난 뒤에 한다.
+  usbhInit();
+#endif
+
 #ifdef _USE_HW_LOG
   // 여기까지가 부팅이다. 이후 로그는 boot 버퍼에 쌓지 않는다.
   // CDC 는 호스트가 포트를 열어야 살아나므로 위 로그는 화면에 안 나간다.

@@ -28,9 +28,10 @@ PC 에는 **VIA / Vial 로 편집 가능한 키보드**로 보이게 한다.
 |---|---|
 | **완료** | **01 LED** — 프로젝트 골격, firm-sdk, 빌드/다운로드 경로, 120MHz 클럭 |
 | **완료** | **02 CLI/CDC** — USB CDC + CLI/log/swtimer, 1200bps touch, 더블클릭 리셋 |
-| **다음** | **03 USB HOST** — Pico-PIO-USB + TinyUSB host(RHPort1), core1 전용 태스크 |
+| **완료** | **03 USB HOST** — Pico-PIO-USB, core1 전용 태스크. HHKB Lite 2 열거·리포트 수신 확인 |
+| **다음** | **04 HID DEVICE** — Type-C 복합 descriptor(HID kbd/extra/raw + CDC), host→device 패스스루 |
 
-02 단계 실측: FLASH 53,548 B / 2 MB (2.55%), RAM 17,276 B / 512 KB (3.30%)
+03 단계 실측: FLASH 약 161 KB uf2 / RAM 36 KB. FLASH 2MB 대비 여유 충분.
 CDC 는 `2E8A:F001 QMK-LINK` 로 열거된다. `clk_sys` 는 CLI 에서 120,000,000 Hz 확인.
 
 BOOTSEL 진입 경로 (전부 실기 확인):
@@ -108,6 +109,9 @@ VSCode 는 `firmware/qmk-link/prj/qmk-link.code-workspace` 를 연다.
 | **백그라운드 처리는 `delay()` 에 태운다** | `bsp.c` 의 `delay()` 가 `cliLoopIdle()` 을 돌린다 (NU87-TinyDK 관례). 그래야 기존 코드를 안 고치고도 USB 가 계속 돈다. 한때 `cliDelay()` 를 새로 만들고 `cliKeepLoop()` 을 고쳤다가, 이 관례를 따르는 쪽으로 되돌렸다 |
 | **CRLF 는 지원하지 않는다** | `CLI_KEY_ENTER` 는 CR 만 본다. 호스트 도구가 CR 만 보내면 된다. LF 무시를 넣어 봤지만 정작 `cliKeepLoop()` 중단은 못 고쳐서 되돌렸다 |
 | **리셋 더블클릭은 SDK 라이브러리로** | RP2350 은 RUN 리셋 때 RAM 전원이 내려간다(실측). SRAM · watchdog scratch · POWMAN scratch 전부 지워진다. RP2350 전용 `POWMAN_CHIP_RESET.DOUBLE_TAP` 비트를 `pico_bootsel_via_double_reset` 이 쓴다 |
+| **허브 지원은 필수다** | `CFG_TUH_HUB=1`. HHKB Lite 2 처럼 허브 내장 키보드가 흔하다. 끄면 연결은 감지되는데 열거가 끝나지 않는다 |
+| **PIO USB 가 pio0 를 통째로 쓴다** | SM 0·1·2 + DMA ch0. 그래서 WS2812 는 pio1 이다 |
+| **PIO USB 는 core1 전용** | 타이밍 때문이다. 알람풀도 core1 에서 만들어야 SOF 가 core1 에서 돈다. 코어 간 리포트 전달은 `pico/util/queue.h` |
 | **WS2812 전송 순서 = R,G,B** | 표준 WS2812B 는 G,R,B 지만 이 보드 부품은 R,G,B 다. 실기에서 확인했다(초록을 보냈는데 빨강이 켜짐). `hw_def.h` 의 `HW_WS2812_ORDER_RGB` 로 분리했다 |
 | **커스텀 보드 헤더** (`src/bsp/board/qmk_link.h`) | `pico2` 를 쓰면 flash 가 4MB 로 잘못 잡힌다. 실제는 W25Q16JV = 2MB |
 | **`pico_stdio_usb` 미사용** | 자체 device descriptor 를 갖고 있어 우리 HID descriptor 와 공존이 안 된다. CDC 는 2단계에서 직접 만든다 |
@@ -151,9 +155,7 @@ VSCode 는 `firmware/qmk-link/prj/qmk-link.code-workspace` 를 연다.
 
 | 항목 | 언제 결정 | 내용 |
 |---|---|---|
-| 허브 지원 | 3단계 | `CFG_TUH_HUB` 를 켤지. 실사용 빈도 보고 |
 | boot vs report protocol | 3단계 | report protocol 이 NKRO 를 살리지만 리포트 디스크립터 파싱이 필요하다 |
-| host 포트 VBUS 타이밍 | 3단계 | J1 VBUS 는 VSYS 직결이다 |
 | VID / PID | 8단계 | `info.json` / `vial.json` 과 반드시 일치해야 한다 |
 | **hola-mini 포트 ↔ QMK 0.33.13 API 차이** | 5단계 | hola-mini 가 이식한 QMK 는 0.33.13 보다 한참 이전이다. `keycodes.h` 재편 · `keyboard.c` 스캔 흐름 · `eeconfig` 레이아웃 등에서 차이가 날 수 있다. 착수 시 **먼저 컴파일 가능 여부부터 확인**하고, 차이가 크면 QMK 리비전을 내릴지 포트를 올릴지 정한다 |
 | sparse-checkout 범위 | 5단계 | `quantum/` 만으로 부족하면 `sparse-checkout set` 에 경로를 추가한다. `keyboards/` 만 빠지면 크기는 여전히 작다 |

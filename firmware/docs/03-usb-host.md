@@ -1,168 +1,158 @@
 # 03-usb-host — USB-A 에 꽂힌 키보드를 읽는다
 
-**상태: ⬜ 미착수** — 구현 상세는 착수할 때 채운다.
+**상태: ✅ 완료**
 
 ## 목표
 
-USB-A(J1) 에 일반 USB 키보드를 꽂으면 **CLI 에 HID report 가 찍힌다.**
+USB-A(J1) 에 일반 USB 키보드를 꽂으면 CLI 에 HID report 가 찍힌다.
 
 ## 배경 / 근거
 
-**이 프로젝트에서 가장 위험한 단계다.** PIO USB 는 타이밍에 민감하고,
-하드웨어 쪽 미확인 항목(R10/R13 풀업)은 1단계에서 미리 잡아 두었다 — R13 제거 완료, 핀 배정 확증.
-여기가 안 되면 프로젝트 전제가 무너지므로 QMK 를 얹기 전에 최대한 앞에서 검증한다.
+이 프로젝트에서 **가장 위험한 단계**다. PIO USB 는 타이밍에 민감하고
+하드웨어 쪽 미확인 항목도 여기서 드러난다. QMK 를 얹기 전에 먼저 검증한다.
 
+01단계에서 물려받는 것: **120MHz 클럭**, R13 제거.
 02단계에서 물려받는 것: **CDC 로그** — 이게 없으면 이 단계는 디버깅이 불가능하다.
 
 ## 설계
 
-→ [usb-stack.md](usb-stack.md) 전체가 이 단계의 근거다.
+→ [usb-stack.md](usb-stack.md) 가 전체 근거다.
 
-### 핀
+### 빌드 배선
 
-| | GPIO | 근거 |
-|---|---|---|
-| D+ | **12** | [hardware.md](hardware.md#usb-a-d--gpio12-d--gpio13) |
-| D− | **13** | `DM = DP + 1` — Pico-PIO-USB 요구사항 만족 |
+`Pico-PIO-USB` 는 `firm-sdk/Pico-PIO-USB` 서브모듈(0.7.2, 260KB).
 
-### 구성
+**`pico_sdk_init()` 이전에 `PICO_PIO_USB_PATH` 만 지정하면 나머지는 SDK 가 다 한다.**
+tinyusb 의 `hw/bsp/rp2040/family.cmake` 가 `check_and_add_pico_pio_usb_support()` 를
+최상위에서 부르는데, 그게 `tinyusb_pico_pio_usb` 타깃을 만들고
+`hcd_pio_usb.c` / `dcd_pio_usb.c` 를 tinyusb 에 붙이고 PIO 헤더까지 생성한다.
 
-```
-RHPort 1 = PIO USB → OPT_MODE_HOST | OPT_MODE_FULL_SPEED
-CFG_TUH_ENABLED     1
-CFG_TUH_RPI_PIO_USB 1
-CFG_TUH_HID         4
-BOARD_TUH_RHPORT    1
+```cmake
+set(PICO_PIO_USB_PATH ${CMAKE_CURRENT_LIST_DIR}/../firm-sdk/Pico-PIO-USB)
+...
+target_link_libraries(${PRJ_NAME} tinyusb_host tinyusb_pico_pio_usb)
 ```
 
-`Pico-PIO-USB` 는 pico-sdk 에 없다 → `firm-sdk/Pico-PIO-USB` 서브모듈로 추가하고
-SDK 의 `lib/tinyusb/src/portable/raspberrypi/pio_usb/hcd_pio_usb.c` 와 함께 빌드한다.
+### PIO 자원 — WS2812 를 pio1 로 옮겼다
+
+`PIO_USB_DEFAULT_CONFIG` 는 **pio0 의 SM 0·1·2 를 전부 쓴다** (TX / RX / EOP) + DMA ch0.
+01단계의 WS2812 가 pio0 sm0 이라 정면 충돌한다.
+
+PIO USB 는 검증된 기본 설정을 유지하고 **WS2812 를 pio1 로 옮겼다** (`hw_def.h`).
 
 ### 코어 분배
 
 ```
-core0 : CLI + LED
-core1 : tuh_task()   ← PIO USB 전용
+core0 : tud_task() + CLI + LED      (ap.c)
+core1 : tuh_task() 만               (usbh.c)
 ```
 
-`multicore_launch_core1()`. 코어 간 전달은 `qbuffer`.
+SOF 인터럽트를 core1 에서 돌리려면 **알람풀도 core1 에서 만들어야 한다.**
 
-### 클럭
+```c
+config.alarm_pool = (void *)alarm_pool_create(HW_USBH_ALARM_NUM, 1);
+tuh_configure(HW_USBH_RHPORT, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &config);
+tuh_init(HW_USBH_RHPORT);
+```
 
-이미 01단계에서 120MHz 로 맞춰 두었다. 여기서 건드릴 게 없다.
+하드웨어 알람 2번을 쓴다 (SDK 기본 알람풀은 3번이라 안 겹친다).
+
+### 코어 간 리포트 전달
+
+`tuh_hid_report_received_cb()` 는 core1 에서 불린다. CLI 는 core0 이다.
+`pico/util/queue.h` 의 `queue_t` 를 쓴다 — 스핀락 기반이라 코어 간에 안전하다.
+
+**core0 이 안 가져가면 버린다.** 여기서 막히면 USB 타이밍이 깨진다.
+버린 개수는 `usbh info` 의 `drop` 으로 본다.
+
+### 파일 배치
+
+`baram-kbd-tester` 관례를 따랐다 — `src/hw/driver/usbh/` 아래, **`common/` 은 건드리지 않는다.**
+
+```
+src/hw/driver/usbh/
+├── usbh.c / usbh.h              core1 태스크, PIO USB 설정, CLI
+└── usbh_hid/usbh_hid.c / .h     mount / umount / report 콜백, 큐
+```
 
 ## 구현 항목
 
-- [x] ~~실물에서 R10 / R13 실장 여부 확인~~ → R13 실장 확인, **제거 완료**
-- [x] ~~진단 펌웨어로 검증~~ → 빈 포트 초록, FS 키보드 연결 시 빨강. **제거 확인 + 핀 배정 확증**
-- [ ] `firm-sdk/Pico-PIO-USB` 서브모듈 추가
-- [ ] `src/CMakeLists.txt` — pio_usb 소스 · include · `PICO_PIO_USB_PATH`
-- [ ] `tusb_config.h` — host 설정 추가
-- [ ] `hw/driver/usb/usbh.c` — `usbhInit()`, core1 태스크
-- [ ] `tuh_hid_mount_cb` / `tuh_hid_umount_cb` / `tuh_hid_report_received_cb`
-- [ ] CLI `usbh info` — 연결된 장치 · 인터페이스 · 리포트 덤프
+- [x] `firm-sdk/Pico-PIO-USB` 서브모듈 @ 0.7.2
+- [x] `PICO_PIO_USB_PATH` + `tinyusb_host` / `tinyusb_pico_pio_usb` 링크
+- [x] WS2812 를 pio1 로 이동
+- [x] `tusb_config.h` — host 설정
+- [x] `usbh.c` — core1 태스크, 알람풀, 진단 CLI
+- [x] `usbh_hid.c` — mount / umount / report 콜백, 리포트 큐
+- [x] CLI `usbh info` / `usbh dump`
 
 ## 완료 판정
 
-1. 키보드를 꽂으면 CLI 에 `mount` 로그 (VID/PID, 인터페이스 수)
-2. 키를 누르면 8바이트 boot report 가 찍힌다
-3. 뽑으면 `umount` 로그
-4. 꽂았다 뺐다를 반복해도 열거가 계속 된다
-5. 아무것도 안 꽂았을 때 장치가 연결된 것으로 보이지 **않는다** (R13 제거 확인)
+실기(HHKB Lite 2)에서 확인했다.
+
+```
+usbh info
+core1     : running
+D+ / D-   : GPIO12 / GPIO13
+configure : 1
+tuh_init  : 1
+connect st: 1
+speed     : full
+frame num : 5427
+mounted   : 1
+connected : 1
+rx / drop : 8 / 0
+  [0] addr 1  04FE:0006  keyboard
+```
+
+`usbh dump` 로 실제 키코드 확인:
+
+```
+i0 p1 len 8 : 00 00 04 16 07 09 00 00     <- a s d f
+i0 p1 len 8 : 00 00 0D 0E 0F 33 00 00     <- j k l ;
+i0 p1 len 8 : 00 00 01 01 01 01 01 01     <- ErrorRollOver (6키 초과)
+```
+
+## 도중에 잡은 것
+
+### 허브를 켜야 했다 — 열린 질문이 바로 걸렸다
+
+처음엔 `CFG_TUH_HUB 0` 으로 두고 "08단계에서 판단" 이라고 미뤘다.
+그런데 **HHKB Lite 2 는 뒷면에 USB 포트가 있는 허브 내장 키보드**라
+`connect st: 1` 에 SOF 도 도는데 열거가 끝나지 않았다.
+
+```c
+#define CFG_TUH_HUB               1
+#define CFG_TUH_DEVICE_MAX        (3 * CFG_TUH_HUB + 1)
+```
+
+켜자마자 바로 잡혔다. **허브 지원은 선택이 아니다** — 키보드 안에 허브가 있는 경우가 흔하다.
+
+### 진단 없이는 못 찾았다
+
+`connected : 0` 만 보고는 어디가 문제인지 알 수 없었다. 단계별로 값을 노출하고 나서야
+"스택은 떴고(`configure`/`tuh_init` = 1), 연결도 봤고(`connect st: 1`),
+SOF 도 돈다(`frame num` 증가). 그런데 열거가 안 끝난다" 로 좁혀졌고,
+그 지점에서 허브가 후보로 떠올랐다.
+
+`usbh info` 의 진단 항목은 그대로 남겨 둔다. 04단계 이후에도 쓸 일이 있다.
+
+### raw GPIO 읽기는 신뢰할 수 없다 (제거함)
+
+디버깅 중 `gpio_get(D+)` / `gpio_get(D-)` 를 CLI 에 찍었는데 **오해를 불렀다.**
+
+- Pico-PIO-USB 는 읽은 값을 **반전**해서 쓴다 (`PORT_PIN_FS_IDLE = 0b01`)
+- RP2350-E9 errata 때문에 라이브러리는 읽기 직전에 IE 를 껐다 켠다.
+  core0 에서 그냥 `gpio_get()` 하면 그 절차를 안 거친다
+
+실제로 이 값을 보고 "핀이 반대다" 라고 잘못 판단해서 한 번 헛돌았다.
+**권위 있는 값은 `hcd_port_speed_get()` 과 열거 성공 여부다.** 그래서 raw 출력은 지웠다.
 
 ## 열린 질문
 
 | 항목 | 내용 |
 |---|---|
-| ~~R10 / R13~~ | **해소됨(조치 대기).** R10 미실장 / **R13 실장** 으로 확인. R13 을 제거해야 호스트가 동작한다. 같은 측정으로 `GPIO12 = D+` 도 확증되었다 → [hardware.md](hardware.md#r10--r13--usb-a-포트의-풀업-해결됨) |
-| 허브 지원 | `CFG_TUH_HUB` 를 켤지. 켜면 `CFG_TUH_DEVICE_MAX` 도 올려야 하고 메모리를 더 쓴다 |
-| boot vs report protocol | report protocol 이 NKRO 를 살리지만 리포트 디스크립터 파싱이 필요하다. 우선 boot 로 시작하고 05단계에서 판단 |
-| VBUS 타이밍 | J1 VBUS 는 VSYS 직결이라 전원 스위칭이 없다. 부팅 시점에 이미 전원이 올라가 있는지 실측 |
-| 저속(LS) 키보드 | 오래된 키보드는 low-speed 다. Pico-PIO-USB 가 처리하는지 실측.<br>**R13 을 제거하지 않으면 LS 는 원리적으로 불가능하다** — D+ 가 항상 HIGH 라 속도 판별이 깨진다 |
-
-
----
-
-## 부록 — USB-A 풀업 진단 펌웨어
-
-R13 을 제거한 뒤 다시 확인할 때 쓴다. `src/ap/ap.c` 를 잠시 이걸로 바꿔 굽고,
-확인이 끝나면 원래 점멸로 되돌린다. CDC 가 없어도 색으로 결과를 읽을 수 있다.
-
-GPIO12 / GPIO13 을 입력 + 내부 풀다운(~50~80kΩ)으로 두고 읽는다.
-외부 1.5K 풀업이 있으면 내부 풀다운을 이겨서 HIGH 가 된다.
-
-| GPIO12 (D+) | GPIO13 (D−) | 색 | 의미 |
-|---|---|---|---|
-| LOW | LOW | 🟢 초록 | 풀업 없음 — **호스트 OK** |
-| HIGH | LOW | 🔴 빨강 | D+ 풀업 (R13 실장) |
-| LOW | HIGH | 🔵 파랑 | D− 풀업 (R10 실장) |
-| HIGH | HIGH | ⚪ 흰색 | 둘 다 |
-
-USB-A 에 장치를 꽂으면 그 장치의 풀업이 보이므로,
-**꽂았을 때 색이 바뀌는지로 핀 배정까지 같이 확인**할 수 있다
-(full-speed 장치 → 빨강, low-speed 장치 → 파랑).
-
-```c
-#include "ap.h"
-
-#define USB_HOST_DP_PIN   QMK_LINK_USB_HOST_DP_PIN   // 12
-#define USB_HOST_DM_PIN   QMK_LINK_USB_HOST_DM_PIN   // 13
-
-static bool readPin(uint32_t pin)
-{
-  uint32_t high_cnt = 0;
-
-  for (int i=0; i<16; i++)
-  {
-    if (gpio_get(pin) == true) high_cnt++;
-    busy_wait_us(50);
-  }
-  return (high_cnt > 8);
-}
-
-void apInit(void)
-{
-  gpio_init(USB_HOST_DP_PIN);
-  gpio_set_dir(USB_HOST_DP_PIN, GPIO_IN);
-  gpio_pull_down(USB_HOST_DP_PIN);
-
-  gpio_init(USB_HOST_DM_PIN);
-  gpio_set_dir(USB_HOST_DM_PIN, GPIO_IN);
-  gpio_pull_down(USB_HOST_DM_PIN);
-
-  delay(10);
-}
-
-void apMain(void)
-{
-  uint32_t pre_time = millis();
-  uint32_t color_pre = 0xFFFFFFFF;
-
-  while(1)
-  {
-    if (millis()-pre_time >= 100)
-    {
-      bool     dp;
-      bool     dm;
-      uint32_t color;
-
-      pre_time = millis();
-
-      dp = readPin(USB_HOST_DP_PIN);
-      dm = readPin(USB_HOST_DM_PIN);
-
-      if      (dp == false && dm == false) color = WS2812_RGB(  0,  24,   0);
-      else if (dp == true  && dm == false) color = WS2812_RGB( 24,   0,   0);
-      else if (dp == false && dm == true ) color = WS2812_RGB(  0,   0,  24);
-      else                                 color = WS2812_RGB( 24,  24,  24);
-
-      if (color != color_pre)
-      {
-        color_pre = color;
-        ws2812SetColor(0, color);
-        ws2812Refresh();
-      }
-    }
-  }
-}
-```
+| boot vs report protocol | 지금은 장치가 주는 대로 받는다. HHKB 는 boot(8바이트)로 온다. NKRO 를 살리려면 report protocol + 리포트 디스크립터 파싱이 필요하다. 05단계에서 판단 |
+| 유휴 리포트가 많다 | 키를 안 눌러도 폴링마다 `00 00 ...` 이 올라온다. 05단계에서 직전 리포트와 같으면 버린다 |
+| 여러 키보드 동시 연결 | 허브를 켰으므로 가능해졌다. 비트맵을 어떻게 합칠지는 05단계 |
+| 저속(LS) 키보드 | 아직 시험 못 했다. 라이브러리는 지원한다 (`low_speed` 처리 있음) |
+| `drop` 이 생기는 조건 | 아직 0 이다. QMK 가 붙어 core0 이 바빠지면 다시 본다 |

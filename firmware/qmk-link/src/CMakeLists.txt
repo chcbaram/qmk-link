@@ -25,6 +25,8 @@ target_include_directories(${PRJ_NAME} PUBLIC
   hw
   hw/driver
   hw/driver/usb
+  hw/driver/usbh
+  hw/driver/usbh/usbh_hid
 )
 
 target_link_libraries(${PRJ_NAME}
@@ -33,6 +35,8 @@ target_link_libraries(${PRJ_NAME}
   pico_multicore
   pico_unique_id
   tinyusb_device
+  tinyusb_host
+  tinyusb_pico_pio_usb
   pico_usb_reset
 
   # Key2(Reset) 더블클릭 -> BOOTSEL.

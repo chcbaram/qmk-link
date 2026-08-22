@@ -1,3 +1,6 @@
 [submodule "firmware/firm-sdk/pico-sdk"]
 	path = firmware/firm-sdk/pico-sdk
 	url = https://github.com/raspberrypi/pico-sdk.git
+[submodule "firmware/firm-sdk/Pico-PIO-USB"]
+	path = firmware/firm-sdk/Pico-PIO-USB
+	url = https://github.com/sekigon-gonnoc/Pico-PIO-USB.git

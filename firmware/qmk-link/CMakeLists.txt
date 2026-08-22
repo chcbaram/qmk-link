@@ -28,6 +28,14 @@ endif()
 # PICO_BOARD_HEADER_DIRS 는 pico_sdk_init() 안의 generic_board.cmake 가 읽으므로
 # 반드시 pico_sdk_init() 이전에 설정해야 한다.
 #
+# Pico-PIO-USB (USB-A 호스트 포트).
+# pico_sdk_init() 안에서 tinyusb 의 family.cmake 가 이 경로를 보고
+# tinyusb_pico_pio_usb 타깃과 hcd_pio_usb.c 를 자동으로 엮는다.
+# 그래서 pico_sdk_init() 이전에 지정해야 한다.
+if (NOT DEFINED PICO_PIO_USB_PATH)
+  set(PICO_PIO_USB_PATH ${CMAKE_CURRENT_LIST_DIR}/../firm-sdk/Pico-PIO-USB)
+endif()
+
 set(PICO_BOARD qmk_link)
 list(APPEND PICO_BOARD_HEADER_DIRS ${CMAKE_CURRENT_LIST_DIR}/src/bsp/board)
 

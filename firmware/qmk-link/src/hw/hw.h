@@ -16,6 +16,7 @@
 #include "log.h"
 #include "swtimer.h"
 #include "usb.h"
+#include "usbh.h"
 #include "qbuffer.h"
 
 
