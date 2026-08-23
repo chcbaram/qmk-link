@@ -127,6 +127,10 @@ async function attach(dev) {
   const ver = info[2], tree = info[3], locked = info[4];
   const rows = info[5], cols = info[6], n = info[7];
 
+  // ★ 읽자마자 넣는다. 아래 어디서든 이 값을 본다 —
+  //   나중에 넣었더니 showDev() 가 v0 를 그려서 "오래됐다" 고 잘못 알렸다.
+  cmdVer = ver;
+
   let kbds = [];
   hostVid = 0; hostPid = 0;
   for (let i = 0; i < n; i++) {
@@ -138,12 +142,13 @@ async function attach(dev) {
   }
 
   firmware = (tree === TREE_VIAL) ? 'vial' : 'via';
-  showDev(`매트릭스 ${rows}x${cols}, 꽂힌 키보드 ${n}대`
-          + (kbds.length ? ` (${kbds.join(', ')})` : ''));
 
-  cmdVer = ver;
+  // 버전 · 이름을 먼저 받고 나서 한 줄을 그린다
   await readBoardInfo();
   await readHostName();
+
+  showDev(`매트릭스 ${rows}x${cols}, 꽂힌 키보드 ${n}대`
+          + (kbds.length ? ` (${kbds.join(', ')})` : ''));
 
   applyFirmware(locked !== 0);
 
