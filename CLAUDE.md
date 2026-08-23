@@ -40,6 +40,12 @@ USB-A 에 꽂은 일반 키보드를 QMK 로 처리해 PC 에는 VIA / Vial 키�
 - 기능 on/off 는 프로젝트의 `src/hw/hw_def.h` 의 `_USE_HW_*` 로 한다.
   드라이버는 그 매크로로 자기 자신을 감싼다
 - 핀 상수는 `src/bsp/board/qmk_link.h` 에만 둔다. 드라이버에 숫자를 박지 않는다
+- **키보드 배열은 `keyboards/qmk-link/layout-kle.json` 하나만 손으로 고친다.**
+  `tools/gen_keymap.py` 가 `layout-via.json` 을 만든다 (wish-he 관례).
+  KLE 범례는 주소가 아니라 **키 이름**이다 — 주소를 손으로 적으면 반드시 어긋난다
+- **플래시에 쓰는 코드는 `hw/driver/flash.c` 를 거친다.** 소거·기록 중 XIP 가 멈추는데
+  core1 이 PIO USB 를 돌고 있다. `flash_safe_execute()` 로 core1 을 세워야 한다.
+  `flash_range_erase()` 를 직접 부르면 안 된다
 - **`ap.c` 의 static 함수는 `ap` 접두어를 붙이지 않는다.**
   `updateKeyboard()` · `isKeyDown()` 처럼 쓴다 (baram-kbd-tester 관례).
   외부로 나가는 `apInit()` / `apMain()` 만 접두어를 갖는다

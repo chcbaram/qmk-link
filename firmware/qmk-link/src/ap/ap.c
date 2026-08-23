@@ -19,6 +19,16 @@ void apInit(void)
 
   ledStatusInit();
   qmkCliInit();
+
+  // ★ 06단계부터 부팅 때 자동으로 올린다.
+  //
+  //   05단계까지는 `qmk start` 로만 켰다 — 이식 중에 qmkInit() 안에서 죽으면
+  //   USB 가 통째로 안 올라와 BOOTSEL 로만 되살릴 수 있어서였다.
+  //   이제 VIA 까지 실기에서 확인됐고, 자동으로 안 켜면 재부팅할 때마다
+  //   CLI 를 붙이기 전에는 키보드가 아예 동작하지 않는다.
+  //
+  //   그래도 되살릴 길은 남아 있다 — Key2(Reset) 더블클릭이면 BOOTSEL 이다.
+  qmkStart();
 }
 
 void apMain(void)
@@ -57,7 +67,7 @@ void updateKeyboard(void)
       case HID_ITF_PROTOCOL_KEYBOARD:
         if (report.len >= 8)
         {
-          if (qmkIsOn() == true)
+          if (qmkIsOn() == true && qmkIsPassthrough() == false)
           {
             // QMK 가 올라와 있으면 비트맵만 채운다.
             // port/matrix.c 가 읽어가고 QMK 가 키맵을 태워 내보낸다.
@@ -65,6 +75,8 @@ void updateKeyboard(void)
           }
           else
           {
+            // 패스스루면 QMK 를 거치지 않는다 (VIA 의 Link > Passthrough).
+            // 키맵이 꼬였을 때의 탈출구다.
             // QMK 가 없으면 04단계처럼 그대로 흘린다.
             // QMK 기동에 실패해도 키보드는 계속 쓸 수 있다.
             usbdHidSendKeyboard(report.data);

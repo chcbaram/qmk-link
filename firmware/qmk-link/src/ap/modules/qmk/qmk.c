@@ -35,7 +35,8 @@ extern host_driver_t usb_driver;    /* port/driver_usb.c */
 
 static void cliCmd(cli_args_t *args);
 
-static bool     is_qmk_on   = false;
+static bool     is_qmk_on      = false;
+static bool     is_passthrough = false;
 static uint32_t task_count  = 0;
 
 
@@ -79,6 +80,21 @@ bool qmkStart(void)
 bool qmkIsOn(void)
 {
   return is_qmk_on;
+}
+
+void qmkSetPassthrough(bool enable)
+{
+  if (is_passthrough == enable) return;
+
+  is_passthrough = enable;
+
+  // 바꾸는 순간 눌려 있던 키는 QMK 쪽에 남는다. 아무도 안 뗀다.
+  clear_keyboard();
+}
+
+bool qmkIsPassthrough(void)
+{
+  return is_passthrough;
 }
 
 void qmkUpdate(void)

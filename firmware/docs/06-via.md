@@ -1,130 +1,277 @@
 # 06-via — VIA 로 키맵을 편집한다
 
-**상태: ⬜ 미착수** — 구현 상세는 착수할 때 채운다.
+**상태: ✅ 완료**
 
 ## 목표
 
-VIA 웹앱에서 키맵을 편집하고 저장한다. 재부팅해도 유지된다.
+VIA 웹앱에서 키맵과 옵션을 편집하고 저장한다. 재부팅해도 유지된다.
 
 ## 배경 / 근거
 
-05단계에서 QMK 가 돌아가지만 키맵이 컴파일 시점에 박혀 있다.
+05단계에서 QMK 가 돌지만 키맵이 컴파일 시점에 박혀 있다.
 편집 가능하게 만들려면 raw HID 프로토콜과 EEPROM 이 필요하다.
-
-04단계에서 raw HID 엔드포인트는 이미 뚫려 있다. 여기서 응답을 채운다.
+raw HID 엔드포인트(IF2)는 04단계에서 이미 뚫어 뒀다. 여기서 응답을 채운다.
 
 ## 설계
 
-### raw HID
+### 1. EEPROM 을 flash 로 — 이 단계의 핵심 리스크였다
 
-usage page `0xFF60`, usage `0x61`. IN/OUT 각 32바이트.
-QMK 의 `via.c` 가 프로토콜을 처리하므로 우리가 할 일은
-`raw_hid_receive()` / `raw_hid_send()` 를 TinyUSB 에 연결하는 것뿐이다.
+RP2350 에는 EEPROM 이 없어 내장 플래시로 흉내낸다.
+문제는 **소거·기록 동안 XIP 가 멈추는데 core1 이 PIO USB 를 돌고 있다**는 것이다.
+core1 이 그 사이 플래시 코드를 인출하면 그대로 죽는다.
 
-### EEPROM 에뮬레이션 — 이 단계의 핵심 리스크
+```c
+flash_safe_execute_core_init();   // core1 쪽 — usbhCore1Main() 맨 앞
+flash_safe_execute(func, param, timeout_ms);   // core0 쪽 — hw/driver/flash.c
+```
 
-VIA / Vial 은 키맵을 장치에 저장한다. RP2350 에는 EEPROM 이 없으니 flash 로 흉내낸다.
-`hw/driver/eeprom.c` (hola-mini 판을 가져온다) + QMK 의 `eeconfig` / `dynamic_keymap`.
+`flash_safe_execute()` 가 core1 을 RAM 안 루프에 세웠다가 끝나면 풀어 준다.
+core1 이 `flash_safe_execute_core_init()` 을 불러 두지 않으면 SDK 가 거절한다
+(`PICO_ERROR_NOT_PERMITTED`).
 
-**문제는 XIP 다.** flash 를 지우거나 쓰는 동안에는 flash 에서 코드를 실행할 수 없다.
-그런데 03단계에서 **core1 이 PIO USB 를 돌고 있다.** core1 이 그 사이에 flash 코드를
-실행하면 그대로 죽는다. USB 호스트 타이밍도 깨진다.
+**실측** (W25Q16 / clk_sys 120MHz, `flash test` CLI):
 
-pico-sdk 가 주는 수단:
+| | 시간 | 그 사이 core1 `tuh_task()` |
+|---|---:|---:|
+| 소거 4KB | 약 30 ms | 3~4 회 |
+| 기록 4KB | 약 10 ms | 0 회 |
+| 합계 | **약 41 ms** | — |
 
-| 방법 | 내용 |
+평소 `tuh_task()` 는 초당 150만 회쯤 돈다. 즉 **USB 호스트가 통째로 멈추는 시간**이다.
+41ms 를 6번 연속으로 때려도 키보드는 붙어 있었다 (`mounted 1`, `rx 592 / drop 0`, CDC 정상).
+**견딜 만하다** — 이것으로 06단계 진입이 확정됐다.
+
+그래도 줄일 수 있는 만큼 줄였다:
+
+- **0xFF 페이지는 쓰지 않는다.** 소거 직후 섹터는 전부 0xFF 다. 값이 든 페이지만 쓰면
+  대부분 비어 있는 EEPROM 에서 기록이 거의 0 이 된다 (실측 41ms → 28ms)
+- **연속된 페이지는 한 번에 묶는다.** `flashWrite()` 한 번이 lockout 한 번이다.
+  4KB 를 페이지마다 부르면 16회가 되어 49ms, 묶으면 1회로 42ms
+- **섹터 사이를 띄운다.** 4섹터를 붙여 쓰면 164ms 연속 정지가 된다.
+  `EE_FLUSH_MS`(200ms) 간격으로 하나씩 쓴다
+
+#### RAM 섀도 + 지연 플러시
+
+QMK 는 EEPROM 을 바이트 단위로 아무 때나 쓴다. NOR 플래시는 그렇게 못 쓴다.
+
+| | |
 |---|---|
-| `flash_safe_execute()` | 다른 코어를 잠그고(`multicore_lockout`) flash 작업을 한 뒤 푼다. **1순위** |
-| `multicore_lockout_victim_init()` | core1 이 잠길 준비를 해 둬야 한다. `usbhCore1Main()` 초기에 부른다 |
-| RAM 함수 | flash 루틴을 `__not_in_flash_func` 로 두는 것만으로는 부족하다. core1 도 막아야 한다 |
+| 읽기 | RAM 섀도에서 바로. 플래시를 건드리지 않는다 |
+| 쓰기 | RAM 섀도를 고치고 그 섹터를 dirty 로 표시만 |
+| 플러시 | 조용해진 뒤(`EE_FLUSH_MS`)에 dirty 섹터를 하나씩 소거+기록 |
 
-정해야 할 것:
-- core1 을 잠근 동안 USB 호스트가 끊기는 시간이 얼마나 되나 (섹터 지우기 ~수십 ms)
-- 그 사이 PC 쪽 device 도 멈춘다. 호스트가 장치를 놓치지 않을 만큼 짧은가
-- 키 입력이 없는 타이밍에만 쓰는 식으로 피할 수 있나
-- 저장 빈도 — VIA 는 키 하나 바꿀 때마다 쓴다. 캐시해 두고 모아서 쓸지
+VIA 로 키맵을 바꾸면 바이트 쓰기가 수백 번 연달아 온다. 매번 쓰면 같은 섹터를
+수백 번 지우게 되고(수명) 그동안 USB 가 멈춘다. 모았다 쓰면 소거가 섹터당 1회다.
 
-**착수하면 이것부터 실험한다.** 여기서 막히면 06단계 전체가 막힌다.
+`eeprom_task()` 를 `qmkUpdate()` 가 부른다. **QMK 가 꺼져 있어도 부른다** —
+껐을 때 남은 dirty 섹터가 그대로 날아가면 안 된다.
 
-### QMK 옵션
+#### VIA 와 Vial 을 다른 자리에 둔다
 
 ```
-VIA_ENABLE
-RAW_ENABLE
-DYNAMIC_KEYMAP_ENABLE
+0x1F0000  VIA  EEPROM  16KB (4섹터)
+0x1F4000  Vial EEPROM  16KB (4섹터)
+0x1F8000  (예약)       32KB
+0x200000  끝
 ```
 
-### bootloader_jump
+같은 보드에 두 펌웨어를 번갈아 구울 수 있다. 한 영역을 공유하면 트리를 바꿔 구운
+순간 상대가 남긴 바이트를 자기 레이아웃으로 읽는다. eeconfig 매직이 우연히 맞으면
+초기화도 안 되고 엉뚱한 키맵이 나온다. 아예 떼어 놓는다.
 
-VIA 의 "bootloader" 버튼 → `reset_usb_boot(0, 0)`.
-02단계에서 만든 것과 같은 함수다. → [usb-stack.md](usb-stack.md#펌웨어-업데이트)
+크기는 16KB 다. 동적 키맵만 8레이어 × 16 × 16 × 2B = 4096B 이고
+나머지를 eeconfig · VIA user data · 매크로 버퍼가 나눠 쓴다.
 
-### 빌드 옵션을 VIA 로 뺀다 — custom menu
+#### flash 드라이버
 
-QMK 는 NKRO · 탭홀드 같은 것을 보통 **컴파일 타임 매크로**로 정한다.
-바꾸려면 다시 굽어야 한다. 이 프로젝트는 하드웨어가 고정이라 정작 만지고 싶은 게
-전부 그런 옵션이다. **VIA 의 custom menu 로 빼서 런타임에 바꾸게 한다.**
+`common/hw/include/flash.h` 는 **wish-he 것을 그대로** 가져왔다 (오프셋 기준 주소).
+구현 `hw/driver/flash.c` 만 RP2350 용으로 새로 썼다.
 
-Vial 의 QMK settings 와 같은 효과를 VIA 에서 얻는다. wish-he 가 이 방식을 쓴다:
+`rp2040_fw` 계열에서 가져온 것:
 
-> VIA 는 정의 JSON 의 menus 를 보고 UI 를 스스로 그린다. 펌웨어는 채널 ID 별로
-> 값을 읽고 쓰기만 하면 된다. 그래서 **설정 화면은 웹앱을 포크하지 않아도 된다.**
+- **영역 가드 (`flash_tbl`)** — 주소를 잘못 넘기면 자기 펌웨어를 지운다.
+  다만 그쪽 `flashInSector()` 는 **겹치기만 하면** 통과시킨다(0x000000 부터 2MB 도 통과).
+  여기서는 요청 구간이 표 안에 **완전히 들어갈 때만** 통과시킨다
+- **페이지 단위 read-modify-write** — 정렬되지 않은 부분 기록 지원
+- **디바이스 ID (`flash_do_cmd` 0x90)** — `flash info` 에서 확인 (실측 `EF 14` = W25Q16)
+
+멀티코어는 참고할 게 없었다. RP2040 프로젝트 중 `flash_safe_execute` / `multicore_lockout`
+을 쓰는 곳이 하나도 없다 — 전부 `__disable_irq()` 단독이고, core1 이 도는 상황이 없었다.
+
+**주소 규약이 다르다.** rp2040 계열 `flash.c` 는 XIP 절대주소(0x10000000~)를 받고
+여기는 오프셋이다. 그쪽 코드를 베껴 올 때 주소를 그대로 넘기면 안 된다.
+
+### 2. raw HID — TinyUSB 로
+
+wish-he 판은 CherryUSB 용이라 새로 썼다.
 
 ```
-호스트 -> 장치   [0] id_custom_get_value / id_custom_set_value
-                 [1] 채널   [2] 값 ID   [3..] 값
+받기    tud_hid_set_report_cb -> 큐 -> qmkUpdate() 에서 raw_hid_receive()
+보내기  host_driver_t 의 send_raw_hid -> usbdHidSendRaw()
 ```
 
-#### 뺄 후보
+**받는 쪽이 큐를 타는 이유**: OUT 리포트는 `tud_task()` 안의 콜백으로 들어온다.
+거기서 바로 VIA 를 처리하면 응답을 보내려고 IN 엔드포인트를 기다리는데,
+그 대기가 다시 `tud_task()` 를 부른다. 큐에 넣고 메인 루프에서 꺼낸다.
 
-| 옵션 | QMK 훅 | 비고 |
-|---|---|---|
-| NKRO on/off | `keymap_config.nkro` | 이미 런타임이다 (`NK_TOGG`) |
-| `TAPPING_TERM` | `get_tapping_term()` | weak 함수를 덮어 eeprom 값을 돌려준다 |
-| `HOLD_ON_OTHER_KEY_PRESS` | `get_hold_on_other_key_press()` | 〃 |
-| `PERMISSIVE_HOLD` | `get_permissive_hold()` | 〃 |
-| `RETRO_TAPPING` | `get_retro_tapping()` | 〃 |
-| **볼륨키 변환** | `link/` | HHKB 는 keyboard 페이지 `0x80`/`0x81` 로 보낸다. consumer 로 바꿀지 |
-| **패스스루 모드** | `ap.c` | QMK 를 건너뛰고 04단계처럼 그대로 흘린다. 문제 생겼을 때 되돌아갈 곳 |
+`usbdHidSendRaw()` 안에서 **`delay()` 를 쓰면 안 된다.**
+`bsp.c` 의 `delay()` 는 `cliLoopIdle()` 을 돌리고 그 안에 `qmkUpdate()` 가 있다.
+VIA 처리 중에 다시 VIA 처리로 들어간다. `tud_task()` 만 직접 돌린다.
 
-값은 `EECONFIG_USER_DATA_SIZE` 영역에 둔다 (wish-he 의 `ee_user.h` 방식).
+**★ `RAW_ENABLE` 은 `host_driver_t` 에 6번째 멤버(`send_raw_hid`)를 만든다.**
+`port/driver_usb.c` 의 초기화도 같은 `#ifdef` 로 묶여 있다. 한쪽만 켜면 구조체가 어긋난다.
+
+### 3. 키보드 정의 폴더 (wish-he 관례)
+
+```
+firmware/qmk-link/
+├── keyboards/qmk-link/
+│   ├── config.h            via · vial 공용
+│   ├── keymap.c            공용 — usage 패스스루
+│   ├── layout-kle.json     ★ 손으로 편집하는 건 이것 하나
+│   ├── menus.json          손으로 씀 — VIA 커스텀 메뉴
+│   └── layout-via.json     생성물
+└── tools/gen_keymap.py     KLE + menus -> layout-via.json
+```
+
+**KLE 범례는 주소가 아니라 키 이름**(`ESC`, `A`, `LSFT`, `P7` …)이다.
+`gen_keymap.py` 가 이름 → HID usage → `"row,col"` 로 바꾼다.
+주소를 손으로 적으면 반드시 어긋난다.
+
+```bash
+python3 tools/gen_keymap.py          # layout-via.json 생성
+python3 tools/gen_keymap.py --show   # 매핑 표 + KLE 에 빠진 usage
+python3 tools/gen_keymap.py --check  # 생성물이 최신인지만 확인
+```
+
+생성기가 막아 주는 것: 모르는 키 이름, 좌표 중복.
+
+### 4. 배열 — 왜 풀사이즈인가
+
+**이 배열은 물리 PCB 가 아니다. 그냥 그림이다.**
+매트릭스 좌표가 HID usage 라서(`row = usage>>4`, `col = usage&0xF`) 그림이
+키가 동작하는지를 결정하지 않는다.
+
+여기서 세 가지가 따라온다:
+
+1. **풀사이즈로 그린다.** TKL / 75% / 65% / 60% 는 전부 풀사이즈 usage 의
+   부분집합이라 그대로 덮인다
+2. **레이아웃 옵션이 필요 없다.** ISO Enter 도 ANSI Enter 도 똑같이 `0x28` 을 보낸다.
+   wish-he 의 `labels.json`(백스페이스 2U/스플릿 같은 것)에 해당하는 게 없다
+3. **그림에 없는 키도 동작한다.** 키맵 256칸이 전부 패스스루라, 안 그린 키는
+   "못 쓰는" 게 아니라 "VIA 에서 못 고치는" 것뿐이다
+
+그래서 배열이 다를 때의 답은 **ANSI 에 없는 usage 를 별도 서랍으로 붙이는 것**이다.
+현재 3줄이 붙어 있다:
+
+| 서랍 | 내용 |
+|---|---|
+| F13 ~ F24 | `0x68`~`0x73` |
+| ISO / JIS / 한글 | `NUBS` `NUHS` `PEQL` `PCMM` `INT1`~`INT6` `LNG1`~`LNG5` |
+| 편집 / 미디어 | `MUTE` `VOLU` `VOLD` `PWR` `EXEC` `HELP` `MENU` `SLCT` `STOP` `AGIN` `UNDO` `CUT` `COPY` `PSTE` `FIND` |
+
+합쳐 146키. 빠진 것은 `INT7`~`INT9` / `LNG6`~`LNG9` 뿐이고 실물이 거의 없다.
+모르는 usage 가 오면 **CLI `qmk matrix`** 로 확인하고 `layout-kle.json` 에 한 줄 더한다.
+
+### 5. 빌드 옵션을 VIA 로 뺀다 — custom menu
+
+QMK 는 NKRO · 탭홀드를 보통 컴파일 타임 매크로로 정한다. 바꾸려면 다시 구워야 한다.
+이 보드는 **꽂는 키보드가 매번 달라서** 그게 특히 불편하다.
+Vial 의 QMK settings 와 같은 효과를 VIA 에서 얻는다 — **웹앱을 포크하지 않는다.**
+
+```
+호스트 -> 장치   [0] id_custom_get/set_value  [1] 채널  [2] 값 ID  [3..] 값
+```
+
+| 채널 | 값 ID | 항목 | QMK 훅 |
+|---:|---:|---|---|
+| 14 | 1 | Tapping Term (50~500) | `get_tapping_term()` + `get_quick_tap_term()` |
+| 14 | 2 | Hold On Other Key Press | `get_hold_on_other_key_press()` |
+| 14 | 3 | Permissive Hold | `get_permissive_hold()` |
+| 14 | 4 | Retro Tapping | `get_retro_tapping()` |
+| 15 | 1 | NKRO | `keymap_config.nkro` (eeconfig) |
+| 15 | 2 | Passthrough | `ap.c` — QMK 를 건너뛴다 |
+
+**★ `*_PER_KEY` 매크로가 없으면 QMK 가 `get_*()` 를 아예 부르지 않는다.**
+`action_tapping.c` / `action.c` 가 컴파일 상수로 굳혀 버려서, 메뉴를 만들어 놓고도
+슬라이더가 아무 일도 하지 않는 상태가 된다. `config.h` 에서 켠다:
+
+```c
+#define TAPPING_TERM_PER_KEY
+#define QUICK_TAP_TERM_PER_KEY
+#define HOLD_ON_OTHER_KEY_PRESS_PER_KEY
+#define PERMISSIVE_HOLD_PER_KEY
+#define RETRO_TAPPING_PER_KEY
+```
+
+**★ 퀵탭텀도 같이 따라가게 한다.** QMK 는 `QUICK_TAP_TERM` 을 안 주면
+`TAPPING_TERM` 으로 잡는데 그건 컴파일 때 200 으로 굳는다. 탭텀을 150 으로 내려도
+퀵탭텀은 200 으로 남아 원래 지키려던 `퀵탭텀 <= 탭텀` 이 깨진다 (wish-he 에서 겪은 것).
+
+**★ 탭텀은 두 바이트, 큰 자리가 먼저다.** 앱은 슬라이더 최댓값이 255 를 넘으면
+자동으로 2바이트로 보낸다.
+
+**★ 채널 ID 는 14 부터.** 1~5 는 VIA 가 조명용으로 예약해 뒀다.
+
+**★ 라벨은 영어로 쓴다.** 웹앱이 이 문자열을 그대로 i18n 키로 쓴다.
+한글을 박으면 어느 언어로 보든 한글만 나온다 (wish-he 에서 겪은 것).
+
+값은 `EECONFIG_USER_DATA` 영역(64B)에 `version` 을 앞세운 구조체로 둔다.
+구조가 바뀌면 `LINK_CFG_VERSION` 을 올려 옛 EEPROM 을 기본값으로 되돌린다.
 
 #### 디바운스 메뉴는 두지 않는다
 
-wish-he 의 주석 그대로다:
+우리 `matrix.c` 는 `debounce()` 를 아예 부르지 않는다 (원본 키보드가 이미 했다).
+그 메뉴를 두면 아무것도 하지 않는 스위치가 된다. wish-he 와 같은 이유다.
 
-> 우리는 matrix.c 가 debounce() 를 아예 부르지 않는다. 그 메뉴를 두면
-> 아무것도 하지 않는 스위치가 된다.
+### 6. bootloader_jump
 
-우리도 같다 — 원본 키보드가 이미 디바운스했다.
+**★ `id_bootloader_jump` 는 upstream `via.c` 에 구현이 없다.**
+`via.h` 에 enum(0x0B) 만 있고 switch 에 case 가 없다 — 키보드 쪽에서 처리하라는 뜻이다.
+`via_command_kb()` 가 `raw_hid_receive()` 맨 앞에서 불리고, `true` 를 주면
+"응답까지 내가 다 했다" 는 의미다.
 
-### VIA 정의 파일
+응답을 먼저 보내고 20ms 뒤에 넘어간다. 안 그러면 앱이 타임아웃으로 오해한다.
 
-`info.json` 을 VIA 형식으로 만든다. 16×16 가상 매트릭스를 어떻게 보여줄지가 문제다 —
-256키를 그대로 그리면 쓸 수 없으므로, **실제로 쓰는 키만 추린 레이아웃**을 정의한다.
+`VIA_EEPROM_ALLOW_RESET` 도 켰다 — 앱의 "Reset EEPROM" 이 살아난다.
+
+### 7. QMK 자동 시작
+
+**05단계까지는 `qmk start` 로만 켰다.** 이식 중에 `qmkInit()` 안에서 죽으면
+USB 가 통째로 안 올라와 BOOTSEL 로만 되살릴 수 있어서였다.
+VIA 까지 실기에서 확인됐으므로 `apInit()` 에서 자동으로 올린다.
+되살릴 길은 남아 있다 — Key2(Reset) 더블클릭이면 BOOTSEL 이다.
 
 ## 구현 항목
 
-- [ ] `hw/driver/eeprom.c` — flash 기반, 듀얼코어 안전
-- [ ] `ap/modules/qmk/via/port/via_hid.c` — raw HID ↔ TinyUSB
-- [ ] `via.c` / `dynamic_keymap.c` 를 빌드에 포함
-- [ ] `info.json` — VIA 레이아웃 정의
-- [ ] `bootloader_jump()` 연결
-- [ ] CLI `eeprom` 명령 (덤프 / 지우기)
+- [x] `common/hw/include/flash.h` (wish-he 인터페이스 그대로) + `hw/driver/flash.c`
+- [x] `usbhCore1Main()` 에 `flash_safe_execute_core_init()`
+- [x] `port/platforms/eeprom.c` — RAM 섀도 + 지연 플러시
+- [x] `via.c` / `dynamic_keymap.c` / `raw_hid.c` / `nvm_*.c` 를 빌드에 포함
+- [x] `usbd_hid.c` — raw HID 수신 큐 + 송신
+- [x] `port/driver_usb.c` — `send_raw_hid`
+- [x] `keyboards/qmk-link/` + `tools/gen_keymap.py`
+- [x] `port/via_port.c` — 커스텀 메뉴 + `via_command_kb()`
+- [x] `bootloader_jump()` 연결
+- [x] CLI — `flash info/read/erase/test`, `qmk eeprom [flush|erase]`
+- [x] QMK 자동 시작
 
 ## 완료 판정
 
-1. VIA 웹앱이 장치를 인식한다
-2. 키맵을 바꾸면 즉시 반영된다
-3. **재부팅 후에도 유지된다**
-4. VIA 의 bootloader 버튼으로 BOOTSEL 진입
-5. flash 쓰기 중에 core1 의 USB host 가 죽지 않는다
+| # | 항목 | 결과 |
+|---|---|---|
+| 1 | VIA 프로토콜 응답 | ✅ version 13, layer count 8 |
+| 2 | 키맵 읽기 / 쓰기 | ✅ `[0][0][4]` 0x0004 → 0x001D |
+| 3 | **재부팅 후 유지** | ✅ 0x001D 남음, `flush cnt 0` (다시 쓰지 않음) |
+| 4 | 커스텀 메뉴 | ✅ 6개 항목 get/set, 재부팅 후 유지, 모르는 채널은 `id_unhandled` |
+| 5 | bootloader 버튼 | ✅ 응답 0x0B 후 BOOTSEL 진입 |
+| 6 | flash 쓰기 중 core1 생존 | ✅ 41ms × 6회 연속에도 `mounted 1` / `drop 0` |
 
 ## 열린 질문
 
 | 항목 | 내용 |
 |---|---|
-| **flash 쓰기 vs core1** | XIP 정지 중 core1 의 `tuh_task()` 가 어떻게 되는지가 최대 리스크다. `flash_safe_execute()` 로 core1 을 잠그거나, 키 입력이 없는 타이밍에만 쓰거나 |
-| 레이아웃 | 256키를 다 노출할 수 없다. 어떤 부분집합을 보여줄지 |
-| VID / PID | VIA 는 VID/PID 로 정의 파일을 찾는다. `info.json` 과 반드시 일치해야 한다 |
-| EEPROM 크기 | dynamic keymap 이 레이어 수 × 256키 × 2바이트다. 레이어를 몇 개로 할지에 따라 flash 사용량이 결정된다 |
+| VIA 웹앱 실물 확인 | 프로토콜은 hidapi 로 전부 확인했지만 `layout-via.json` 을 앱의 Design 탭에 넣어 그림이 제대로 나오는지는 미확인 |
+| 미디어키 | 원본 키보드가 consumer 페이지로 보내는 키는 아직 안 받는다. `updateKeyboard()` 가 `HID_ITF_PROTOCOL_KEYBOARD` 만 본다 → 08단계 |
+| 매크로 버퍼 | `DYNAMIC_KEYMAP_MACRO_COUNT` 기본값을 그대로 쓴다. 16KB 안에서 남는 만큼이 버퍼다 |
+| 첫 부팅 정지 | 빈 EEPROM 에서 동적 키맵을 처음 채울 때 4섹터를 쓴다. 200ms 간격이라 총 1초쯤 |

@@ -17,8 +17,7 @@ file(GLOB QMK_SRC_FILES CONFIGURE_DEPENDS
   ${CMAKE_CURRENT_SOURCE_DIR}/ap/modules/link/*.c
   ${CMAKE_CURRENT_SOURCE_DIR}/ap/modules/qmk/qmk.c
 
-  ${QMK_PORT_PATH}/port/driver_usb.c
-  ${QMK_PORT_PATH}/port/matrix.c
+  ${QMK_PORT_PATH}/port/*.c
   ${QMK_PORT_PATH}/port/platforms/*.c
 
   # 프로토콜 계층은 upstream 원본을 쓴다.
@@ -104,8 +103,8 @@ set(QMK_DEFINES
   GRAVE_ESC_ENABLE
 
   QMK_KEYBOARD_H="quantum.h"
-  QMK_KEYMAP_CONFIG_H="${QMK_PORT_PATH}/config.h"
-  KEYMAP_C="${QMK_PORT_PATH}/keymap.c"
+  QMK_KEYMAP_CONFIG_H="${QMK_BOARD_PATH}/config.h"
+  KEYMAP_C="${QMK_BOARD_PATH}/keymap.c"
 )
 
 

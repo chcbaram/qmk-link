@@ -31,16 +31,25 @@ PC 에는 **VIA / Vial 로 편집 가능한 키보드**로 보이게 한다.
 | **완료** | **03 USB HOST** — Pico-PIO-USB, core1 전용 태스크. HHKB Lite 2 열거·리포트 수신 확인 |
 | **완료** | **04 HID DEVICE** — HID kbd/extra/raw + CDC 복합. 패스스루로 PC 타이핑 확인 |
 | **완료** | **05 QMK** — QMK 0.33.13 이식. `link/` 가상 매트릭스, QMK 거쳐 PC 입력 확인 |
-| **다음** | **06 VIA** — raw HID + dynamic keymap + **flash EEPROM** (지금은 RAM 이다) |
+| **완료** | **06 VIA** — flash EEPROM, raw HID, dynamic keymap, 커스텀 메뉴. 전부 실기 확인 |
+| **다음** | **07 VIAL** — `qmk/vial/` 트리 추가, `-DKEY_PROTOCOL=vial` |
 
-04 단계 실측: FLASH 82,668 B / 2 MB (3.94%), RAM 37,028 B / 512 KB (7.06%).
+06 단계 실측: FLASH 109,548 B / 2 MB (5.22%), RAM 59,992 B / 512 KB (11.44%).
 `0483:5305 QMK-LINK` 로 열거된다 — HID(keyboard / extra / raw) + CDC 복합 장치.
 `clk_sys` 는 CLI 에서 120,000,000 Hz 확인.
 
-**지금 동작하는 것**: HHKB Lite 2 를 USB-A 에 꽂고 타이핑하면 PC 에 그대로 입력된다.
-QMK 는 아직 없다 — `ap.c` 의 `updateKeyboard()` 가 리포트를 그대로 넘기는 패스스루다.
+**지금 동작하는 것**
 
-**미검증**: 마우스 패스스루(USB 마우스 없음), BIOS 화면, Windows / Linux.
+- HHKB Lite 2 를 USB-A 에 꽂고 타이핑하면 QMK 를 거쳐 PC 에 입력된다
+- **QMK 는 부팅 때 자동으로 올라온다** (`apInit()`). `qmk start` 는 이제 재기동용이다
+- VIA 프로토콜 응답 — version 13, layer count 8, 키맵 읽기/쓰기
+- 키맵이 **내장 플래시에 저장되어 재부팅을 넘는다** (0x1F0000, 16KB)
+- VIA 커스텀 메뉴 6개 — 탭텀 / hold-okp / permissive / retro / NKRO / 패스스루
+- VIA 의 bootloader 버튼 → BOOTSEL
+
+**미검증**: 마우스 패스스루(USB 마우스 없음), BIOS 화면, Windows / Linux,
+그리고 **VIA 웹앱 실물** (프로토콜은 hidapi 로 전부 확인했지만 `layout-via.json` 을
+Design 탭에 넣어 그림이 제대로 나오는지는 아직 안 봤다).
 
 BOOTSEL 진입 경로 (전부 실기 확인):
 1. `flash.py` 의 CDC 1200bps touch — 버튼 없이 굽는다
@@ -143,7 +152,7 @@ print(s.read(32768).decode(errors="replace").replace("\r\n","\n"))
 
 ---
 
-## 소스 구조 (05단계 기준)
+## 소스 구조 (06단계 기준)
 
 ```
 firmware/qmk-link/src/
@@ -164,11 +173,30 @@ firmware/qmk-link/src/
     └── modules/
         ├── link/               HID usage -> 16x16 비트맵 (QMK 무관)
         └── qmk/
-            ├── qmk.c           QMK 기동 · CLI
+            ├── qmk.c           QMK 기동 · 패스스루 · CLI (via·vial 공용)
             └── via/
                 ├── CMakeLists.txt   ★ 어떤 upstream 파일을 넣을지 여기서 정한다
-                ├── config.h · keymap.c · version.h
-                └── port/             wish-he 판 (driver_usb · matrix · platforms)
+                ├── version.h
+                └── port/            driver_usb · matrix · via_port · platforms
+```
+
+키보드 정의는 소스 밖에 따로 있다 (**wish-he 관례**):
+
+```
+firmware/qmk-link/
+├── keyboards/qmk-link/         via · vial 두 트리가 같은 것을 본다
+│   ├── config.h                QMK 설정 (CMake 가 QMK_KEYMAP_CONFIG_H 로 넘긴다)
+│   ├── keymap.c                usage 패스스루 키맵
+│   ├── layout-kle.json         ★ 손으로 편집하는 건 이것 하나. 범례는 '키 이름'
+│   ├── menus.json              VIA 커스텀 메뉴 (손으로 씀)
+│   └── layout-via.json         생성물 — VIA 앱 Design 탭에 넣는 정의
+└── tools/gen_keymap.py         KLE + menus -> layout-via.json
+```
+
+```bash
+python3 tools/gen_keymap.py          # 생성
+python3 tools/gen_keymap.py --show   # 매핑 표 + KLE 에 빠진 usage
+python3 tools/gen_keymap.py --check  # 생성물이 최신인지만 확인
 ```
 
 **`ap/modules/` 아래는 프로젝트 glob 에서 제외**되어 있다 (`src/CMakeLists.txt` 의
@@ -213,7 +241,13 @@ void cliLoopIdle(void)
 | **부트 키보드는 IF0 이어야 한다** | 일부 BIOS 가 IF0 만 본다 (wish-he 의 `usb_desc.h` 에 기록된 함정). 04단계에서 CDC 를 뒤로 밀고 키보드를 IF0 으로 옮긴다 |
 | **HID 리포트 ID 는 QMK 값** | mouse 2 / system 3 / consumer 4 / NKRO 6. `qmk/port/protocol/report.h` 와 어긋나면 05단계에서 곤란해진다 |
 | **QMK 는 upstream 을 받아 쓴다** | `firm-sdk/upstream.json` 이 리비전 고정(`0.33.13`), `fetch_upstream.py` 가 sparse 로 받는다(9.6MB). **`tmk_core/protocol` 도 원본을 쓴다** — vendoring 하지 않는다 |
-| **QMK 는 `qmk start` 로만 켠다** | 부팅 때 자동으로 켜지 않는다. 기동에 실패하면 USB 가 통째로 안 올라와 BOOTSEL 로만 살아난다. 꺼져 있으면 04단계 패스스루로 동작한다 |
+| **QMK 는 부팅 때 자동으로 올린다** (06단계~) | 05단계까지는 `qmk start` 로만 켰다 — 이식 중에 죽으면 USB 가 통째로 안 올라와서다. VIA 까지 확인된 지금은 `apInit()` 에서 올린다. 되살릴 길은 남아 있다 (Key2 더블클릭 → BOOTSEL). 기동에 실패하면 04단계 패스스루로 떨어진다 |
+| **EEPROM 은 flash + RAM 섀도 + 지연 플러시** | 소거·기록 중 XIP 가 멈추는데 core1 이 PIO USB 를 돈다. `flash_safe_execute()` 로 core1 을 세운다. **실측 소거 30ms + 기록 10ms = 41ms 동안 USB 호스트가 통째로 멈춘다.** 6회 연속에도 키보드가 살아 있어 진입을 확정했다. 지연 플러시가 핵심 — VIA 는 키 하나에 바이트 쓰기가 수백 번 온다 → [06-via.md](06-via.md#1-eeprom-을-flash-로--이-단계의-핵심-리스크였다) |
+| **VIA 와 Vial EEPROM 을 떼어 놓는다** | `0x1F0000` / `0x1F4000`, 각 16KB. 같은 보드에 두 펌웨어를 번갈아 구울 수 있는데 영역을 공유하면 상대가 남긴 바이트를 자기 레이아웃으로 읽는다. 매직이 우연히 맞으면 초기화도 안 되고 엉뚱한 키맵이 나온다 |
+| **`flash.h` 는 wish-he 인터페이스 그대로** | 주소는 **플래시 오프셋**이다. rp2040 계열 `flash.c` 는 반대로 XIP 절대주소를 받으므로 그쪽 코드를 베껴 올 때 주의. 영역 가드는 rp2040_fw 의 `flash_tbl` 을 참고하되 "겹치면 통과" 가 아니라 "완전히 들어가야 통과" 로 좁혔다 |
+| **키보드 정의는 `keyboards/qmk-link/`** | wish-he 관례. **`layout-kle.json` 하나만 손으로 편집**하고 `tools/gen_keymap.py` 가 `layout-via.json` 을 만든다. KLE 범례는 주소가 아니라 **키 이름**이다 — 주소를 손으로 적으면 반드시 어긋난다 |
+| **VIA 배열은 풀사이즈 + 서랍** | 매트릭스 좌표가 HID usage 라 **그림은 물리 PCB 가 아니다.** TKL/65%/60% 는 풀사이즈의 부분집합이라 그대로 덮이고, ISO Enter 도 ANSI Enter 도 `0x28` 이라 **레이아웃 옵션이 필요 없다.** ANSI 에 없는 usage(F13~F24 / ISO·JIS / 편집·미디어)는 아래에 서랍으로 붙인다. **그림에 없는 키도 동작한다** — 못 고칠 뿐이다 |
+| **빌드 옵션을 VIA 커스텀 메뉴로 뺀다** | 꽂는 키보드가 매번 달라서 탭텀·탭홀드를 다시 구워 바꾸는 게 특히 불편하다. Vial 의 QMK settings 와 같은 효과를 얻으면서 **웹앱을 포크하지 않는다.** ★ `*_PER_KEY` 매크로가 없으면 QMK 가 `get_*()` 를 아예 부르지 않는다 |
 | **`led.h` 이름 충돌** | `common/hw/include/led.h`(baram)와 `quantum/led.h`(QMK)가 같은 이름이다. include 경로 순서로는 못 푼다. QMK 소스에만 `-include quantum/led.h` 를 강제한다 (`qmk/via/CMakeLists.txt`) |
 | **허브 지원은 필수다** | `CFG_TUH_HUB=1`. HHKB Lite 2 처럼 허브 내장 키보드가 흔하다. 끄면 연결은 감지되는데 열거가 끝나지 않는다 |
 | **PIO USB 가 pio0 를 통째로 쓴다** | SM 0·1·2 + DMA ch0. 그래서 WS2812 는 pio1 이다 |
@@ -263,64 +297,63 @@ void cliLoopIdle(void)
 |---|---|---|
 | boot vs report protocol | 3단계 | report protocol 이 NKRO 를 살리지만 리포트 디스크립터 파싱이 필요하다 |
 | ~~VID / PID~~ ✅ | — | `info.json` / `vial.json` 과 반드시 일치해야 한다. 04단계에서 descriptor 가 바뀌므로 PID 를 한 번 올린다 |
-| **EEPROM 이 RAM 이다** | 6단계 | `port/platforms/eeprom.c` 가 RAM 백엔드다. 전원을 내리면 사라진다. **06단계 첫 항목** |
-| **EEPROM 쓰기 vs core1** | 6단계 | flash 를 쓰는 동안 XIP 가 멈추는데 core1 이 PIO USB 를 돌고 있다. `flash_safe_execute()` + `multicore_lockout_victim_init()` 로 core1 을 잠가야 한다. **06단계 착수 시 이것부터 실험한다** |
-| **hola-mini 포트 ↔ QMK 0.33.13 API 차이** | 5단계 | hola-mini 가 이식한 QMK 는 0.33.13 보다 한참 이전이다. `keycodes.h` 재편 · `keyboard.c` 스캔 흐름 · `eeconfig` 레이아웃 등에서 차이가 날 수 있다. 착수 시 **먼저 컴파일 가능 여부부터 확인**하고, 차이가 크면 QMK 리비전을 내릴지 포트를 올릴지 정한다 |
+| ~~EEPROM 이 RAM / 쓰기 vs core1~~ ✅ | — | 06단계에서 해결. `flash_safe_execute()` + 지연 플러시. 실측 41ms 정지, 견딜 만하다 |
+| ~~hola-mini 포트 ↔ QMK 0.33.13 API 차이~~ ✅ | — | hola-mini 가 이식한 QMK 는 0.33.13 보다 한참 이전이다. `keycodes.h` 재편 · `keyboard.c` 스캔 흐름 · `eeconfig` 레이아웃 등에서 차이가 날 수 있다. 착수 시 **먼저 컴파일 가능 여부부터 확인**하고, 차이가 크면 QMK 리비전을 내릴지 포트를 올릴지 정한다 |
 | ~~sparse-checkout 범위~~ ✅ | — | `quantum/` 만으로 부족하면 `sparse-checkout set` 에 경로를 추가한다. `keyboards/` 만 빠지면 크기는 여전히 작다 |
+| **VIA 웹앱 실물** | 07단계 전 | 프로토콜은 hidapi 로 전부 확인했지만 `keyboards/qmk-link/layout-via.json` 을 앱 Design 탭에 넣어 그림이 제대로 나오는지는 미확인 |
+| **미디어키** | 8단계 | 원본 키보드가 consumer 페이지로 보내는 키는 아직 안 받는다. `updateKeyboard()` 가 `HID_ITF_PROTOCOL_KEYBOARD` 만 본다 |
 | Windows / Linux 에서 `flash.py` | 해당 OS 실기가 있을 때 | macOS 에서만 검증했다. `setup-windows.md` · `setup-linux.md` 도 미검증이다 |
 
 ---
 
-## 06단계 착수 — 이 순서로 한다
+## 07단계 착수 — 이 순서로 한다
 
-**첫 항목이 가장 위험하다. 그것부터 실험하고 나머지를 정한다.**
+06단계가 길을 다 뚫어 놨다. 07단계는 **트리를 하나 더 만드는 작업**이다.
 
-### 1. EEPROM 을 flash 로 (★ 여기서 막히면 06단계 전체가 막힌다)
+### 0. 그 전에 — VIA 웹앱으로 실물 확인
 
-지금 `qmk/via/port/platforms/eeprom.c` 는 **RAM 백엔드**다. 전원을 내리면 사라진다.
+`keyboards/qmk-link/layout-via.json` 을 [usevia.app](https://usevia.app) 의
+Design 탭에 넣고 그림이 제대로 나오는지 본다. 여기서 배열을 고칠 게 나오면
+`layout-kle.json` 을 고치고 `tools/gen_keymap.py` 를 다시 돌린다.
+07단계에 들어가면 같은 배열을 vial.json 으로도 만들어야 하니 **먼저 확정한다.**
 
-문제는 **flash 를 쓰는 동안 XIP 가 멈추는데 core1 이 PIO USB 를 돌고 있다**는 것이다.
-core1 이 그 사이 flash 코드를 실행하면 그대로 죽고 USB 호스트 타이밍도 깨진다.
+### 1. upstream 에 vial-qmk 추가
 
-```c
-multicore_lockout_victim_init();   // usbhCore1Main() 초기에 (core1 쪽)
-flash_safe_execute(...);           // core0 에서 flash 작업
+`firm-sdk/upstream.json` 에 항목을 더하고 `fetch_upstream.py --update` 로 받는다.
+sparse 목록은 qmk 와 같다 (`quantum tmk_core platforms`).
+
+```json
+"vial-qmk": { "url": "https://github.com/vial-kb/vial-qmk.git", "rev": "<커밋 SHA>" }
 ```
 
-재야 할 것:
-- core1 을 잠근 동안 USB 가 멈추는 시간 (섹터 지우기 수십 ms)
-- 호스트가 장치를 놓치지 않을 만큼 짧은가
-- VIA 는 키 하나 바꿀 때마다 쓴다 → 모아서 쓸지 (wish-he 는 `eeprom_flush()` 로 지연 기록한다)
+리비전이 SHA 라 `--branch` 로는 못 받는다 — `fetch_upstream.py` 가 이미
+`git init` + `fetch --depth 1 <sha>` 경로를 갖고 있다.
 
-### 2. NVM 계층에 맞추기
+### 2. `src/ap/modules/qmk/vial/` 트리
 
-QMK 0.33 은 `eeconfig` / `dynamic_keymap` 이 `quantum/nvm/` 인터페이스를 거친다.
-백엔드는 `quantum/nvm/eeprom/nvm_*.c` 다 (지금 `nvm_eeconfig.c` 만 빌드에 있다).
-06단계에서 `nvm_dynamic_keymap.c` · `nvm_via.c` 를 켠다.
+`via/` 를 복사해 시작한다. 갈리는 곳:
 
-### 3. VIA 켜기
+| | via | vial |
+|---|---|---|
+| `CMakeLists.txt` | `QMK_UPSTREAM_PATH` | vial-qmk 경로. `vial.c` · `vial_generated_*.h` 추가 |
+| `port/via_port.c` | 커스텀 메뉴 | Vial 은 QMK settings 가 내장이라 **대부분 필요 없어진다** |
+| `port/platforms/eeprom.c` | `HW_FLASH_E2P_VIA_BEGIN` | **`HW_FLASH_E2P_VIAL_BEGIN` 으로 바꾼다** (이것을 빠뜨리면 조용히 섞인다) |
 
-`qmk/via/CMakeLists.txt` 에서 되돌리면 된다 — 05단계에 주석으로 꺼 뒀다:
+`port/driver_usb.c` · `matrix.c` · 나머지 `platforms/*` 는 그대로 쓸 수 있을 것이다.
 
-```cmake
-VIA_ENABLE / RAW_ENABLE / DYNAMIC_KEYMAP_ENABLE
-${QMK_QUANTUM_PATH}/via.c
-${QMK_QUANTUM_PATH}/dynamic_keymap.c
-${QMK_QUANTUM_PATH}/nvm/eeprom/nvm_dynamic_keymap.c
-${QMK_QUANTUM_PATH}/nvm/eeprom/nvm_via.c
-```
+### 3. `keyboards/qmk-link/` 는 공유한다
 
-raw HID 엔드포인트(IF2)는 04단계에서 이미 뚫려 있다. `via_hid.c` 를 새로 쓴다
-(wish-he 판은 CherryUSB 용이라 TinyUSB 로 바꿔야 한다).
+`config.h` · `keymap.c` · `layout-kle.json` 은 두 트리가 같은 것을 본다.
+Vial 전용 설정(`VIAL_KEYBOARD_UID` 등)은 vial 트리 안에 따로 둔다 —
+`keyboards/` 의 공용 `config.h` 를 갈라 놓지 않는다.
 
-### 4. `info.json` — VIA 정의
+`vial.json` 은 `gen_keymap.py` 에 `--vial` 을 더해 같은 KLE 에서 뽑는다.
+두 벌을 손으로 관리하면 반드시 어긋난다.
 
-**16x16 = 256키를 그대로 그리면 못 쓴다.** 실제로 쓰는 키만 추린 레이아웃을 만든다.
-좌표가 HID usage 라는 점을 이용하면 일반 키보드 배열 그대로 그릴 수 있다.
+### 4. `-DKEY_PROTOCOL=vial` 로 빌드
 
-### 5. custom menu 로 빌드 옵션 런타임화
-
-→ [06-via.md](06-via.md#빌드-옵션을-via-로-뺀다--custom-menu)
+`src/CMakeLists.txt` 가 이미 `include(ap/modules/qmk/${KEY_PROTOCOL}/CMakeLists.txt)`
+로 갈라 놓았다. 산출물 이름을 `qmk-link-via.uf2` / `qmk-link-vial.uf2` 로 나눌지 정한다.
 
 ## 문서 읽는 순서
 

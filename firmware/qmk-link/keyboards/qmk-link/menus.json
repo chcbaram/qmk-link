@@ -1,0 +1,63 @@
+{
+  "_comment": [
+    "VIA 커스텀 메뉴. 손으로 쓴다 — 생성물이 아니다.",
+    "여기 적으면 VIA 가 UI 를 스스로 그리고, 펌웨어는 port/via_port.c 에서",
+    "채널 ID 별로 값만 주고받는다. VIA 웹앱을 포크할 필요가 없다.",
+    "",
+    "★ 여기 있는 것들은 원래 QMK 의 '빌드 옵션' 이다.",
+    "  config.h 에 박아 두면 바꿀 때마다 다시 구워야 한다. 이 보드는 꽂는 키보드가",
+    "  매번 달라서 그게 특히 불편하다. Vial 이 하는 것처럼 런타임 값으로 뺐다.",
+    "",
+    "★ 라벨은 영어로 쓴다.",
+    "  웹앱이 이 문자열을 그대로 i18n 키로 쓴다. 한글을 박으면 어느 언어로 보든",
+    "  한글만 나온다 (wish-he 에서 겪은 것).",
+    "",
+    "★ 채널 ID 는 14 부터 쓴다.",
+    "  1~5 는 VIA 가 조명용으로 예약해 뒀다 (backlight / rgblight / rgb_matrix ...).",
+    "  지금은 조명을 안 켜서 충돌이 없지만, 나중에 켤 때 옮기지 않으려고 비켜 둔다."
+  ],
+
+  "menus": [
+    {
+      "label": "Tap-Hold",
+      "content": [
+        {
+          "label": "Tapping Term (default 200ms)",
+          "type": "range",
+          "options": [50, 500],
+          "content": ["id_link_tapping_term", 14, 1]
+        },
+        {
+          "label": "Hold On Other Key Press",
+          "type": "toggle",
+          "content": ["id_link_hold_okp", 14, 2]
+        },
+        {
+          "label": "Permissive Hold",
+          "type": "toggle",
+          "content": ["id_link_permissive_hold", 14, 3]
+        },
+        {
+          "label": "Retro Tapping",
+          "type": "toggle",
+          "content": ["id_link_retro_tapping", 14, 4]
+        }
+      ]
+    },
+    {
+      "label": "Link",
+      "content": [
+        {
+          "label": "NKRO",
+          "type": "toggle",
+          "content": ["id_link_nkro", 15, 1]
+        },
+        {
+          "label": "Passthrough (bypass QMK)",
+          "type": "toggle",
+          "content": ["id_link_passthrough", 15, 2]
+        }
+      ]
+    }
+  ]
+}

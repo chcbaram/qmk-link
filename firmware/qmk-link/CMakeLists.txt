@@ -9,6 +9,11 @@ set(PRJ_NAME qmk-link)
 #   via  : qmk_firmware  기반
 #   vial : vial-qmk      기반
 #
+# 키보드 정의 폴더 (wish-he 관례).
+# 배열 KLE / VIA 메뉴 / config.h / keymap.c 가 여기 모여 있다.
+# via · vial 두 트리가 같은 것을 본다.
+set(QMK_BOARD_PATH ${CMAKE_CURRENT_LIST_DIR}/keyboards/qmk-link)
+
 set(KEY_PROTOCOL "via" CACHE STRING "key protocol tree: via | vial")
 
 # QMK / Vial 원본. firm-sdk/upstream.json 이 리비전을 고정하고
