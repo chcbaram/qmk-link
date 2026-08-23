@@ -324,24 +324,33 @@ function renderSlots() {
       const row = document.createElement('div');
 
       row.className = 'slot-row' + (on ? ' on' : '');
-      row.innerHTML = '<span class="dot"><i></i></span>'
-        + `<b>SLOT ${r.i}</b>`
-        + `<span class="nm">${esc(r.name) || '(이름 없음)'}</span>`
-        + `<span class="note">${r.len} B · PID ${hex4(PID_BASE + r.i)}</span>`
-        + `<span class="note" style="color:#1e5c30">${on ? '적용 중' : ''}</span>`;
+
+      /*
+       * ★ 적용 여부를 보여 주던 등을 라디오로 바꿨다 — 그 자리에서 바로 고른다.
+       *
+       *   [적용] 버튼을 따로 두면 "지금 적용 중" 을 말하는 곳과 "바꾸는 곳" 이
+       *   갈린다. 라디오는 둘이 같은 자리라 설명이 필요 없다.
+       *   무리(키보드)마다 name 을 달리해서 서로 간섭하지 않게 한다.
+       */
+      const pick = document.createElement('input');
+
+      pick.type = 'radio';
+      pick.className = 'pick';
+      pick.name = `pick-${g.vid}-${g.pid}`;
+      pick.checked = on;
+      pick.disabled = !here;
+      pick.title = here ? (on ? '이미 적용 중이다' : '이 SLOT 을 적용한다')
+                        : '꽂혀 있는 키보드만 적용할 수 있다';
+      pick.onchange = () => applySlot(r.i);
+      row.appendChild(pick);
+
+      row.appendChild(cell('b', `SLOT ${r.i}`));
+      row.appendChild(cell('span', esc(r.name) || '(이름 없음)', 'nm'));
+      row.appendChild(cell('span', `${r.len} B · PID ${hex4(PID_BASE + r.i)}`, 'note'));
+      row.appendChild(cell('span', on ? '적용 중' : '', 'note on-mark'));
 
       const acts = document.createElement('span');
       acts.className = 'acts';
-
-      /*
-       * ★ [적용] 은 적용 중인 줄에도 둔다 — 눌리지 않는 회색으로.
-       *   줄마다 버튼 수가 달라지면 나머지 버튼 자리가 어긋나서, 누르려던
-       *   [편집] 자리에 [지우기] 가 와 있게 된다.
-       */
-      const ap = btn('적용', () => applySlot(r.i));
-      ap.disabled = (!here || on);
-      if (on) ap.title = '이미 적용 중이다';
-      acts.appendChild(ap);
       acts.appendChild(btn('편집', () => loadSlotForEdit(r.i)));
       acts.appendChild(btn('지우기', () => eraseSlot(r.i)));
 
@@ -363,7 +372,7 @@ function renderSlots() {
       const row = document.createElement('div');
 
       row.className = 'slot-row';
-      row.innerHTML = '<span class="dot"><i></i></span>'
+      row.innerHTML = '<span></span>'
         + `<b>SLOT ${editSlot}</b>`
         + '<span class="note wide">새로 만드는 중 — 아래 <b>3</b> 에서 배열을 넣고 키를 배운다</span>';
 
@@ -399,6 +408,13 @@ function renderSlots() {
     }
     box.appendChild(div);
   }
+}
+
+function cell(tag, html, cls) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  e.innerHTML = html;
+  return e;
 }
 
 function btn(label, fn, cls) {
