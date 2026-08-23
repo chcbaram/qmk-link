@@ -327,6 +327,7 @@ void apMain(void)
 | ~~sparse-checkout 범위~~ ✅ | — | `quantum/` 만으로 부족하면 `sparse-checkout set` 에 경로를 추가한다. `keyboards/` 만 빠지면 크기는 여전히 작다 |
 | **VIA 웹앱 실물** | 07단계 전 | 프로토콜은 hidapi 로 전부 확인했지만 `keyboards/qmk-link/layout-via.json` 을 앱 Design 탭에 넣어 그림이 제대로 나오는지는 미확인 |
 | **미디어키** | 8단계 | 원본 키보드가 consumer 페이지로 보내는 키는 아직 안 받는다. `updateKeyboard()` 가 `HID_ITF_PROTOCOL_KEYBOARD` 만 본다 |
+| **키보드마다 다른 레이아웃/키맵** | 09단계 | 검토 끝났다 → [09-keyboard-profile.md](09-keyboard-profile.md). 핵심: Vial 은 정의를 장치에서 읽어가고 VIA 는 안 읽는다. 키맵 전환은 보드가 결정하므로 **둘 다 된다** |
 | Windows / Linux 에서 `flash.py` | 해당 OS 실기가 있을 때 | macOS 에서만 검증했다. `setup-windows.md` · `setup-linux.md` 도 미검증이다 |
 
 ---
