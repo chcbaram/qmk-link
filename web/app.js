@@ -305,6 +305,17 @@ function startWizard() {
 
 function skip() { if (cursor >= 0) { cursor++; next(); } }
 
+// 잘못 배운 자리를 되돌린다. 커서는 그대로 둬서 바로 다시 누를 수 있게 한다.
+function clearCur() {
+  if (cursor < 0 || cursor >= keys.length) { log('먼저 자리를 고른다 (키를 클릭).'); return; }
+
+  const had = keys[cursor].usage;
+  keys[cursor].usage = null;
+  render();
+  log(had === null ? '이미 비어 있다.'
+                   : `0x${had.toString(16).toUpperCase()} 를 비웠다. 이 자리의 키를 다시 누른다.`);
+}
+
 function manualAssign() {
   const name = $('manual').value.trim().toUpperCase();
   if (cursor < 0) { log('먼저 자리를 고른다 (키를 클릭).'); return; }
@@ -380,6 +391,7 @@ $('disconnect').onclick = disconnect;
 $('load').onclick = loadKle;
 $('start').onclick = startWizard;
 $('skip').onclick = skip;
+$('clear').onclick = clearCur;
 $('assign').onclick = manualAssign;
 $('exVia').onclick = exportVia;
 $('exVial').onclick = exportVial;
