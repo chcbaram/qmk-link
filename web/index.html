@@ -43,8 +43,12 @@
                   margin-left:-12px; padding:6px 12px; border-radius:0 6px 6px 0; }
   .slot-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap;
               padding:4px 0 4px 18px; font-size:13px; }
-  .slot-row .dot { width:14px; display:inline-block; }
+  .slot-row .dot { width:16px; display:inline-block; }
+  .slot-row .dot i { display:inline-block; width:9px; height:9px; border-radius:50%;
+                     background:#fff; border:1px solid #b9b9c2; vertical-align:middle; }
   .slot-row.on { color:#1e5c30; }
+  .slot-row.on .dot i { background:#34a853; border-color:#2a8443;
+                        box-shadow:0 0 0 3px #dff0e2; }
   .slot-row button { padding:2px 8px; font-size:12px; }
   .badge { background:#ffe9a8; border:1px solid #d8a83a; color:#5a4310;
            border-radius:5px; padding:3px 8px; font-size:12px; }

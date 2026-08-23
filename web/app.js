@@ -21,6 +21,7 @@ const TREE_VIAL   = 1;
 const CMD_INFO    = 0x00;
 const CMD_PRESSED = 0x01;
 const CMD_SLOT_INFO   = 0x02;
+const CMD_SLOT_READ   = 0x03;
 const CMD_SLOT_BEGIN  = 0x04;
 const CMD_SLOT_DATA   = 0x05;
 const CMD_SLOT_COMMIT = 0x06;
@@ -228,6 +229,18 @@ function renderSlots() {
 
   for (const g of order) {
     const here = (`${g.vid}:${g.pid}` === hereKey) && (hostVid || hostPid);
+
+    /*
+     * ★ 어느 SLOT 이 적용 중인가 — 펌웨어와 같은 규칙으로 판정한다.
+     *
+     *   보드가 알려 주는 activeSlot 이 정답이다. 다만 그것을 못 받았을 때
+     *   (구형 펌웨어라 INFO 버전이 낮을 때) -1 로 두면 "아무것도 적용 안 됨"
+     *   처럼 보인다. 실제로는 kbdStoreFind() 가 첫 일치를 쓰므로 같은 규칙을
+     *   여기서도 쓴다. 안 그러면 하나뿐인 SLOT 이 꺼진 등으로 보인다.
+     */
+    const applied = here
+      ? (activeSlot >= 0 ? activeSlot : (g.rows.length ? g.rows[0].i : -1))
+      : -1;
     const div = document.createElement('div');
     div.className = 'kbd-grp' + (here ? ' here' : '');
 
@@ -247,15 +260,16 @@ function renderSlots() {
     }
 
     for (const r of g.rows) {
-      const on  = here && r.i === activeSlot;
+      const on  = (r.i === applied);
       const row = document.createElement('div');
       row.className = 'slot-row' + (on ? ' on' : '');
 
       const txt = document.createElement('span');
-      txt.innerHTML = `<span class="dot">${on ? '\u25CF' : '\u25CB'}</span>`
+      txt.innerHTML = '<span class="dot"><i></i></span>'
         + `<b>SLOT ${r.i}</b>  ${r.name || '(이름 없음)'}`
-        + `  <span class="note">${r.len} B · PID ${hex4(PID_BASE + r.i)}`
-        + `${on && selSlot === r.i ? ' · 고정' : ''}</span>`;
+        + `  <span class="note">${r.len} B · PID ${hex4(PID_BASE + r.i)}</span>`
+        + (on ? '  <span class="note" style="color:#1e5c30">적용 중'
+                + (selSlot === r.i ? ' · 고정' : '') + '</span>' : '');
       row.appendChild(txt);
 
       if (here && !on) row.appendChild(btn('적용', () => applySlot(r.i)));
@@ -264,8 +278,26 @@ function renderSlots() {
       div.appendChild(row);
     }
 
-    if (here && g.rows.length > 1 && selSlot >= 0) {
-      div.appendChild(btn('자동으로', () => applySlot(0xFF), 'note'));
+    /*
+     * ★ 새 SLOT 을 늘리는 길을 여기 둔다.
+     *
+     *   전에는 "이미 담아 둔 것을 [열기] 로 연 뒤" 에만 [새 SLOT 에 담기] 가
+     *   나왔다. 그래서 변형본을 하나 더 만들 방법이 사실상 없었다.
+     */
+    if (here) {
+      const free = slots ? slots.findIndex(x => !x.used) : -1;
+      const foot = document.createElement('div');
+
+      foot.className = 'slot-row';
+      if (free >= 0) foot.appendChild(btn(`SLOT ${free} 에 새로 담기`, () => saveSlot(free)));
+      else {
+        const n = document.createElement('span');
+        n.className = 'note';
+        n.textContent = '빈 SLOT 이 없다 — 하나 지워야 늘릴 수 있다.';
+        foot.appendChild(n);
+      }
+      if (g.rows.length > 1 && selSlot >= 0) foot.appendChild(btn('자동으로', () => applySlot(SEL_AUTO)));
+      div.appendChild(foot);
     }
     box.appendChild(div);
   }
