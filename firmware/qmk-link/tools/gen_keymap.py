@@ -95,6 +95,23 @@ def board_dir(name):
     return d
 
 
+def kle_rows(doc):
+    """
+    KLE 문서에서 행 목록을 꺼낸다. 두 가지 모양을 다 받는다.
+
+    ★ keyboard-layout-editor.com 이 내려주는 파일은 **최상위가 배열**이고
+      첫 원소가 {"name": ...} 같은 메타데이터일 수 있다. 우리 저장소의
+      layout-kle.json 은 주석을 달려고 {"_comment": ..., "layout": [...]} 로
+      감싼 모양이다. 웹 마법사는 KLE 가 바로 열 수 있게 앞의 모양으로 내보낸다.
+
+      두 벌을 관리하지 않으려면 읽는 쪽이 둘 다 받는 편이 낫다.
+    """
+    if isinstance(doc, dict):
+        return doc["layout"]
+
+    return [row for row in doc if isinstance(row, list)]
+
+
 def load(path):
     try:
         return json.loads(path.read_text())
@@ -173,7 +190,7 @@ def build(kle_doc, menus_doc, name):
     seen = {}
     unknown = []
 
-    for r, row in enumerate(kle_doc["layout"]):
+    for r, row in enumerate(kle_rows(kle_doc)):
         out = []
         for item in row:
             if isinstance(item, dict):
@@ -264,7 +281,7 @@ def gen_vial_header(vial):
 def show_rows(kle):
     """줄별 키 개수. 서랍이 직사각형인지 눈으로 확인하려고 찍는다."""
     print("줄별 키 개수")
-    for i, row in enumerate(kle["layout"]):
+    for i, row in enumerate(kle_rows(kle)):
         n = sum(1 for x in row if isinstance(x, str))
         print("  %2d : %2d 키" % (i, n))
     print()

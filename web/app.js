@@ -680,7 +680,15 @@ function parseKle(text) {
   let arr;
   try { arr = JSON.parse(t); }
   catch { arr = JSON.parse('[' + t + ']'); }
-  if (!Array.isArray(arr[0])) arr = [arr];
+
+  /*
+   * ★ KLE 파일은 첫 원소가 {"name": ...} 같은 메타데이터일 수 있다.
+   *   배열인 것만 행이다. 예전에는 첫 원소가 배열이 아니면 전체를 한 행으로
+   *   봤는데, 그러면 메타데이터가 붙은 파일이 통째로 어긋났다.
+   */
+  const rows = arr.filter(Array.isArray);
+
+  arr = rows.length ? rows : [arr];
 
   const out = [];
   let y = 0;
@@ -751,7 +759,14 @@ $('file') && ($('file').onchange = async (e) => {
   trustCoords = true;
   try {
     const j = JSON.parse(text);
-    if (j.layout) body = JSON.stringify(j.layout);                       // layout-kle.json
+
+    // KLE 원본 — 최상위 배열, 첫 원소가 메타데이터일 수 있다
+    if (Array.isArray(j)) {
+      const meta = j.find(x => x && !Array.isArray(x) && typeof x === 'object');
+
+      if (meta && meta.name) $('name').value = meta.name;
+    }
+    else if (j.layout) body = JSON.stringify(j.layout);                  // 예전 layout-kle.json
     else if (j.layouts && j.layouts.keymap) {                            // via / vial
       body = JSON.stringify(j.layouts.keymap);
       // ★ 우리 정의만 좌표를 usage 로 믿는다 (decodeLegend 주석 참고)
@@ -1306,13 +1321,28 @@ function buildDef(isVial) {
 
 function exportVia()  { download(slug() + 'layout-via.json',  buildDef(false)); }
 function exportVial() { download(slug() + 'layout-vial.json', buildDef(true)); }
+/*
+ * KLE 원본. 범례가 '키 이름' 이라 사람이 읽고 고칠 수 있다.
+ *
+ * ★ keyboard-layout-editor.com 이 그대로 여는 형식으로 낸다.
+ *
+ *   최상위가 **배열**이고 첫 원소가 메타데이터다. 예전에는 우리 편하자고
+ *   {_comment, layout} 로 감쌌는데, 그러면 KLE 의 Upload 가 아무것도 안
+ *   그린다 — 내보내는 뜻이 없어진다.
+ *   gen_keymap.py 는 두 모양을 다 받는다 (kle_rows).
+ */
 function exportKle() {
-  // 저장소 워크플로용 — 범례가 '키 이름' 이라 사람이 읽고 고칠 수 있다
   const rows = buildLayout().map(row => row.map(it =>
     typeof it === 'string'
       ? (NAME_OF[(parseInt(it.split(',')[0]) << 4) | parseInt(it.split(',')[1])] || it)
       : it));
-  download(slug() + 'layout-kle.json', { _comment: ['웹 마법사가 만들었다. gen_keymap.py 의 입력이다.'], layout: rows });
+
+  const meta = {
+    name: $('name').value || 'QMK-LINK',
+    notes: '웹 마법사가 만들었다. 범례는 키 이름이고 gen_keymap.py 의 입력이다.',
+  };
+
+  download(slug() + 'layout-kle.json', [meta, ...rows]);
 }
 
 fillPresets();
