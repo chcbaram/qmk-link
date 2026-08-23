@@ -35,6 +35,13 @@ bool usbdHidIsReady(uint8_t itf)
 static uint8_t kbd_shadow[8];
 static bool    kbd_shadow_valid = false;
 
+// 진단용 — PC 로 나가는 키보드 리포트가 어디서 막히는지 센다.
+static volatile uint32_t kbd_try_cnt  = 0;   // 호출
+static volatile uint32_t kbd_same_cnt = 0;   // 섀도와 같아 건너뜀
+static volatile uint32_t kbd_busy_cnt = 0;   // tud_hid_n_ready 가 false
+static volatile uint32_t kbd_sent_cnt = 0;   // tud_hid_n_report 성공
+static volatile uint32_t kbd_fail_cnt = 0;   // tud_hid_n_report 실패
+
 // raw HID 수신 큐. 호스트 -> 우리 방향만 큐를 탄다 (usbd_hid.h 주석 참고).
 #define HID_RAW_QUEUE_MAX   8
 static uint8_t           raw_queue[HID_RAW_QUEUE_MAX][HID_RAW_REPORT_LEN];
@@ -44,18 +51,53 @@ static volatile uint32_t raw_drop_count = 0;
 
 bool usbdHidSendKeyboard(const uint8_t *p_report)
 {
+  bool ret;
+
+  kbd_try_cnt++;
+
   if (kbd_shadow_valid && memcmp(kbd_shadow, p_report, 8) == 0)
   {
+    kbd_same_cnt++;
     return true;
   }
 
-  if (tud_hid_n_ready(HID_ITF_KEYBOARD) != true) return false;
-
-  memcpy(kbd_shadow, p_report, 8);
-  kbd_shadow_valid = true;
+  if (tud_hid_n_ready(HID_ITF_KEYBOARD) != true)
+  {
+    kbd_busy_cnt++;
+    return false;
+  }
 
   // 리포트 ID 를 안 쓰므로 0 을 넘긴다. 8바이트가 그대로 나간다.
-  return tud_hid_n_report(HID_ITF_KEYBOARD, 0, p_report, 8);
+  ret = tud_hid_n_report(HID_ITF_KEYBOARD, 0, p_report, 8);
+
+  // ★ 섀도는 실제로 나간 뒤에 갱신한다.
+  //
+  //   먼저 갱신하면 전송이 실패했을 때 "이미 보냈다" 고 기억해서 같은 리포트를
+  //   영영 다시 안 보낸다. 키가 눌린 채로 남거나 아예 안 눌린 것이 된다.
+  if (ret == true)
+  {
+    memcpy(kbd_shadow, p_report, 8);
+    kbd_shadow_valid = true;
+    kbd_sent_cnt++;
+  }
+  else
+  {
+    kbd_fail_cnt++;
+  }
+
+  return ret;
+}
+
+void usbdHidGetKbdStat(usbd_hid_kbd_stat_t *p_stat)
+{
+  p_stat->try_cnt  = kbd_try_cnt;
+  p_stat->same_cnt = kbd_same_cnt;
+  p_stat->busy_cnt = kbd_busy_cnt;
+  p_stat->sent_cnt = kbd_sent_cnt;
+  p_stat->fail_cnt = kbd_fail_cnt;
+  p_stat->is_ready = tud_hid_n_ready(HID_ITF_KEYBOARD);
+  p_stat->is_mount = tud_mounted();
+  p_stat->is_susp  = tud_suspended();
 }
 
 bool usbdHidSendExtra(const uint8_t *p_report, uint16_t len)
@@ -169,6 +211,13 @@ void tud_hid_set_protocol_cb(uint8_t instance, uint8_t protocol)
 
 void tud_mount_cb(void)
 {
+  // ★ 섀도를 버린다.
+  //
+  //   호스트가 새로 붙었으면 저쪽은 아무 키도 안 눌린 상태로 안다.
+  //   우리 섀도가 옛 내용을 들고 있으면 "같으니 안 보낸다" 로 첫 리포트를
+  //   통째로 삼킨다.
+  kbd_shadow_valid = false;
+
 #ifdef QMK_ENABLE
   usb_device_state_set_configuration(true, 1);
 #endif
@@ -191,6 +240,8 @@ void tud_suspend_cb(bool remote_wakeup_en)
 
 void tud_resume_cb(void)
 {
+  kbd_shadow_valid = false;
+
 #ifdef QMK_ENABLE
   usb_device_state_set_resume(true, 1);
 #endif

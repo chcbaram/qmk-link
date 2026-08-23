@@ -29,13 +29,32 @@ flash_safe_execute(func, param, timeout_ms);   // core0 쪽 — hw/driver/flash.
 core1 이 `flash_safe_execute_core_init()` 을 불러 두지 않으면 SDK 가 거절한다
 (`PICO_ERROR_NOT_PERMITTED`).
 
-#### ★ 정지 뒤에는 USB 호스트를 다시 열거시켜야 한다
+#### ★ 정지를 없앤다 — 펌웨어를 통째로 RAM 에서 돌린다
 
-**이것을 빼면 플래시 한 번에 키보드가 죽는다. 리셋 전까지 회복되지 않는다.**
+```cmake
+pico_set_binary_type(${PRJ_NAME} copy_to_ram)
+target_compile_definitions(${PRJ_NAME} PRIVATE PICO_FLASH_ASSUME_CORE1_SAFE=1)
+```
 
-core1 이 멈춘 동안 SOF 가 끊겨 키보드가 서스펜드에 빠지고, 깨어나지 못한 채
-전송이 계속 실패한다. 그런데 TinyUSB 의 `hidh_xfer_cb` 는 **실패를 무시하고**
-길이 0 으로 콜백한다:
+**소거 중 core1 이 도는 횟수 (`flash test` 실측)**
+
+| | 소거 35ms 동안 `tuh_task()` |
+|---|---:|
+| XIP 실행 + `flash_safe_execute` lockout | **3 회** |
+| RAM 실행 (`copy_to_ram`) | **37,456 회** |
+
+RAM 에서 돌면 XIP 가 멈춰도 인출할 것이 없다. `PICO_FLASH_ASSUME_CORE1_SAFE=1`
+로 lockout 을 끄면 core0 만 인터럽트를 막고 기다리고, **core1 의 PIO USB 는
+한순간도 멈추지 않는다.**
+
+비용은 RAM 뿐이다 — 111KB(펌웨어) + 데이터 = 152KB / 512KB (29%).
+
+##### 여기까지 오는 데 두 번 헛짚었다
+
+**① "41ms 정지는 견딜 만하다" — 틀렸다.**
+
+core1 이 멈춘 동안 SOF 가 끊겨 키보드가 서스펜드에 빠지고 깨어나지 못한다.
+그런데 TinyUSB 의 `hidh_xfer_cb` 는 전송 실패를 무시하고 길이 0 으로 콜백한다:
 
 ```c
 (void) result;   // hid_host.c
@@ -45,8 +64,6 @@ tuh_hid_report_received_cb(daddr, idx, epbuf->epin, (uint16_t) xferred_bytes);  
 그래서 `rx` 는 계속 늘고 `mounted 1` · `drop 0` 이라 **겉보기엔 멀쩡한데 내용이 빈
 리포트**다. 길이 0 이라 `link` 로도 안 가고 `isKeyDown()` 도 안 걸려 LED 도 안 깜빡인다.
 
-실측 (`flash test` 3회, VIA·EEPROM 무관):
-
 | | drain | → link | 버림 |
 |---|---:|---:|---:|
 | 리셋 직후 | 11 | 11 | 0 |
@@ -55,20 +72,33 @@ tuh_hid_report_received_cb(daddr, idx, epbuf->epin, (uint16_t) xferred_bytes);  
 
 **`mounted` / `drop` 은 이 고장을 못 잡는 지표다.** CLI `key info` 가 이걸 보라고 있다.
 
-해결: 플래시 작업 뒤 `usbhRequestRecover()` 로 "뗐다 붙었다" 를 usbh 에 알린다.
-열거가 포트 리셋(SE0)을 내보내고 그게 서스펜드에 빠진 장치를 깨운다.
-논블로킹이라 core0 은 안 막힌다 — core1 이 처리한다.
+**② 뒤처리로 덮으려 한 두 시도 모두 실패했다.**
 
-**★ `pio_usb_host_stop()` / `pio_usb_host_restart()` 를 쓰면 안 된다.**
-Pico-PIO-USB 0.7.2 에서 죽은 코드다. 플래그를 세우고 그것이 내려가기를 무한
-대기하는데 그 플래그를 내리는 곳이 소스 어디에도 없다. 부르는 순간 그 코어가 멈춘다.
+- `pio_usb_host_stop()` / `pio_usb_host_restart()` — **Pico-PIO-USB 0.7.2 에서 죽은
+  코드다.** 플래그를 세우고 내려가기를 무한 대기하는데 내리는 곳이 소스에 없다.
+  부르는 순간 그 코어가 멈춘다.
 
-```c
-pio_usb_host.c:102   cancel_timer_flag = true;
-pio_usb_host.c:103   while (cancel_timer_flag) { continue; }
-```
+  ```c
+  pio_usb_host.c:102   cancel_timer_flag = true;
+  pio_usb_host.c:103   while (cancel_timer_flag) { continue; }
+  ```
 
-**실측** (W25Q16 / clk_sys 120MHz, `flash test` CLI):
+- `hcd_event_device_remove()` → `hcd_event_device_attach()` 로 재열거 —
+  **떼기는 되는데 다시 붙지 못한다.** `connect st 1` · `speed full` 인데
+  `mounted 0` 으로 굳고 자체 회복도 안 된다.
+
+정지를 만들어 놓고 되살리려 하지 말고 애초에 만들지 않는 것이 답이었다.
+
+##### QMK 의 RP2040 EEPROM 은 참고가 안 된다 (이 문제에 한해서)
+
+`platforms/chibios/drivers/wear_leveling/wear_leveling_rp2040_flash.c` 는
+`save_and_disable_interrupts()` + RAM 함수만 쓴다. **멀티코어 처리가 아예 없다** —
+QMK 는 core1 에서 PIO USB 호스트를 돌리지 않기 때문이다.
+우리 정지 문제는 그 구성에서는 생기지 않는다.
+
+다만 **wear leveling 자체는 별개로 가치가 있다** → [열린 질문](#열린-질문)
+
+**실측** (W25Q16 / clk_sys 120MHz, `flash test` CLI):**실측** (W25Q16 / clk_sys 120MHz, `flash test` CLI):
 
 | | 시간 | 그 사이 core1 `tuh_task()` |
 |---|---:|---:|
@@ -77,9 +107,9 @@ pio_usb_host.c:103   while (cancel_timer_flag) { continue; }
 | 합계 | **약 41 ms** | — |
 
 평소 `tuh_task()` 는 초당 150만 회쯤 돈다. 즉 **USB 호스트가 통째로 멈추는 시간**이다.
-처음에는 이 정지를 "견딜 만하다" 고 판단했다 — 6번 연속으로 때려도 `mounted 1` ·
-`drop 0` 이었기 때문이다. **그 지표가 틀렸다** (위 항목 참고). 정지 자체는 피할 수
-없으므로 뒤처리로 해결한다.
+위 표는 `copy_to_ram` 이전, XIP 로 실행하며 lockout 을 걸었을 때의 값이다.
+지금은 core1 이 멈추지 않으므로 이 시간은 **core0 만의 정지**다 (USB device 쪽은
+NAK 로 버티고 호스트가 재시도한다).
 
 그래도 줄일 수 있는 만큼 줄였다:
 
@@ -320,7 +350,7 @@ VIA 까지 실기에서 확인됐으므로 `apInit()` 에서 자동으로 올린
 | 3 | **재부팅 후 유지** | ✅ 0x001D 남음, `flush cnt 0` (다시 쓰지 않음) |
 | 4 | 커스텀 메뉴 | ✅ 6개 항목 get/set, 재부팅 후 유지, 모르는 채널은 `id_unhandled` |
 | 5 | bootloader 버튼 | ✅ 응답 0x0B 후 BOOTSEL 진입 |
-| 6 | flash 쓰기 뒤 키보드 생존 | ✅ `flash test` 6회 + VIA 쓰기 4회에도 `버림 0`, `drain == link` |
+| 6 | flash 쓰기 중 키보드 생존 | ✅ 소거 중 core1 `tuh_task` 37,456회. `flash test` 4회 + VIA 쓰기 4회에도 `connected 1` · `버림 0` · `drain == link` |
 
 ## 열린 질문
 
@@ -329,4 +359,5 @@ VIA 까지 실기에서 확인됐으므로 `apInit()` 에서 자동으로 올린
 | VIA 웹앱 실물 확인 | 메뉴 계층 오류는 앱에서 잡아 고쳤다. 배열 그림이 제대로 나오는지는 아직 확인 중 |
 | 미디어키 | 원본 키보드가 consumer 페이지로 보내는 키는 아직 안 받는다. `updateKeyboard()` 가 `HID_ITF_PROTOCOL_KEYBOARD` 만 본다 → 08단계 |
 | 매크로 버퍼 | `DYNAMIC_KEYMAP_MACRO_COUNT` 기본값을 그대로 쓴다. 16KB 안에서 남는 만큼이 버퍼다 |
+| **wear leveling** | 지금은 키 하나 바꿀 때마다 섹터를 지운다(소거 1회/저장). QMK 의 `quantum/wear_leveling/` 은 append 로그라 소거가 훨씬 드물다. 정지 문제는 `copy_to_ram` 으로 해결됐으니 급하지 않지만 **수명 면에서는 그쪽이 맞다.** 백엔드(`wear_leveling_rp2040_flash.c`)는 RP2040 전용 레지스터를 쓰므로 우리 `flash.c` 위에 새로 얹어야 한다 |
 | 첫 부팅 정지 | 빈 EEPROM 에서 동적 키맵을 처음 채울 때 4섹터를 쓴다. 200ms 간격이라 총 1초쯤 |

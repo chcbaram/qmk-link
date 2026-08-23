@@ -75,6 +75,22 @@ void updateKeyboard(void)
 {
   usbh_hid_report_t report;
 
+  // ★ 원본 키보드가 빠지면 눌려 있던 키를 비운다.
+  //
+  //   안 그러면 그 순간 눌려 있던 키가 매트릭스에 남고, 아무도 떼 주지 않는다.
+  //   QMK 는 계속 눌린 것으로 보고 PC 에 키를 물고 있는다 — 타이핑이 죽은 것처럼
+  //   보인다.
+  {
+    static bool kbd_connect_pre = false;
+    bool        kbd_connect     = usbhHidIsConnected();
+
+    if (kbd_connect != kbd_connect_pre)
+    {
+      kbd_connect_pre = kbd_connect;
+      if (kbd_connect == false) linkClear();
+    }
+  }
+
   while(usbhHidGetReport(&report) == true)
   {
     kbd_drain_cnt++;
@@ -207,6 +223,18 @@ static void cliKey(cli_args_t *args)
               qmkIsOn() ? "on" : "off",
               qmkIsPassthrough() ? " (passthrough)" : "");
     cliPrintf("link set     : %d\n", linkGetSetCount());
+
+    {
+      usbd_hid_kbd_stat_t st;
+
+      usbdHidGetKbdStat(&st);
+      cliPrintf("PC 로 보내기 (IF0 키보드)\n");
+      cliPrintf("  호출 %d  보냄 %d  같아서 건너뜀 %d\n",
+                st.try_cnt, st.sent_cnt, st.same_cnt);
+      cliPrintf("  not ready %d   전송실패 %d\n", st.busy_cnt, st.fail_cnt);
+      cliPrintf("  ready %d  mounted %d  suspend %d\n",
+                st.is_ready, st.is_mount, st.is_susp);
+    }
 
     dumpReport("last ok  ", &kbd_last_ok);
     dumpReport("last 버림", &kbd_last_drop);

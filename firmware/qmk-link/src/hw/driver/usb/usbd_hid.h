@@ -36,6 +36,22 @@ enum
 #define HID_RAW_REPORT_LEN    32
 
 
+// 진단용 — PC 로 나가는 키보드 리포트가 어디서 막히는지 본다.
+typedef struct
+{
+  uint32_t try_cnt;
+  uint32_t same_cnt;
+  uint32_t busy_cnt;
+  uint32_t sent_cnt;
+  uint32_t fail_cnt;
+  bool     is_ready;
+  bool     is_mount;
+  bool     is_susp;
+} usbd_hid_kbd_stat_t;
+
+void usbdHidGetKbdStat(usbd_hid_kbd_stat_t *p_stat);
+
+
 bool usbdHidInit(void);
 
 // 호스트가 붙어서 리포트를 받을 준비가 됐나

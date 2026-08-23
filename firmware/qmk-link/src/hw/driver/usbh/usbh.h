@@ -22,20 +22,12 @@ bool usbhIsRunning(void);
 
 uint32_t usbhGetTaskCount(void);
 
-// ★ 플래시 작업 뒤에 반드시 부른다 (hw/driver/flash.c 가 부른다).
+// ★ 여기에 있던 usbhRequestRecover() 는 없앴다.
 //
-//   flash_safe_execute() 가 core1 을 수십 ms 세운다. 그 사이 SOF 가 끊겨
-//   장치가 서스펜드에 빠지고, 깨어나지 못한 채 전송이 계속 실패한다.
-//   TinyUSB 의 hidh_xfer_cb 는 실패를 무시하고(`(void) result;`) 길이 0 으로
-//   콜백하므로, 겉보기에는 리포트가 계속 오는데 내용이 없다.
-//   리셋 전까지 회복되지 않는다 — 실측으로 확인했다.
-//
-//   그래서 "뗐다 붙였다" 를 usbh 에 알려 열거를 처음부터 다시 시킨다.
-//   열거가 포트 리셋(SE0)을 내보내고, 그게 서스펜드에 빠진 장치를 깨운다.
-//
-//   논블로킹이다 — 요청만 세우고 core1 이 처리한다.
-void     usbhRequestRecover(void);
-uint32_t usbhGetRecoverCount(void);
+//   flash 정지 뒤 "뗐다 붙었다" 를 usbh 에 알려 재열거시키려 했는데,
+//   떼기만 하고 다시 붙지 못했다 (connect st 1 / speed full 인데 mounted 0,
+//   자체 회복도 안 됨). 애초에 정지를 없애는 쪽이 맞다 —
+//   지금은 copy_to_ram 으로 정지 자체가 없다 (src/CMakeLists.txt).
 
 
 #endif

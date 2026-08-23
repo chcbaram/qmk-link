@@ -126,7 +126,10 @@ static void flashDoWrite(void *param)
  *   끊기면 엔드포인트가 영구 에러 상태로 빠져 그 뒤로는 길이 0 리포트만 올라온다
  *   (키가 하나도 안 들어온다. 리셋해야 낫는다 — 실측).
  *
- *   끝나고 나면 USB 호스트를 다시 열거시킨다 (usbhRequestRecover).
+ *   ★ 이 프로젝트는 펌웨어를 통째로 RAM 에서 돌린다 (copy_to_ram).
+ *     그래서 소거·기록 중에도 core1 은 멈추지 않는다 —
+ *     PICO_FLASH_ASSUME_CORE1_SAFE=1 로 lockout 을 껐다.
+ *     core0 만 인터럽트를 막고 기다린다.
  */
 static int flashExecute(void (*func)(void *), void *param)
 {
@@ -135,12 +138,6 @@ static int flashExecute(void (*func)(void *), void *param)
   is_busy = true;
   ret = flash_safe_execute(func, param, FLASH_LOCKOUT_TIMEOUT_MS);
   is_busy = false;
-
-#ifdef _USE_HW_USBH
-  // ★ 잊으면 안 된다 — 이걸 빼면 플래시 한 번에 키보드가 죽는다.
-  //   요청만 세우고 바로 돌아온다. core1 이 처리한다.
-  usbhRequestRecover();
-#endif
 
   return ret;
 }

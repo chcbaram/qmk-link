@@ -74,6 +74,21 @@ target_compile_definitions(${PRJ_NAME} PRIVATE
 
 pico_generate_pio_header(${PRJ_NAME} ${CMAKE_CURRENT_LIST_DIR}/hw/driver/pio/ws2812.pio)
 
+# ★ 펌웨어를 통째로 RAM 에서 실행한다.
+#
+#   플래시를 소거·기록하는 동안에는 XIP 가 멈춘다. 그때 core1 이 PIO USB 를
+#   돌고 있으면 코드를 인출하지 못해 죽으므로, 원래는 flash_safe_execute() 로
+#   core1 을 세워야 했다. 그런데 그 정지(소거 34ms)가 SOF 를 끊어 키보드를
+#   서스펜드에 빠뜨렸고, 뒤처리(재열거)로 되살리는 것도 안정적이지 않았다.
+#
+#   RAM 에서 돌면 애초에 정지시킬 이유가 없다. RP2350 은 SRAM 520KB 고
+#   펌웨어는 110KB 라 여유가 충분하다.
+#
+#   PICO_FLASH_ASSUME_CORE1_SAFE : core1 은 플래시를 건드리지 않는다고 알린다.
+#   그래야 flash_safe_execute() 가 core1 을 세우지 않는다.
+pico_set_binary_type(${PRJ_NAME} copy_to_ram)
+target_compile_definitions(${PRJ_NAME} PRIVATE PICO_FLASH_ASSUME_CORE1_SAFE=1)
+
 pico_add_extra_outputs(${PRJ_NAME})
 
 # 로그는 2단계에서 자체 USB CDC 로 붙인다.
