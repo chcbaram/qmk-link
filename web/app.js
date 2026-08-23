@@ -422,9 +422,7 @@ function updateSaveNote() {
     `<code>${hex4(hostVid)}:${hex4(hostPid)}</code> 의 배열로 <b>SLOT ${target}</b> 에 담는다. `
     + `담고 나면 보드가 PID 를 <code>0x${hex4(PID_BASE + target)}</code> 로 보고하고 `
     + '스스로 다시 열거한다 — 그래서 연결이 한 번 끊긴다.'
-    + (editSlot >= 0
-        ? '<br>같은 키보드의 변형본을 따로 두려면 [새 SLOT 에 담기] 를 쓴다.'
-        : '');
+    + '<br>같은 키보드의 변형본을 따로 두려면 위 <b>2</b> 의 [새 SLOT 추가] 를 쓴다.';
 }
 
 // 연결 상태 한 줄. 펌웨어가 무엇인지 늘 같이 적는다.
@@ -870,7 +868,21 @@ async function saveSlot(slot) {
     try { await sendReport(CMD_SEL_SET, [slot], 5000); } catch { /* 구형 펌웨어 */ }
 
     editSlot = slot;
-    slots = null;
+
+    /*
+     * ★ 담긴 사실을 화면에도 바로 반영한다.
+     *
+     *   담고 나면 보드가 재열거하는데, 처음 보는 PID 면 브라우저가 장치를
+     *   안 돌려준다. 그때 slots 를 비워 두면 화면이 담기 전 상태로 남아
+     *   "SLOT 1 을 만드는 중" 이 그대로 붙어 있었다 — 이미 담았는데도.
+     */
+    if (slots && slots[slot]) {
+      slots[slot] = {
+        used: true,
+        name: new TextDecoder().decode(Uint8Array.from(nameBytes23())).split('\0')[0],
+        vid: hostVid, pid: hostPid, len: blob.length,
+      };
+    }
     afterSlotWrite(`SLOT ${slot} 에 담았다 (${blob.length} B).`);
   } catch (e) {
     busy = false;
@@ -941,7 +953,7 @@ async function applySlot(slot) {
     const r = await sendReport(CMD_SEL_SET, [slot], 5000);
     if (r[2] !== 0) throw new Error('결과 ' + r[2]);
 
-    slots = null;
+    if (slot !== SEL_AUTO) { activeSlot = slot; selSlot = slot; }
     afterSlotWrite(slot === SEL_AUTO ? '자동으로 되돌렸다.' : `SLOT ${slot} 을 적용했다.`);
   } catch (e) {
     busy = false;
@@ -960,7 +972,7 @@ async function eraseSlot(slot) {
     if (r[2] !== 0) throw new Error('결과 ' + r[2]);
 
     if (editSlot === slot) editSlot = -1;
-    slots = null;
+    if (slots && slots[slot]) slots[slot] = { used: false, name: '', vid: 0, pid: 0, len: 0 };
     afterSlotWrite(`SLOT ${slot} 을 지웠다.`);
   } catch (e) {
     busy = false;
@@ -990,7 +1002,7 @@ async function afterSlotWrite(msg) {
   if (!found) {
     $('dev').textContent = '보드가 다시 열거됐다 — [보드 연결] 을 한 번 더 누른다';
     $('dev').className = '';
-    renderSlots();
+    refreshUi();        // ★ 트리만 말고 뱃지·담기 칸까지. 예전에 여기서 어긋났다
     log(msg + ' PID 가 바뀌어 연결이 끊겼다. [보드 연결] 을 누르면 이어서 쓸 수 있다.');
     return;
   }
