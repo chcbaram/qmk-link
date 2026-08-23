@@ -210,6 +210,15 @@ def build(kle_doc, menus_doc, name):
     return via, seen
 
 
+def show_rows(kle):
+    """줄별 키 개수. 서랍이 직사각형인지 눈으로 확인하려고 찍는다."""
+    print("줄별 키 개수")
+    for i, row in enumerate(kle["layout"]):
+        n = sum(1 for x in row if isinstance(x, str))
+        print("  %2d : %2d 키" % (i, n))
+    print()
+
+
 def show(seen):
     print("%-6s %-6s %s" % ("이름", "usage", "좌표"))
     for addr, name in sorted(seen.items(), key=lambda kv: USAGE[kv[1]]):
@@ -240,6 +249,7 @@ def main():
     out = d / "layout-via.json"
 
     if args.show:
+        show_rows(kle)
         show(seen)
         return
 
