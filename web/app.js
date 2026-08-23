@@ -14,6 +14,7 @@ let kle = null;              // 파싱한 KLE
 let keys = [];              // {x,y,w,h,usage|null,label}
 let cursor = -1;             // 마법사가 가리키는 키
 let prevPressed = new Set(); // 직전에 눌려 있던 usage
+let paused = false;          // 탭이 가려지면 멈춘다
 
 const $ = (id) => document.getElementById(id);
 const log = (msg) => { $('log').textContent = msg; };
@@ -53,6 +54,26 @@ async function connect() {
 
 function hex4(v) { return v.toString(16).toUpperCase().padStart(4, '0'); }
 
+async function disconnect() {
+  const d = device;
+  device = null;                 // poll 루프가 스스로 끝난다
+  paused = false;
+  await sleep(60);
+  try { if (d && d.opened) await d.close(); } catch { /* 무시 */ }
+  $('dev').textContent = '연결 끊김 — VIA / Vial 을 써도 된다';
+  $('dev').className = '';
+  $('pressed').textContent = '(없음)';
+  log('연결을 끊었다. 다시 배우려면 [보드 연결].');
+}
+
+document.addEventListener('visibilitychange', () => {
+  paused = document.hidden;
+  if (device) {
+    $('dev').className = paused ? '' : 'ok';
+    if (paused) $('pressed').textContent = '(탭이 가려져 멈춤)';
+  }
+});
+
 function send(sub, ...args) {
   const buf = new Uint8Array(REPORT_LEN);
   buf[0] = CMD_PREFIX; buf[1] = sub;
@@ -67,6 +88,13 @@ function send(sub, ...args) {
 // ── 눌린 키 폴링 ────────────────────────────────────────
 async function poll() {
   while (device) {
+    // ★ 탭이 가려지면 폴링을 멈춘다.
+    //
+    //   VIA / Vial 도 같은 raw HID 를 쓴다. 우리가 계속 물어보고 있으면
+    //   저쪽이 보낸 질문의 답을 우리가 가로채고, VIA 는 "VIA 키보드처럼
+    //   응답하지 않는다" 고 판단한다. 탭을 옮기는 순간 조용해져야 한다.
+    if (paused) { await sleep(200); continue; }
+
     let r;
     try { r = await send(CMD_PRESSED); }
     catch { await sleep(200); continue; }
@@ -129,6 +157,8 @@ function fillPresets() {
     if (!p) return;
     $('kle').value = JSON.stringify(p.layout, null, 0).slice(1, -1).replace(/\],\[/g, '],\n[');
     loadKle();
+    // 이름 칸도 채운다 — 내려받는 파일명이 키보드마다 구별된다
+    $('name').value = p.name.replace(/\s*\(\d+\)$/, '');
     log(`${p.name} 을 넣었다. [마법사 시작] 을 누른다.`);
   };
 }
@@ -244,6 +274,13 @@ function buildLayout() {
   return rows;
 }
 
+// "HHKB Lite 2" -> "hhkb-lite-2-". 내려받는 파일명 앞에 붙는다.
+function slug() {
+  const v = ($('name').value || '').trim().toLowerCase()
+    .replace(/[^a-z0-9가-힣]+/g, '-').replace(/^-+|-+$/g, '');
+  return v ? v + '-' : '';
+}
+
 function download(name, obj) {
   const blob = new Blob([JSON.stringify(obj, null, 2) + '\n'], { type: 'application/json' });
   const a = document.createElement('a');
@@ -251,7 +288,7 @@ function download(name, obj) {
 }
 
 function exportVia() {
-  download('layout-via.json', {
+  download(slug() + 'layout-via.json', {
     name: $('name').value || 'QMK-LINK VIA',
     vendorId: '0x0483', productId: '0x5305',
     matrix: { rows: 16, cols: 16 },
@@ -259,7 +296,7 @@ function exportVia() {
   });
 }
 function exportVial() {
-  download('vial.json', {
+  download(slug() + 'vial.json', {
     name: $('name').value ? $('name').value.replace(' VIA', ' VIAL') : 'QMK-LINK VIAL',
     vendorId: '0x0483', productId: '0x5305', lighting: 'none',
     matrix: { rows: 16, cols: 16 },
@@ -272,12 +309,13 @@ function exportKle() {
     typeof it === 'string'
       ? (NAME_OF[(parseInt(it.split(',')[0]) << 4) | parseInt(it.split(',')[1])] || it)
       : it));
-  download('layout-kle.json', { _comment: ['웹 마법사가 만들었다. gen_keymap.py 의 입력이다.'], layout: rows });
+  download(slug() + 'layout-kle.json', { _comment: ['웹 마법사가 만들었다. gen_keymap.py 의 입력이다.'], layout: rows });
 }
 
 fillPresets();
 $('loadFile').onclick = openFile;
 $('connect').onclick = connect;
+$('disconnect').onclick = disconnect;
 $('load').onclick = loadKle;
 $('start').onclick = startWizard;
 $('skip').onclick = skip;

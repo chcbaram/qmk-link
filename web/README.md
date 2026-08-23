@@ -20,6 +20,21 @@ python3 -m http.server 8000
 
 → <http://localhost:8000> (Chrome / Edge. Safari · Firefox 는 WebHID 미지원)
 
+## ★ VIA / Vial 을 쓰기 전에 [연결 끊기]
+
+**같은 raw HID 인터페이스를 셋이 나눠 쓴다.** 이 페이지가 물고 폴링하는 동안
+VIA 를 열면, VIA 가 보낸 질문의 답을 이 페이지가 가로챈다. VIA 에는 이렇게 보인다:
+
+```
+Command Name: GET_PROTOCOL_VERSION
+Response: 160 1 0 0 0 ...          <- 160 = 0xA0. 우리 명령의 응답이다
+Received invalid protocol version from device
+```
+
+그래서 VIA 는 "VIA 키보드처럼 응답하지 않는다" 고 판단한다. **장치는 멀쩡하다.**
+
+탭을 옮기면 폴링이 자동으로 멈추지만, 확실하게 하려면 **[연결 끊기]** 를 누른다.
+
 ## 쓰는 법
 
 1. **보드 연결** — USB-A 쪽에도 배우려는 키보드를 꽂아 둔다
