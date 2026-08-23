@@ -193,6 +193,25 @@ case id_bootloader_jump: {          /* <- VIAL_INSECURE 를 켜면 이 케이스
 커스텀 raw HID 명령은 `via_command_kb()` 에 붙인다.
 **VIA 의 명령 ID 와 겹치지 않게 `0xA0` 부터 쓴다** (VIA 는 `0x14` 근처까지 쓴다).
 
+#### ★ 저장소는 via · vial 공용이다 — EEPROM 과 반대다
+
+| | 주소 | 트리 |
+|---|---|---|
+| **레이아웃 저장소** | `0x1D0000` + 8KB x 16 | **공용** — `hw_def.h` 의 `HW_FLASH_KBD_BEGIN` 하나, `kbd_store.c` 도 `ap/modules/link/` 공용 |
+| VIA EEPROM | `0x1F0000` 16KB | via 전용 (`HW_FLASH_E2P_VIA_BEGIN`) |
+| Vial EEPROM | `0x1F4000` 16KB | vial 전용 (`HW_FLASH_E2P_VIAL_BEGIN`) |
+
+EEPROM 은 트리마다 갈라 두는 것이 규칙인데(→ [CLAUDE.md](../../CLAUDE.md)) **저장소는
+일부러 반대로 했다.** 담아 둔 것은 "이 키보드가 어떻게 생겼나" 라 프로토콜과
+무관하고, 펌웨어를 바꿔 구워도 다시 담고 싶지 않기 때문이다.
+
+`.uf2` 는 펌웨어 영역(`0x10000000`~ 약 135KB)만 쓴다. `0x1D0000` 근처는 건드리지
+않으므로 **via ↔ vial 을 번갈아 구워도 SLOT 은 그대로 남는다.**
+
+담긴 내용은 LZMA 로 압축한 Vial 정의다. 두 트리가 쓰는 방식만 다르다 —
+vial 은 그대로 앱에 내주고, **via 는 내용을 안 보고 머리말의 vid/pid 만 본다**
+(그게 SLOT 을 고르는 열쇠고, PID 전환을 굴린다).
+
 ### 5. Vial 정의 서빙을 플래시로
 
 `vial_get_size` / `vial_get_def` 가 배열 대신 플래시를 읽게 바꾼다.
