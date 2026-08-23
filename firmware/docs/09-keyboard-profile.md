@@ -309,7 +309,7 @@ QMK 의 **레이아웃 좌표** 와 그 레이아웃을 쓰는 **키보드의 �
 - [x] 업로드 도구 `tools/kbd_upload.py` (put / get / list / erase)
 - [ ] 키보드 식별에 product string 해시 넣기 (자리는 있다)
 - [x] Vial `vial_get_size` / `vial_get_def` 를 플래시에서 서빙
-- [ ] PID 전환 (`0x5400` + 슬롯)
+- [ ] **PID 전환 (`0x5400` + 슬롯)** — 남은 것. → [00-context.md](00-context.md#남은-것--pid-전환--via-를-위한-것이다)
 - [ ] 웹페이지에서 업로드 (아래 LZMA 문제)
 
 #### ★ Vial 정의 서빙 — 실기 확인

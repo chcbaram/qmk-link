@@ -34,10 +34,15 @@ PC 에는 **VIA / Vial 로 편집 가능한 키보드**로 보이게 한다.
 | **완료** | **06 VIA** — flash EEPROM, raw HID, dynamic keymap, 커스텀 메뉴. 전부 실기 확인 |
 | **완료** | **07 VIAL** — vial 트리. 장치가 정의를 내주는 것까지 확인 |
 | **완료** | **08 마감** — 미디어키 · 키보드 여러 대 · suspend 소등 · VID/PID · README |
-| **완료** | **09-1 학습 마법사** — `web/`, `gh-pages` 배포. 펌웨어는 명령 하나만 더했다 |
-| **다음** | **09-2 온디바이스 저장** — 레이아웃을 보드에 담고 VID/PID 로 자동 전환 |
+| **완료** | **09-1 학습 마법사** — `web/`, GitHub Actions 로 Pages 배포 |
+| **완료** | **09-2 온디바이스 저장** — 저장소 · 업로드 도구 · **Vial 정의 서빙** |
+| **다음** | **09-2-4 PID 전환** — VIA 도 정의를 자동으로 고르게 (`0x5400` + 슬롯) |
+| 그다음 | **09-3 키맵 프로파일** — 키보드마다 다른 키맵 |
 
-실측: via FLASH 111,256 B / vial 129,432 B, RAM 152~155 KB / 512 KB (copy_to_ram).
+**릴리스** : [v1.0.0](https://github.com/chcbaram/qmk-link/releases/tag/v1.0.0) — `.uf2` 두 개 첨부.
+**웹 마법사** : <https://chcbaram.github.io/qmk-link/>
+
+실측: via FLASH 115,104 B / vial 133,664 B, RAM 152~172 KB / 512 KB (copy_to_ram).
 `0483:5305 QMK-LINK` 로 열거된다 — HID(keyboard / extra / raw) + CDC 복합 장치.
 `clk_sys` 는 CLI 에서 120,000,000 Hz 확인.
 
@@ -52,6 +57,9 @@ PC 에는 **VIA / Vial 로 편집 가능한 키보드**로 보이게 한다.
 - VIA 의 Key Tester > Test Matrix — 누른 키의 usage 가 배열에서 반짝인다
 - **미디어키** — Consumer 인터페이스를 파싱해 그대로 흘린다 (QMK 를 거치지 않는다)
 - **키보드 여러 대** — 인스턴스별 비트맵을 OR 로 합친다
+- **레이아웃 저장소** — `0x1D0000` 부터 8KB x 16칸. `tools/kbd_upload.py` 로 담고 꺼낸다
+- **★ Vial 정의를 장치가 내준다** — 꽂힌 키보드에 맞는 칸을 찾아 그 정의를 준다.
+  저장된 것이 없으면 컴파일에 박힌 풀사이즈 기본값이 나간다
 - **Vial 트리** — `-DKEY_PROTOCOL=vial`. 장치가 자기 정의를 내준다 (552 B, LZMA)
   기능 전부 켜 뒀다 — QMK Settings 15항목 · tap dance 16 · combo 16 ·
   key override 8 · alt repeat 8 · 매크로 16(버퍼 11.7KB)
@@ -350,54 +358,112 @@ void apMain(void)
 
 ---
 
-## 07단계 착수 — 이 순서로 한다
+## 09단계 이어서 — 이 순서로 한다
 
-06단계가 길을 다 뚫어 놨다. 07단계는 **트리를 하나 더 만드는 작업**이다.
+### 지금 보드에 올라가 있는 것
 
-### 0. 그 전에 — VIA 웹앱으로 실물 확인
+**vial 펌웨어** + 칸 0 에 HHKB Lite 2 레이아웃(63키). 확인 방법:
 
-`keyboards/qmk-link/layout-via.json` 을 [usevia.app](https://usevia.app) 의
-Design 탭에 넣고 그림이 제대로 나오는지 본다. 여기서 배열을 고칠 게 나오면
-`layout-kle.json` 을 고치고 `tools/gen_keymap.py` 를 다시 돌린다.
-07단계에 들어가면 같은 배열을 vial.json 으로도 만들어야 하니 **먼저 확정한다.**
-
-### 1. upstream 에 vial-qmk 추가
-
-`firm-sdk/upstream.json` 에 항목을 더하고 `fetch_upstream.py --update` 로 받는다.
-sparse 목록은 qmk 와 같다 (`quantum tmk_core platforms`).
-
-```json
-"vial-qmk": { "url": "https://github.com/vial-kb/vial-qmk.git", "rev": "<커밋 SHA>" }
+```bash
+cd firmware/qmk-link
+python3 tools/kbd_upload.py list
 ```
 
-리비전이 SHA 라 `--branch` 로는 못 받는다 — `fetch_upstream.py` 가 이미
-`git init` + `fetch --depth 1 <sha>` 경로를 갖고 있다.
+### 남은 것 ① PID 전환 — VIA 를 위한 것이다
 
-### 2. `src/ap/modules/qmk/vial/` 트리
+Vial 은 정의를 장치에서 읽어가서 이미 자동이다. **VIA 는 정의를 VID/PID 로 찾으므로**
+우리가 늘 `0483:5305` 하나면 VIA 안에 정의가 한 벌만 남는다 —
+키보드를 바꿀 때마다 JSON 을 다시 넣어야 한다.
 
-`via/` 를 복사해 시작한다. 갈리는 곳:
+슬롯마다 PID 를 다르게 보고하면 VIA 가 알아서 고른다 (`0x5400` + 슬롯).
 
-| | via | vial |
-|---|---|---|
-| `CMakeLists.txt` | `QMK_UPSTREAM_PATH` | vial-qmk 경로. `vial.c` · `vial_generated_*.h` 추가 |
-| `port/via_port.c` | 커스텀 메뉴 | Vial 은 QMK settings 가 내장이라 **대부분 필요 없어진다** |
-| `port/platforms/eeprom.c` | `HW_FLASH_E2P_VIA_BEGIN` | **`HW_FLASH_E2P_VIAL_BEGIN` 으로 바꾼다** (이것을 빠뜨리면 조용히 섞인다) |
+손댈 곳:
 
-`port/driver_usb.c` · `matrix.c` · 나머지 `platforms/*` 는 그대로 쓸 수 있을 것이다.
+| | |
+|---|---|
+| `hw/driver/usb/usbd_desc.c` | `idProduct` 를 상수가 아니라 런타임 값으로. descriptor 콜백에서 읽게 |
+| `ap/ap.c` | 소스 키보드가 바뀌면 `tud_disconnect()` / `tud_connect()` 로 재열거 |
+| `firm-sdk/tools/flash.py` | PID 매칭을 범위로 (`0x5305`, `0x5400`~`0x540F`) |
+| 마법사 · `kbd_upload.py` | 이미 PID 목록으로 찾는다 — 손댈 것 없다 |
 
-### 3. `keyboards/qmk-link/` 는 공유한다
+★ 정의의 `productId` 도 슬롯에 맞아야 한다. 마법사가 채워 주게 해야 한다.
 
-`config.h` · `keymap.c` · `layout-kle.json` 은 두 트리가 같은 것을 본다.
-Vial 전용 설정(`VIAL_KEYBOARD_UID` 등)은 vial 트리 안에 따로 둔다 —
-`keyboards/` 의 공용 `config.h` 를 갈라 놓지 않는다.
+### 남은 것 ② 키맵 프로파일 (09-3)
 
-`vial.json` 은 `gen_keymap.py` 에 `--vial` 을 더해 같은 KLE 에서 뽑는다.
-두 벌을 손으로 관리하면 반드시 어긋난다.
+지금은 **모든 키보드가 키맵 한 벌을 공유한다.** 이쪽이 그림보다 체감이 크다.
 
-### 4. `-DKEY_PROTOCOL=vial` 로 빌드
+`nvm_dynamic_keymap_*()` 이 교체 가능한 seam 이다 —
+`quantum/nvm/eeprom/nvm_dynamic_keymap.c` 를 빌드에서 빼고 우리 것을 넣어
+주소에 프로파일 오프셋만 더한다. **upstream 을 패치하지 않아도 된다.**
 
-`src/CMakeLists.txt` 가 이미 `include(ap/modules/qmk/${KEY_PROTOCOL}/CMakeLists.txt)`
-로 갈라 놓았다. 산출물 이름을 `qmk-link-via.uf2` / `qmk-link-vial.uf2` 로 나눌지 정한다.
+`KEYMAP_BLOCK_SIZE` = 8레이어 x 16 x 16 x 2 = **4096B**. 프로파일 4벌이면 16KB 라
+지금 EEPROM(16KB)을 넘는다 — **영역을 다시 잡아야 한다.**
+
+★ 함정: `dynamic_keymap_reset()` 은 **지금 프로파일 한 벌만** 채운다. 그대로 두면
+나머지가 전부 `KC_NO` 라 옮기는 순간 키보드가 죽는다 (wish-he 가 같은 함정을 겪었다).
+
+### 남은 것 ③ 웹에서 업로드 — LZMA 를 정해야 한다
+
+Vial 은 정의를 **LZMA 로 압축된 상태**로 읽어간다. 브라우저에는 LZMA 인코더가
+없다 (`CompressionStream` 은 deflate/gzip 뿐). 그래서 업로드가 파이썬이다.
+웹에서도 올리려면 인코더를 하나 벤더링해야 한다.
+
+---
+
+## ★ 09단계에서 데인 것들 — 전부 "조용히 틀리는" 종류다
+
+| | |
+|---|---|
+| **upstream 훅에 기대지 말 것** | `via_command_kb()` 는 qmk 전용, `raw_hid_receive_kb()` 는 vial 전용이다. 반대편에서는 링커가 통째로 버려서 **빌드 크기가 한 바이트도 안 변한다.** 우리가 raw HID 큐를 직접 비우는 자리(`qmkUpdate`)에서 걷어낸다 — `link_cmd` · `vial_port` 둘 다 그 방식이다 |
+| **같은 raw HID 를 넷이 나눠 쓴다** | VIA · Vial · 웹 마법사 · `kbd_upload.py`. 다른 쪽이 물어본 답이 우리에게 배달된다. VIA 가 `Received invalid protocol version` 을 낸 것이 그것이었다(`160` = `0xA0`). **앞 두 바이트를 대조**해야 한다 |
+| **VID 만 보고 장치를 열지 말 것** | `0x0483` 은 baram 키보드들이 같이 쓴다. wish-he 도 usage page `0xFF60` 을 갖고 있어서 도구가 **그쪽을 열고** 엉뚱한 답을 받았다. PID 까지 본다 |
+| **좌표와 키맵은 같은 매크로에서** | 프리셋 범례가 한 칸씩 밀렸다. 지금은 **토큰 수 == 자리 수** 검사로 막는다 (`web/tools/gen_presets.py`) |
+
+---
+
+## 도구 한눈에
+
+```bash
+cd firmware/qmk-link
+
+# 빌드
+cmake -S . -B build            && cmake --build build -j16          # VIA
+cmake -S . -B build-vial -DKEY_PROTOCOL=vial && cmake --build build-vial -j16
+
+python3 ../firm-sdk/tools/flash.py build/src/qmk-link-via.uf2
+python3 ../firm-sdk/tools/flash.py build-vial/src/qmk-link-vial.uf2
+
+# 배열 정의 생성 (layout-kle.json 하나가 원본)
+python3 tools/gen_keymap.py            # -> layout-via / layout-vial / 정의 헤더
+python3 tools/gen_keymap.py --show     # 매핑 표 + 빠진 usage
+
+# 보드에 레이아웃 담기
+python3 tools/kbd_upload.py list
+python3 tools/kbd_upload.py put 0 keyboards/qmk-link/layout-vial.json --name "HHKB Lite 2"
+python3 tools/kbd_upload.py get 0 back.json
+python3 tools/kbd_upload.py erase 0
+```
+
+```bash
+cd web
+python3 -m http.server 8000            # WebHID 는 file:// 로 안 된다
+python3 tools/gen_presets.py > presets.js   # vial-qmk 경로가 필요하다
+```
+
+**웹 배포는 자동이다** — `web/` 을 고쳐 `main` 에 push 하면
+`.github/workflows/pages.yml` 이 올린다. 별도 브랜치 없다.
+
+### CLI (CDC 115200, 엔터는 `\r` 만)
+
+| | |
+|---|---|
+| `key info` | 키 입력 경로 진단. **`mounted`/`drop` 으로는 안 보이는 고장을 여기서 본다** |
+| `qmk info` · `qmk matrix` | QMK 상태 · 눌린 usage |
+| `qmk eeprom` | 키맵 저장 상태 |
+| `kbd info` · `kbd erase n` | 레이아웃 저장소 |
+| `usbh info` · `flash info` | USB 호스트 · 플래시 |
+
+---
 
 ## 문서 읽는 순서
 
