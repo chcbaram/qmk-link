@@ -42,14 +42,17 @@ void apMain(void)
 {
   while(1)
   {
-#ifdef _USE_HW_USBH
-    updateKeyboard();
-#endif
+    // ★ 계속 돌아야 하는 것은 cliLoopIdle() 안에만 둔다.
+    //
+    //   예전에는 여기에 같은 목록을 한 벌 더 적어 뒀는데, 한쪽에만 추가하는
+    //   실수가 났다 — usbdHidUpdate() 를 cliLoopIdle() 에만 넣는 바람에
+    //   평상시에는 재시도가 아예 안 돌았고, 못 보낸 뗌 리포트가 보류함에
+    //   갇혀 PC 쪽에 키가 눌린 채로 남았다.
+    //
+    //   목록을 한 군데로 모으면 그 실수가 구조적으로 불가능해진다.
+    cliLoopIdle();
 
-    qmkUpdate();
     ledStatusUpdate();
-
-    usbUpdate();
     cliMain();
   }
 }

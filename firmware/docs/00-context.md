@@ -205,26 +205,45 @@ python3 tools/gen_keymap.py --check  # 생성물이 최신인지만 확인
 
 ## ★ 계속 돌아야 하는 것은 `cliLoopIdle()` 에 넣는다
 
-이 프로젝트에서 **두 번 발목을 잡은 패턴**이라 따로 적는다.
-
-`bsp.c` 의 `delay()` 와 `cliKeepLoop()` 이 `cliLoopIdle()` 을 부른다.
-오래 도는 CLI 명령(`usbh dump`, `qmk matrix` …) 안에서는 `apMain()` 의 루프가
-**진행되지 않는다.** 그 동안에도 돌아야 하는 것은 전부 여기 있어야 한다.
-
-현재 내용 (`ap/ap.c`):
+`bsp.c` 의 `delay()` 와 `cliKeepLoop()` 이 이 함수를 돌린다 (NU87-TinyDK 관례).
+오래 도는 CLI 명령(`qmk matrix`, `usbh dump` …) 안에서는 `apMain()` 이 진행되지
+않으므로, 여기에 없는 것은 그 동안 멈춘다.
 
 ```c
 void cliLoopIdle(void)
 {
-  usbUpdate();        // tud_task()  — 없으면 CDC 가 끊긴다
-  updateKeyboard();   // USB-A 리포트 소비 — 없으면 큐가 차서 버려진다
-  qmkUpdate();        // keyboard_task() — 없으면 키 처리가 멎는다
+  usbUpdate();          // tud_task
+  usbdHidUpdate();      // 못 보낸 키 리포트 재시도
+  updateKeyboard();     // USB 호스트 큐 -> link
+  qmkUpdate();          // eeprom_task + raw HID + keyboard_task
 }
 ```
 
-실제로 겪은 증상:
-- `usbUpdate()` 만 있을 때 → `qmk matrix` 가 아무것도 못 보여줬다
-- 소비자가 아예 없을 때 → `rx / drop : 689 / 657` (95% 손실)
+**`apMain()` 은 이 함수를 부른다. 목록을 두 벌로 두지 않는다.**
+
+```c
+void apMain(void)
+{
+  while(1)
+  {
+    cliLoopIdle();
+    ledStatusUpdate();
+    cliMain();
+  }
+}
+```
+
+### 이 규칙으로 세 번 데였다
+
+| 증상 | 빠져 있던 것 |
+|---|---|
+| `rx/drop 689/657` — 리포트의 95% 유실 | `updateKeyboard()` |
+| `qmk matrix` 가 아무것도 못 보여줌 | `qmkUpdate()` |
+| **키를 떼도 PC 가 계속 눌린 것으로 앎** | `usbdHidUpdate()` — `cliLoopIdle()` 에만 넣고 `apMain()` 에는 안 넣었다 |
+
+마지막 것이 목록을 한 군데로 합친 이유다. 두 벌이면 한쪽에만 넣는 실수가 반드시 난다.
+증상은 이렇게 보였다 — `보류 1` 인데 `나중에보냄 0`, 즉 못 보낸 리포트가 갇힌 채
+재시도가 한 번도 안 돌았다. `key info` 로 본다.
 
 ## 확정된 결정과 이유
 
