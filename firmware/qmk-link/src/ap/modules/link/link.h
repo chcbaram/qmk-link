@@ -20,13 +20,26 @@
 #define LINK_MATRIX_ROWS      16
 #define LINK_MATRIX_COLS      16
 
+// ★ 키보드가 여러 개 붙을 수 있다.
+//
+//   CFG_TUH_HUB 가 켜져 있어서 허브를 거쳐 두 대 이상이 붙는다.
+//   인스턴스마다 비트맵을 따로 들고 OR 로 합친다. 안 그러면 한쪽이 보낸
+//   리포트가 다른 쪽 키를 지운다 — 각 리포트는 "그 키보드의 전체 상태" 라
+//   그대로 덮어쓰면 남의 키가 사라진다.
+//
+//   CFG_TUH_HID 이상이어야 한다.
+#define LINK_SOURCE_MAX       4
+
 
 bool     linkInit(void);
 
-// boot keyboard 리포트 (8바이트) 를 반영한다.
-void     linkSetKeyboardReport(const uint8_t *p_report, uint8_t len);
+// boot keyboard 리포트 (8바이트) 를 반영한다. instance 마다 따로 기억한다.
+void     linkSetKeyboardReport(uint8_t instance, const uint8_t *p_report, uint8_t len);
 
-// 키보드가 빠졌을 때. 눌려 있던 키를 전부 뗀다.
+// 그 키보드가 빠졌을 때. 그 인스턴스의 키만 뗀다.
+void     linkClearInstance(uint8_t instance);
+
+// 전부 뗀다.
 void     linkClear(void);
 
 // matrix_scan() 이 읽는다. row 한 줄의 비트맵.

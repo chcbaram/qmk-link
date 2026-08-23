@@ -162,6 +162,21 @@ bool usbdHidSendMouse(uint8_t buttons, int8_t x, int8_t y, int8_t wheel, int8_t 
                                 buttons, x, y, wheel, pan);
 }
 
+/*
+ * QMK 의 report_extra_t 와 같은 모양이다 — { report_id, usage(16bit) }.
+ * IF1(Extra) 로 리포트 ID 4(컨슈머)를 달아 나간다.
+ */
+bool usbdHidSendConsumer(uint16_t usage)
+{
+  uint8_t report[3];
+
+  report[0] = HID_REPORT_ID_CONSUMER;
+  report[1] = (uint8_t)(usage & 0xFF);
+  report[2] = (uint8_t)(usage >> 8);
+
+  return usbdHidSendExtra(report, sizeof(report));
+}
+
 uint8_t usbdHidGetLed(void)
 {
   return hid_led;

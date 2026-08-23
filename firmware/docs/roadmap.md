@@ -11,7 +11,7 @@
 | [05 QMK](05-qmk.md) | ✅ **완료** | `fetch_upstream.py` + `qmk/via/port/` + `link/` + keymap | 레이어 · 모디파이어 · 탭홀드 동작 |
 | [06 VIA](06-via.md) | ✅ **완료** | raw HID VIA 프로토콜 + dynamic keymap + flash EEPROM | VIA 웹앱에서 키맵 편집 · 저장 · 재부팅 후 유지 |
 | [07 VIAL](07-vial.md) | ✅ **완료** | `qmk/vial/` 트리 추가, `-DKEY_PROTOCOL=vial` + vial.json | Vial 앱 인식 · 편집 |
-| [08 마감](08-finalize.md) | ⬜ | WS2812 상태 인디케이터 · USB suspend/resume · VID/PID · 허브 | |
+| [08 마감](08-finalize.md) | ✅ **완료** | WS2812 상태 인디케이터 · USB suspend/resume · VID/PID · 허브 | |
 
 ### 마감(08) 이후에 할 것
 

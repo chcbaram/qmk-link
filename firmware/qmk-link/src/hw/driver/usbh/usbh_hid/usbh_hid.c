@@ -68,9 +68,6 @@ uint32_t usbhHidGetDropCount(void)
 void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
                       uint8_t const *desc_report, uint16_t desc_len)
 {
-  (void)desc_report;
-  (void)desc_len;
-
   if (instance >= CFG_TUH_HID) return;
 
   hid_info[instance].is_connect   = true;
@@ -79,6 +76,38 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
   hid_info[instance].itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
 
   tuh_vid_pid_get(dev_addr, &hid_info[instance].vid, &hid_info[instance].pid);
+
+  /*
+   * ★ 미디어키를 받으려면 여기서 리포트 디스크립터를 봐야 한다.
+   *
+   *   볼륨 · 재생 키는 키보드 인터페이스가 아니라 Consumer 페이지(0x0C)를 쓰는
+   *   별도 인터페이스로 온다. 그쪽 bInterfaceProtocol 은 NONE 이라
+   *   프로토콜만으로는 마우스와 구별되지 않는다.
+   *
+   *   report_id 가 0 이 아니면 리포트 첫 바이트가 ID 다 — 값을 꺼낼 때 건너뛴다.
+   */
+  {
+    tuh_hid_report_info_t info[4];
+    uint8_t              n;
+
+    n = tuh_hid_parse_report_descriptor(info, 4, desc_report, desc_len);
+
+    for (uint8_t i=0; i<n; i++)
+    {
+      if (info[i].usage_page == HID_USAGE_PAGE_CONSUMER)
+      {
+        hid_info[instance].is_consumer = true;
+        hid_info[instance].report_id   = info[i].report_id;
+        hid_info[instance].usage_page  = info[i].usage_page;
+        break;
+      }
+      if (i == 0)
+      {
+        hid_info[instance].report_id  = info[i].report_id;
+        hid_info[instance].usage_page = info[i].usage_page;
+      }
+    }
+  }
 
   // 리포트를 계속 받으려면 매번 다시 요청해야 한다.
   tuh_hid_receive_report(dev_addr, instance);
@@ -103,6 +132,8 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance,
   item.dev_addr = dev_addr;
   item.instance = instance;
   item.protocol = (instance < CFG_TUH_HID) ? hid_info[instance].itf_protocol : 0;
+  item.is_consumer = (instance < CFG_TUH_HID) ? hid_info[instance].is_consumer : false;
+  item.report_id   = (instance < CFG_TUH_HID) ? hid_info[instance].report_id   : 0;
   item.len      = (uint8_t)len;
   memcpy(item.data, report, len);
 

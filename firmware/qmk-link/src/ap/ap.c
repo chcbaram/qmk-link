@@ -78,19 +78,28 @@ void updateKeyboard(void)
 {
   usbh_hid_report_t report;
 
-  // ★ 원본 키보드가 빠지면 눌려 있던 키를 비운다.
+  // ★ 키보드가 빠지면 그 키보드가 누르고 있던 키를 뗀다.
   //
   //   안 그러면 그 순간 눌려 있던 키가 매트릭스에 남고, 아무도 떼 주지 않는다.
   //   QMK 는 계속 눌린 것으로 보고 PC 에 키를 물고 있는다 — 타이핑이 죽은 것처럼
   //   보인다.
+  //
+  //   ★ 인스턴스별로 본다. 두 대가 붙어 있을 때 한 대만 빼면 다른 대의 키까지
+  //     떼면 안 된다.
   {
-    static bool kbd_connect_pre = false;
-    bool        kbd_connect     = usbhHidIsConnected();
+    static bool connect_pre[CFG_TUH_HID] = {false, };
 
-    if (kbd_connect != kbd_connect_pre)
+    for (int i=0; i<CFG_TUH_HID; i++)
     {
-      kbd_connect_pre = kbd_connect;
-      if (kbd_connect == false) linkClear();
+      usbh_hid_info_t info;
+
+      if (usbhHidGetInfo(i, &info) != true) continue;
+
+      if (info.is_connect != connect_pre[i])
+      {
+        connect_pre[i] = info.is_connect;
+        if (info.is_connect == false) linkClearInstance(i);
+      }
     }
   }
 
@@ -118,7 +127,7 @@ void updateKeyboard(void)
           {
             // QMK 가 올라와 있으면 비트맵만 채운다.
             // port/matrix.c 가 읽어가고 QMK 가 키맵을 태워 내보낸다.
-            linkSetKeyboardReport(report.data, report.len);
+            linkSetKeyboardReport(report.instance, report.data, report.len);
           }
           else
           {
@@ -147,8 +156,41 @@ void updateKeyboard(void)
         }
         break;
 
+      case HID_ITF_PROTOCOL_NONE:
+        /*
+         * ★ 미디어키 (볼륨 · 재생 · 뮤트).
+         *
+         *   키보드 인터페이스가 아니라 Consumer 페이지(0x0C)를 쓰는 별도
+         *   인터페이스로 온다. mount 때 디스크립터를 파싱해 표시해 뒀다
+         *   (usbh_hid.c 의 is_consumer).
+         *
+         *   ★ QMK 를 거치지 않고 그대로 흘린다.
+         *
+         *     QMK 의 키맵은 매트릭스 좌표 기반인데 컨슈머 usage 는 거기 없다.
+         *     마우스와 같은 취급이다.
+         *
+         *   보통 형식은 usage 16비트 하나다 (0 = 뗌).
+         *   report_id 가 있으면 첫 바이트가 ID 라 건너뛴다.
+         */
+        if (report.is_consumer == true)
+        {
+          const uint8_t *p_val = report.data;
+          uint8_t        len   = report.len;
+
+          if (report.report_id != 0 && len > 0) { p_val++; len--; }
+
+          if (len >= 2)
+          {
+            usbdHidSendConsumer((uint16_t)p_val[0] | ((uint16_t)p_val[1] << 8));
+          }
+          else if (len == 1)
+          {
+            usbdHidSendConsumer((uint16_t)p_val[0]);
+          }
+        }
+        break;
+
       default:
-        // report protocol 장치는 05단계에서 디스크립터를 파싱해 다룬다.
         break;
     }
   }
@@ -249,9 +291,10 @@ static void cliKey(cli_args_t *args)
       usbh_hid_info_t info;
 
       if (usbhHidGetInfo(i, &info) != true) continue;
-      cliPrintf("  [%d] connect %d  addr %d  proto %d  %04X:%04X\n",
+      cliPrintf("  [%d] connect %d  addr %d  proto %d  %04X:%04X  %s\n",
                 i, info.is_connect, info.dev_addr, info.itf_protocol,
-                info.vid, info.pid);
+                info.vid, info.pid,
+                info.is_consumer ? "consumer(미디어키)" : "");
     }
     ret = true;
   }

@@ -33,7 +33,8 @@ PC 에는 **VIA / Vial 로 편집 가능한 키보드**로 보이게 한다.
 | **완료** | **05 QMK** — QMK 0.33.13 이식. `link/` 가상 매트릭스, QMK 거쳐 PC 입력 확인 |
 | **완료** | **06 VIA** — flash EEPROM, raw HID, dynamic keymap, 커스텀 메뉴. 전부 실기 확인 |
 | **완료** | **07 VIAL** — vial 트리. 장치가 정의를 내주는 것까지 확인 |
-| **다음** | **08 마감** — LED 인디케이터 · suspend/resume · 허브 · 미디어키 |
+| **완료** | **08 마감** — 미디어키 · 키보드 여러 대 · suspend 소등 · VID/PID · README |
+| **다음** | **09 키보드 프로파일** — 검토 끝났다 → [09-keyboard-profile.md](09-keyboard-profile.md) |
 
 실측: via FLASH 111,256 B / vial 129,432 B, RAM 152~155 KB / 512 KB (copy_to_ram).
 `0483:5305 QMK-LINK` 로 열거된다 — HID(keyboard / extra / raw) + CDC 복합 장치.
@@ -48,6 +49,8 @@ PC 에는 **VIA / Vial 로 편집 가능한 키보드**로 보이게 한다.
 - VIA 커스텀 메뉴 6개 — 탭텀 / hold-okp / permissive / retro / NKRO / 패스스루
 - VIA 의 bootloader 버튼 → BOOTSEL
 - VIA 의 Key Tester > Test Matrix — 누른 키의 usage 가 배열에서 반짝인다
+- **미디어키** — Consumer 인터페이스를 파싱해 그대로 흘린다 (QMK 를 거치지 않는다)
+- **키보드 여러 대** — 인스턴스별 비트맵을 OR 로 합친다
 - **Vial 트리** — `-DKEY_PROTOCOL=vial`. 장치가 자기 정의를 내준다 (552 B, LZMA)
   기능 전부 켜 뒀다 — QMK Settings 15항목 · tap dance 16 · combo 16 ·
   key override 8 · alt repeat 8 · 매크로 16(버퍼 11.7KB)
@@ -55,7 +58,9 @@ PC 에는 **VIA / Vial 로 편집 가능한 키보드**로 보이게 한다.
 **진단은 CLI `key info`** 로 한다. 이 단계의 고장들은 `mounted` / `drop` 으로는
 안 보였다 → [06-via.md](06-via.md#진단-도구--key-info)
 
-**미검증**: 마우스 패스스루(USB 마우스 없음), BIOS 화면, Windows / Linux.
+**미검증**: 미디어키(컨슈머 인터페이스 있는 키보드 없음), 키보드 두 대 동시,
+suspend 소등, 마우스 패스스루, BIOS 화면, Windows / Linux
+→ [08-finalize.md](08-finalize.md#미검증--장비환경이-없어서-못-잰-것)
 
 BOOTSEL 진입 경로 (전부 실기 확인):
 1. `flash.py` 의 CDC 1200bps touch — 버튼 없이 굽는다
@@ -339,7 +344,6 @@ void apMain(void)
 | ~~hola-mini 포트 ↔ QMK 0.33.13 API 차이~~ ✅ | — | hola-mini 가 이식한 QMK 는 0.33.13 보다 한참 이전이다. `keycodes.h` 재편 · `keyboard.c` 스캔 흐름 · `eeconfig` 레이아웃 등에서 차이가 날 수 있다. 착수 시 **먼저 컴파일 가능 여부부터 확인**하고, 차이가 크면 QMK 리비전을 내릴지 포트를 올릴지 정한다 |
 | ~~sparse-checkout 범위~~ ✅ | — | `quantum/` 만으로 부족하면 `sparse-checkout set` 에 경로를 추가한다. `keyboards/` 만 빠지면 크기는 여전히 작다 |
 | **VIA 웹앱 실물** | 07단계 전 | 프로토콜은 hidapi 로 전부 확인했지만 `keyboards/qmk-link/layout-via.json` 을 앱 Design 탭에 넣어 그림이 제대로 나오는지는 미확인 |
-| **미디어키** | 8단계 | 원본 키보드가 consumer 페이지로 보내는 키는 아직 안 받는다. `updateKeyboard()` 가 `HID_ITF_PROTOCOL_KEYBOARD` 만 본다 |
 | **키보드마다 다른 레이아웃/키맵** | 09단계 | 검토 끝났다 → [09-keyboard-profile.md](09-keyboard-profile.md). 핵심: Vial 은 정의를 장치에서 읽어가고 VIA 는 안 읽는다. 키맵 전환은 보드가 결정하므로 **둘 다 된다** |
 | Windows / Linux 에서 `flash.py` | 해당 OS 실기가 있을 때 | macOS 에서만 검증했다. `setup-windows.md` · `setup-linux.md` 도 미검증이다 |
 

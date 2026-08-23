@@ -1,9 +1,11 @@
 #include "led_status.h"
 #include "usbd_hid.h"
+#include "tusb.h"
 
 
 // 보드에 LED 가 WS2812 하나뿐이라 색과 주기로 상태를 표시한다.
 //
+//   소등             PC 가 잠들었다 (USB suspend)
 //   빨강 빠른 점멸   PC 미연결
 //   주황 느린 점멸   PC 는 붙었는데 키보드가 없다
 //   초록 계속 켜짐   정상
@@ -25,6 +27,9 @@ typedef struct
 
 static const led_pattern_t led_pattern[LED_ST_MAX] =
     {
+        // ★ PC 가 자면 끈다. 서스펜드 중에는 전류를 줄여야 하고,
+        //   책상 위에서 혼자 빛나는 것도 거슬린다.
+        [LED_ST_SUSPEND] = { 0,                        1000, 1000 },
         [LED_ST_NO_PC ] = { WS2812_RGB(24,  0,  0),  400, 200 },
         [LED_ST_NO_KBD] = { WS2812_RGB(24, 10,  0), 1000, 500 },
         // on_ms 가 period_ms 이상이면 계속 켜진다.
@@ -53,6 +58,12 @@ bool ledStatusInit(void)
 led_status_t ledStatusGet(void)
 {
 #ifdef _USE_HW_USB
+  // 서스펜드가 최우선이다. 자는 PC 옆에서 깜빡이지 않는다.
+  if (tud_suspended() == true)
+  {
+    return LED_ST_SUSPEND;
+  }
+
   if (usbIsConnect() != true)
   {
     return LED_ST_NO_PC;
@@ -80,7 +91,9 @@ void ledStatusUpdate(void)
   uint32_t now = millis();
   uint32_t color;
 
-  if (key_valid == true && (now - key_time) < LED_KEY_FLASH_MS)
+  // 서스펜드 중에는 키 반짝임도 하지 않는다.
+  if (key_valid == true && (now - key_time) < LED_KEY_FLASH_MS &&
+      ledStatusGet() != LED_ST_SUSPEND)
   {
     color = led_key_color;
   }

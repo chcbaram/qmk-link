@@ -74,6 +74,10 @@ bool usbdHidSendExtra(const uint8_t *p_report, uint16_t len);
 // 호스트가 SET_PROTOCOL 로 정한 값. 0 = boot, 1 = report
 uint8_t usbdHidGetProtocol(void);
 
+// 미디어키 (볼륨 · 재생 등). HID Consumer 페이지의 usage 를 그대로 넘긴다.
+// usage 0 은 "뗌" 이다.
+bool usbdHidSendConsumer(uint16_t usage);
+
 // 마우스. buttons/x/y/wheel/pan
 bool usbdHidSendMouse(uint8_t buttons, int8_t x, int8_t y, int8_t wheel, int8_t pan);
 

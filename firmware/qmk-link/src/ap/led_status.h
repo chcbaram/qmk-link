@@ -10,7 +10,8 @@
 
 typedef enum
 {
-  LED_ST_NO_PC = 0,     // Type-C 가 PC 에 안 붙었다
+  LED_ST_SUSPEND = 0,   // PC 가 잠들었다 — 소등
+  LED_ST_NO_PC,         // Type-C 가 PC 에 안 붙었다
   LED_ST_NO_KBD,        // PC 는 붙었는데 USB-A 에 키보드가 없다
   LED_ST_READY,         // 둘 다 붙었다
   LED_ST_MAX
