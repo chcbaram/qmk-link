@@ -89,11 +89,11 @@
 <section>
   <div class="row">
     <input id="name" placeholder="키보드 이름" size="20" value="QMK-LINK VIA">
-    <button id="exVia">layout-via.json</button>
-    <button id="exVial">layout-vial.json</button>
+    <button id="exVia" style="display:none">layout-via.json</button>
+    <button id="exVial" style="display:none">layout-vial.json</button>
     <button id="exKle">layout-kle.json</button>
   </div>
-  <div class="note" id="fwNote" style="margin-top:6px; display:none; color:#7ab8d8"></div>
+  <div class="note" id="fwNote" style="margin-top:6px; color:#7ab8d8">보드를 연결하면 펌웨어에 맞는 내보내기가 나온다.</div>
   <div class="note" style="margin-top:6px">
     앞의 둘은 VIA / Vial 에 바로 넣는다.
     <code>layout-kle.json</code> 은 저장소의 <code>gen_keymap.py</code> 입력이다.

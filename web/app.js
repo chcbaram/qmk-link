@@ -99,6 +99,10 @@ async function disconnect() {
   try { if (d && d.opened) await d.close(); } catch { /* 무시 */ }
   $('dev').textContent = '연결 끊김 — VIA / Vial 을 써도 된다';
   $('dev').className = '';
+  firmware = null;
+  $('exVia').style.display = 'none';
+  $('exVial').style.display = 'none';
+  $('fwNote').textContent = '보드를 연결하면 펌웨어에 맞는 내보내기가 나온다.';
   $('pressed').textContent = '(없음)';
   log('연결을 끊었다. 다시 배우려면 [보드 연결].');
 }
