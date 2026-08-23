@@ -56,6 +56,19 @@
 #define      HW_FLASH_KBD_BEGIN       0x1D0000UL
 #define      HW_FLASH_KBD_SLOT_SIZE   0x002000UL   /* 8KB */
 #define      HW_FLASH_KBD_SLOT_MAX    16           /* 합 128KB */
+// 키보드마다 "어느 SLOT 을 적용할지" 를 기억한다 (09단계).
+//
+// ★ EEPROM 에 두면 안 된다.
+//
+//   EEPROM 은 트리마다 갈라져 있다 (아래 VIA / VIAL). 거기 두면 펌웨어를
+//   바꿔 구운 순간 선택이 사라진다. SLOT 저장소를 공용으로 둔 것과 같은
+//   이유로 선택도 공용 영역이어야 한다.
+//
+// ★ 추가 기록(append-only) 이다. 바꿀 때마다 16B 를 덧붙이고 읽을 때
+//   마지막 것을 쓴다. 슬롯 blob(8KB) 을 다시 굽지 않아도 된다.
+#define      HW_FLASH_KBD_SEL_BEGIN   0x1F8000UL
+#define      HW_FLASH_KBD_SEL_SIZE    0x001000UL   /* 4KB = 16B x 256 */
+
 #define      HW_FLASH_E2P_VIA_BEGIN   0x1F0000UL
 #define      HW_FLASH_E2P_VIA_SIZE    0x004000UL
 #define      HW_FLASH_E2P_VIAL_BEGIN  0x1F4000UL

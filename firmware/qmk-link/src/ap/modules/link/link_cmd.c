@@ -61,6 +61,11 @@ bool linkCmdHandle(uint8_t *p_data, uint8_t length, bool vial_locked)
         p_data[29] = (uint8_t)(usbGetProductId() & 0xFF);
         p_data[30] = (uint8_t)(usbGetProductId() >> 8);
 #endif
+        {
+          int sel = kbdStoreGetSelected();
+
+          p_data[31] = (sel >= 0) ? (uint8_t)sel : 0xFF;
+        }
       }
       break;
     }
@@ -185,6 +190,16 @@ bool linkCmdHandle(uint8_t *p_data, uint8_t length, bool vial_locked)
       bool ok = kbdStoreErase(p_data[2]);
 
       if (ok == true) kbdStoreReselect();
+
+      memset(&p_data[2], 0, length - 2);
+      p_data[2] = ok ? LINK_RC_OK : LINK_RC_FAIL;
+      break;
+    }
+
+    case LINK_CMD_SEL_SET:
+    {
+      /* 지금 꽂힌 키보드가 쓸 SLOT 을 고정한다 (0xFF = 자동) */
+      bool ok = kbdStoreSelectSlot(p_data[2]);
 
       memset(&p_data[2], 0, length - 2);
       p_data[2] = ok ? LINK_RC_OK : LINK_RC_FAIL;

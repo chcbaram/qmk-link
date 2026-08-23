@@ -2,11 +2,19 @@
 """
 키보드 레이아웃 정의를 보드에 담는다 / 꺼낸다 / 지운다.
 
-★ 왜 파이썬인가
+★ 이제 웹 마법사만으로도 담고 지울 수 있다.
 
-  Vial 은 정의를 **LZMA 로 압축된 상태**로 읽어간다. 브라우저에는 LZMA 인코더가
-  없어서(CompressionStream 은 deflate/gzip 뿐이다) 웹 마법사가 직접 못 만든다.
-  파이썬은 표준 라이브러리에 lzma 가 있다.
+  https://chcbaram.github.io/qmk-link/ 에서 [보드에 담기] 를 누르면 된다.
+  이 도구는 파일을 그대로 담거나 꺼낼 때, 그리고 자동화할 때 쓴다.
+
+★ 압축하지 않은 .xz 로 담는다 — 웹과 같은 형식이다.
+
+  Vial 은 정의를 압축된 채로 읽어가지만, .xz 는 "압축 안 한 LZMA2 청크" 를
+  규격으로 허용한다 (web/xz.js 주석 참고). 브라우저에 LZMA 인코더가 없어서
+  웹이 그 형식을 쓰는데, 여기서 진짜 LZMA 로 담으면 **웹이 그 SLOT 을 열지
+  못한다.** 형식을 하나로 맞춘다.
+
+  풀사이즈 정의 기준 556 B -> 1,548 B. SLOT 이 8,144 B 라 넉넉하다.
 
 사용법
     python3 tools/kbd_upload.py list
@@ -18,6 +26,7 @@
 """
 
 import argparse
+import binascii
 import json
 import lzma
 import sys
@@ -46,6 +55,58 @@ CMD = 0xA0
 INFO, PRESSED, SLOT_INFO, SLOT_READ, SLOT_BEGIN, SLOT_DATA, SLOT_COMMIT, SLOT_ERASE = range(8)
 
 RC = {0: "OK", 1: "실패", 2: "범위 벗어남"}
+
+
+def _vint(n):
+    out = bytearray()
+    while n >= 0x80:
+        out.append((n & 0x7F) | 0x80)
+        n >>= 7
+    out.append(n)
+    return bytes(out)
+
+
+def _crc32(b):
+    return binascii.crc32(b) & 0xFFFFFFFF
+
+
+def xz_store(data):
+    """압축하지 않고 .xz 로 감싼다 — web/xz.js 와 같은 형식이다."""
+    CHUNK = 0x10000                       # 압축 안 한 청크 하나의 최대 크기
+
+    # 블록 데이터 : LZMA2 의 "압축 안 한 청크" 들
+    body = bytearray()
+    for off in range(0, len(data), CHUNK):
+        part = data[off:off + CHUNK]
+        body.append(0x01 if off == 0 else 0x02)      # 0x01 = 사전 리셋
+        body += (len(part) - 1).to_bytes(2, "big")
+        body += part
+    body.append(0x00)                                # 끝 표시
+
+    # 블록 헤더
+    hdr = bytearray([0x40 | 0x80])                   # 압축/비압축 크기 둘 다 있음
+    hdr += _vint(len(body)) + _vint(len(data))
+    hdr += _vint(0x21) + _vint(1) + b"\x00"          # LZMA2 필터, 사전 4KB
+    while (len(hdr) + 1 + 4) % 4:
+        hdr.append(0)
+    # ★ 크기 바이트는 "실제 크기 / 4 - 1" 이다. -1 을 빠뜨리면 통째로 깨진다.
+    hdr = bytes([(len(hdr) + 1 + 4) // 4 - 1]) + bytes(hdr)
+    hdr += _crc32(hdr).to_bytes(4, "little")
+
+    unpadded = len(hdr) + len(body) + 4              # 패딩은 빼고 센다 (인덱스용)
+    block = hdr + bytes(body) + b"\x00" * ((-len(body)) % 4)
+    block += _crc32(data).to_bytes(4, "little")
+
+    idx = bytearray(b"\x00") + _vint(1) + _vint(unpadded) + _vint(len(data))
+    idx += b"\x00" * ((-len(idx)) % 4)
+    idx += _crc32(bytes(idx)).to_bytes(4, "little")
+
+    flags = b"\x00\x01"                              # 검사 방식 = CRC32
+    head = b"\xfd7zXZ\x00" + flags + _crc32(flags).to_bytes(4, "little")
+    back = (len(idx) // 4 - 1).to_bytes(4, "little")
+    foot = _crc32(back + flags).to_bytes(4, "little") + back + flags + b"YZ"
+
+    return head + block + bytes(idx) + foot
 
 
 def open_dev():
@@ -143,11 +204,14 @@ def do_list(h):
 def do_put(h, slot, path, name, vid, pid):
     raw = open(path, "rb").read()
 
-    # vial.json 이면 최소화 + LZMA — vial-qmk 의 util/vial_generate_definition.py 와 같다
+    # 최소화한 뒤 압축하지 않는 .xz 로 감싼다 (위 주석 참고)
     try:
-        blob = lzma.compress(json.dumps(json.loads(raw), separators=(",", ":")).strip().encode())
+        mini = json.dumps(json.loads(raw), separators=(",", ":")).strip().encode()
     except json.JSONDecodeError:
         sys.exit("JSON 이 아니다: %s" % path)
+
+    blob = xz_store(mini)
+    raw = mini
 
     if vid is None or pid is None:
         r = cmd(h, INFO)

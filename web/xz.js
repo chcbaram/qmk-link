@@ -107,3 +107,48 @@ export function xzStore(data) {
 
   return Uint8Array.from(head.concat(block, idx, foot));
 }
+
+/**
+ * 압축하지 않은 .xz 를 되읽는다 (xzStore 가 만든 것).
+ *
+ * ★ 여기 있는 것은 **디코더가 아니다.** 압축 안 한 청크만 훑어 이어 붙인다.
+ *   진짜 LZMA 로 압축된 blob 을 만나면 예외를 던진다 — 그럴 일이 있다면
+ *   그때 디코더를 벤더링한다. (인코더와 달리 LZMA 디코더는 300줄쯤이라
+ *   못 할 일은 아니다. 지금은 필요가 없다)
+ *
+ *   보드에 담기는 것은 이 페이지와 tools/kbd_upload.py 뿐이고 둘 다
+ *   xzStore 와 같은 형식을 쓴다.
+ *
+ * @returns {Uint8Array}
+ */
+export function xzRead(buf) {
+  const MAGIC = [0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00];
+  for (let i = 0; i < MAGIC.length; i++)
+    if (buf[i] !== MAGIC[i]) throw new Error('.xz 가 아니다');
+
+  let p = 12;                                   // 스트림 헤더 12바이트
+
+  const hdrSize = (buf[p] + 1) * 4;             // ★ 값+1 이 실제 크기다
+  if (!buf[p]) throw new Error('블록이 없다');   // 0x00 이면 여기부터 인덱스다
+  p += hdrSize;                                 // 블록 헤더는 통째로 건너뛴다
+
+  const parts = [];
+  let total = 0;
+  for (;;) {
+    const ctrl = buf[p++];
+    if (ctrl === 0x00) break;                   // 블록 끝
+    if (ctrl & 0x80) throw new Error('압축된 blob 이다 — 이 페이지에서는 못 연다');
+    if (ctrl !== 0x01 && ctrl !== 0x02) throw new Error('모르는 청크 ' + ctrl);
+
+    const n = ((buf[p] << 8) | buf[p + 1]) + 1;
+    p += 2;
+    parts.push(buf.subarray(p, p + n));
+    total += n;
+    p += n;
+  }
+
+  const out = new Uint8Array(total);
+  let off = 0;
+  for (const part of parts) { out.set(part, off); off += part.length; }
+  return out;
+}

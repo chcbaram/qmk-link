@@ -37,6 +37,7 @@
 //                   [8..]  키보드마다 vid(2) pid(2)  little endian
 //                   [28]   지금 고른 칸 (0xFF = 없음)      ← 버전 3
 //                   [29..30] 지금 보고 중인 PID  little endian
+//                   [31]   기록된 선택 (0xFF = 없음/자동)
 //     0x01 PRESSED  [2] 개수 N  [3..] 눌린 usage N 개
 //
 //   ★ INFO 의 새 항목을 [8..] 뒤에 이어 붙이지 않고 **뒤쪽 고정 자리**에 둔다.
@@ -55,6 +56,8 @@
 //     0x05 SLOT_DATA   req [2..3]오프셋 [4..31]데이터(28B)
 //     0x06 SLOT_COMMIT req [2]슬롯
 //     0x07 SLOT_ERASE  req [2]슬롯
+//     0x08 SEL_SET     req [2]슬롯 (0xFF = 자동)   ← 버전 3
+//                      지금 꽂힌 키보드가 쓸 SLOT 을 고정한다. 바로 반영된다
 //
 //   ★ 32바이트 리포트라 정의를 한 번에 못 보낸다. Begin -> Data 여러 번 ->
 //     Commit 으로 나눈다. Commit 에서만 플래시를 건드린다 (소거 수명 때문이다).
@@ -81,6 +84,7 @@
 #define LINK_CMD_SLOT_DATA    0x05
 #define LINK_CMD_SLOT_COMMIT  0x06
 #define LINK_CMD_SLOT_ERASE   0x07
+#define LINK_CMD_SEL_SET      0x08
 
 #define LINK_RC_OK            0
 #define LINK_RC_FAIL          1

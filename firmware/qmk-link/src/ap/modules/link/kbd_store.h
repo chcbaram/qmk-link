@@ -38,6 +38,34 @@ typedef struct __attribute__((packed))
 } kbd_hdr_t;               /* 48 B */
 
 
+// ── 키보드마다 "어느 SLOT 을 쓸지" 를 기억한다 ──
+//
+// ★ 왜 필요한가
+//
+//   같은 키보드를 여러 SLOT 에 담을 수 있다 (지금 쓰는 것 / 고치는 중인 것).
+//   그런데 kbdStoreFind() 는 첫 일치를 집으므로 **번호가 곧 우선순위**가 되고
+//   사용자는 못 고른다. 그 선택을 기록해 두는 표다.
+//
+//   기록이 유효하면 그것을, 없거나 못 쓰게 됐으면 지금까지처럼 첫 일치를 쓴다.
+//   그래서 이 기능이 생기기 전에 담아 둔 보드도 그대로 동작한다.
+//
+// ★ 09-3 키맵 프로파일도 같은 표에 얹는다 (profile 바이트).
+
+#define KBD_SEL_MAGIC     0x5351U      /* "QS" */
+#define KBD_SEL_AUTO      0xFF         /* 자동 — 첫 일치를 쓴다 */
+
+typedef struct __attribute__((packed))
+{
+  uint16_t vid;
+  uint16_t pid;
+  uint32_t hash;
+  uint8_t  slot;           /* 적용할 SLOT. KBD_SEL_AUTO 면 자동 */
+  uint8_t  profile;        /* 09-3 자리. 지금은 0 */
+  uint16_t magic;          /* KBD_SEL_MAGIC. 아니면 빈 자리다 */
+  uint32_t reserved;
+} kbd_sel_t;               /* 16 B */
+
+
 bool     kbdStoreInit(void);
 
 // 칸 하나의 머리말. 비었으면 false.
@@ -87,6 +115,17 @@ int      kbdStoreGetActive(void);        /* -1 = 맞는 칸이 없다 (기본 �
 // 저장소가 바뀌었을 때 같은 키보드로 다시 고른다.
 // 담자마자 반영되게 — 안 그러면 키보드를 뽑았다 꽂아야 한다.
 void     kbdStoreReselect(void);
+
+// 지금 꽂힌 키보드가 쓸 SLOT 을 정해 기록한다 (KBD_SEL_AUTO = 자동).
+// 바로 반영된다.
+bool     kbdStoreSelectSlot(uint8_t slot);
+
+// 지금 꽂힌 키보드에 기록된 선택. -1 = 기록 없음(자동).
+int      kbdStoreGetSelected(void);
+
+// 표를 직접 보는 쪽 (CLI · 진단용)
+bool     kbdSelGet(uint16_t vid, uint16_t pid, uint32_t hash, uint8_t *p_slot);
+bool     kbdSelSet(uint16_t vid, uint16_t pid, uint32_t hash, uint8_t slot);
 
 
 #ifdef __cplusplus
