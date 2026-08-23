@@ -89,14 +89,15 @@ python3 tools/gen_presets.py > presets.js      # vial-qmk 경로가 필요하다
 
 ## 배포
 
-`web/` 을 `gh-pages` 브랜치 **루트**로 올린다.
+**별도 브랜치를 두지 않는다.** 소스는 `main` 의 `web/` 하나뿐이고,
+`.github/workflows/pages.yml` 이 그것만 떼어 Pages 로 올린다.
+`web/` 을 고쳐 push 하면 자동으로 배포된다.
 
-```bash
-git subtree push --prefix=web origin gh-pages
-```
-
-저장소 설정에서 한 번만 켜면 된다 —
-**Settings → Pages → Source: Deploy from a branch → `gh-pages` / `(root)`**
+저장소 설정에서 한 번만 바꾸면 된다 —
+**Settings → Pages → Source: `GitHub Actions`**
 
 그러면 <https://chcbaram.github.io/qmk-link/> 로 열린다.
 `file://` 로는 WebHID 가 안 되므로 이 경로가 있어야 남에게 줄 수 있다.
+
+> 처음에는 `gh-pages` 브랜치에 `git subtree push` 하는 방식이었는데,
+> 고칠 때마다 손으로 밀어야 해서 잊기 쉬웠다. 그래서 그만뒀다.

@@ -1,0 +1,47 @@
+# web/ 을 GitHub Pages 로 배포한다.
+#
+# ★ 별도 브랜치를 두지 않는다.
+#
+#   소스는 main 의 web/ 하나뿐이고, 이 워크플로가 그것만 떼어 Pages 로 올린다.
+#   gh-pages 브랜치를 쓰던 방식은 고칠 때마다 subtree push 를 해야 해서
+#   잊기 쉬웠다.
+#
+# 저장소 설정에서 한 번만 바꾸면 된다 —
+#   Settings -> Pages -> Source: GitHub Actions
+#
+# 그러면 https://chcbaram.github.io/qmk-link/ 로 열린다.
+
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths: ['web/**', '.github/workflows/pages.yml']
+  workflow_dispatch:        # 손으로도 돌릴 수 있게
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 배포는 하나씩. 진행 중인 것을 취소하지는 않는다.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # web/ 만 올린다. 저장소 전체를 서빙하지 않는다.
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
