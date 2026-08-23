@@ -11,6 +11,16 @@ set(PRJ_NAME qmk-link)
 #
 set(KEY_PROTOCOL "via" CACHE STRING "key protocol tree: via | vial")
 
+# QMK / Vial 원본. firm-sdk/upstream.json 이 리비전을 고정하고
+# firm-sdk/tools/fetch_upstream.py 가 받아온다 (저장소에 넣지 않는다).
+set(QMK_UPSTREAM_PATH ${CMAKE_CURRENT_LIST_DIR}/../firm-sdk/upstream/qmk_firmware)
+
+if (NOT EXISTS ${QMK_UPSTREAM_PATH}/quantum)
+  message(FATAL_ERROR
+    "QMK 원본이 없다. 먼저 받아온다:\n"
+    "  python3 firm-sdk/tools/fetch_upstream.py")
+endif()
+
 # SDK 는 firm-sdk 서브모듈을 쓴다. 환경변수 PICO_SDK_PATH 에 의존하지 않는다.
 #
 if (NOT DEFINED PICO_SDK_PATH)

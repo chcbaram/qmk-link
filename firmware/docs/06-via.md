@@ -59,6 +59,45 @@ DYNAMIC_KEYMAP_ENABLE
 VIA 의 "bootloader" 버튼 → `reset_usb_boot(0, 0)`.
 02단계에서 만든 것과 같은 함수다. → [usb-stack.md](usb-stack.md#펌웨어-업데이트)
 
+### 빌드 옵션을 VIA 로 뺀다 — custom menu
+
+QMK 는 NKRO · 탭홀드 같은 것을 보통 **컴파일 타임 매크로**로 정한다.
+바꾸려면 다시 굽어야 한다. 이 프로젝트는 하드웨어가 고정이라 정작 만지고 싶은 게
+전부 그런 옵션이다. **VIA 의 custom menu 로 빼서 런타임에 바꾸게 한다.**
+
+Vial 의 QMK settings 와 같은 효과를 VIA 에서 얻는다. wish-he 가 이 방식을 쓴다:
+
+> VIA 는 정의 JSON 의 menus 를 보고 UI 를 스스로 그린다. 펌웨어는 채널 ID 별로
+> 값을 읽고 쓰기만 하면 된다. 그래서 **설정 화면은 웹앱을 포크하지 않아도 된다.**
+
+```
+호스트 -> 장치   [0] id_custom_get_value / id_custom_set_value
+                 [1] 채널   [2] 값 ID   [3..] 값
+```
+
+#### 뺄 후보
+
+| 옵션 | QMK 훅 | 비고 |
+|---|---|---|
+| NKRO on/off | `keymap_config.nkro` | 이미 런타임이다 (`NK_TOGG`) |
+| `TAPPING_TERM` | `get_tapping_term()` | weak 함수를 덮어 eeprom 값을 돌려준다 |
+| `HOLD_ON_OTHER_KEY_PRESS` | `get_hold_on_other_key_press()` | 〃 |
+| `PERMISSIVE_HOLD` | `get_permissive_hold()` | 〃 |
+| `RETRO_TAPPING` | `get_retro_tapping()` | 〃 |
+| **볼륨키 변환** | `link/` | HHKB 는 keyboard 페이지 `0x80`/`0x81` 로 보낸다. consumer 로 바꿀지 |
+| **패스스루 모드** | `ap.c` | QMK 를 건너뛰고 04단계처럼 그대로 흘린다. 문제 생겼을 때 되돌아갈 곳 |
+
+값은 `EECONFIG_USER_DATA_SIZE` 영역에 둔다 (wish-he 의 `ee_user.h` 방식).
+
+#### 디바운스 메뉴는 두지 않는다
+
+wish-he 의 주석 그대로다:
+
+> 우리는 matrix.c 가 debounce() 를 아예 부르지 않는다. 그 메뉴를 두면
+> 아무것도 하지 않는 스위치가 된다.
+
+우리도 같다 — 원본 키보드가 이미 디바운스했다.
+
 ### VIA 정의 파일
 
 `info.json` 을 VIA 형식으로 만든다. 16×16 가상 매트릭스를 어떻게 보여줄지가 문제다 —

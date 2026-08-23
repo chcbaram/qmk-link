@@ -1,0 +1,19 @@
+{
+  "_comment": [
+    "QMK / Vial 원본의 리비전을 고정한다. 단일 진실 원천이다.",
+    "tools/fetch_upstream.py 가 이 파일을 보고 upstream/ 에 받아온다.",
+    "upstream/ 는 .gitignore 라 이 저장소 크기는 늘지 않는다.",
+    "",
+    "sparse 에 적은 경로만 워킹트리에 풀린다. qmk_firmware 는 전체 히스토리가 524MB 인데",
+    "quantum/ 만 받으면 5MB 안팎이다. 헤더가 부족하면 sparse 에 경로를 추가하면 된다."
+  ],
+  "qmk_firmware": {
+    "url": "https://github.com/qmk/qmk_firmware.git",
+    "rev": "0.33.13",
+    "sparse": [
+      "quantum",
+      "tmk_core",
+      "platforms"
+    ]
+  }
+}

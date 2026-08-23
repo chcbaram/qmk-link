@@ -41,8 +41,16 @@ bool usbdHidInit(void);
 // 호스트가 붙어서 리포트를 받을 준비가 됐나
 bool usbdHidIsReady(uint8_t itf);
 
-// boot keyboard 리포트 8바이트를 그대로 보낸다 (패스스루용)
+// boot keyboard 리포트 8바이트를 그대로 보낸다.
+// 직전과 같으면 아무것도 하지 않는다 (아래 주석 참고).
 bool usbdHidSendKeyboard(const uint8_t *p_report);
+
+// IF1(Extra) 로 보낸다. 첫 바이트가 리포트 ID 다.
+// QMK 의 report_nkro_t / report_mouse_t / report_extra_t 를 그대로 넘긴다.
+bool usbdHidSendExtra(const uint8_t *p_report, uint16_t len);
+
+// 호스트가 SET_PROTOCOL 로 정한 값. 0 = boot, 1 = report
+uint8_t usbdHidGetProtocol(void);
 
 // 마우스. buttons/x/y/wheel/pan
 bool usbdHidSendMouse(uint8_t buttons, int8_t x, int8_t y, int8_t wheel, int8_t pan);

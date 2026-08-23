@@ -8,11 +8,16 @@ file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS
   hw/*.c
 )
 
+include(ap/modules/qmk/${KEY_PROTOCOL}/CMakeLists.txt)
+
 add_executable(${PRJ_NAME}
   main.c
 
   ${SRC_FILES}
+  ${QMK_SRC_FILES}
 )
+
+target_compile_definitions(${PRJ_NAME} PRIVATE ${QMK_DEFINES})
 
 target_include_directories(${PRJ_NAME} PUBLIC
   .
@@ -27,6 +32,8 @@ target_include_directories(${PRJ_NAME} PUBLIC
   hw/driver/usb
   hw/driver/usbh
   hw/driver/usbh/usbh_hid
+
+  ${QMK_INC_DIR}
 )
 
 target_link_libraries(${PRJ_NAME}
@@ -70,3 +77,4 @@ pico_enable_stdio_usb(${PRJ_NAME}  0)
 pico_enable_stdio_uart(${PRJ_NAME} 0)
 
 set_target_properties(${PRJ_NAME} PROPERTIES SUFFIX ".elf")
+
