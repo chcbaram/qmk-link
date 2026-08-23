@@ -660,17 +660,24 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 //   그래서 파일을 열 때 matrix 를 보고 이 스위치를 켠다.
 let trustCoords = true;
 
-function decodeLegend(label) {
-  if (!trustCoords) return { label, usage: null };
+function decodeLegend(raw) {
+  const lines = String(raw).split('\n');
+  const head  = lines[0].trim();
 
-  const m = /^(\d{1,2}),(\d{1,2})$/.exec(label.trim());
-  if (!m) return { label, usage: null };
+  if (!trustCoords) return { label: head, usage: null };
+
+  const m = /^(\d{1,2}),(\d{1,2})$/.exec(head);
+  if (!m) return { label: head, usage: null };
 
   const r = +m[1], c = +m[2];
-  if (r > 15 || c > 15) return { label, usage: null };
+  if (r > 15 || c > 15) return { label: head, usage: null };
 
   const u = (r << 4) | c;
-  return { label: NAME_OF[u] || label, usage: u };
+
+  // ★ 0,0 = usage 0x00 "눌린 키 없음" — 아직 안 배운 자리 표시다 (buildLayout 주석)
+  if (u === 0) return { label: (lines[1] || '').trim(), usage: null };
+
+  return { label: NAME_OF[u] || head, usage: u };
 }
 
 function parseKle(text) {
@@ -702,7 +709,7 @@ function parseKle(text) {
         if ('h' in it) h = it.h;
         continue;
       }
-      out.push({ x, y, w, h, ...decodeLegend(String(it).split('\n')[0]) });
+      out.push({ x, y, w, h, ...decodeLegend(it) });
       x += w; w = 1; h = 1;
     }
     y += 1;
@@ -932,12 +939,23 @@ function fillKeyNames() {
 }
 
 // ── 내보내기 ────────────────────────────────────────────
-function buildLayout() {
-  // KLE 를 다시 조립하되 범례를 "row,col" 로 바꾼다
+/*
+ * KLE 를 다시 조립한다. legendOf() 가 각 자리의 범례를 정한다.
+ *
+ * ★ 안 배운 자리도 남긴다.
+ *
+ *   예전에는 usage 가 없는 자리를 통째로 버렸다. 그래서 두 키만 배우고
+ *   저장했다가 다시 열면 **그 두 키만 남은 배열**이 됐다 — 나머지 자리가
+ *   사라져서 이어서 배울 수가 없었다.
+ *
+ *   범례를 "0,0" 으로 적는다. usage 0x00 은 HID 에서 "눌린 키 없음" 이라
+ *   진짜 키와 겹치지 않는다. 뒤에 줄바꿈으로 원래 이름을 붙여 두면 다시
+ *   열 때 무슨 자리였는지도 살아난다 (VIA/Vial 은 첫 줄만 좌표로 읽는다).
+ */
+function buildLayout(legendOf) {
   const rows = [];
   let cur = [], prevY = null, prevX = 0;
   for (const k of keys) {
-    if (k.usage === null) continue;
     if (prevY === null || k.y !== prevY) {
       if (cur.length) rows.push(cur);
       cur = []; prevX = 0;
@@ -947,7 +965,7 @@ function buildLayout() {
     if (k.x !== prevX) { cur.push({ x: k.x - prevX }); prevX = k.x; }
     if (k.w !== 1) cur.push({ w: k.w });
     if (k.h !== 1) cur.push({ h: k.h });
-    cur.push(`${k.usage >> 4},${k.usage & 0x0F}`);
+    cur.push(legendOf(k));
     prevX += k.w;
   }
   if (cur.length) rows.push(cur);
@@ -992,6 +1010,8 @@ async function saveSlot(slot) {
     return;
   }
   if (!keys.some(k => k.usage !== null)) { log('먼저 배열을 읽고 키를 배운다.'); return; }
+
+  const todo = keys.filter(k => k.usage === null).length;
 
   if (slot === undefined) {
     const mine = slotsOf(hostVid, hostPid);
@@ -1066,6 +1086,7 @@ async function saveSlot(slot) {
       };
     }
     finishSlotOp(`SLOT ${slot} 에 저장했다 (${blob.length} B).`
+                 + (todo ? ` 아직 안 배운 자리 ${todo}개는 빈 자리로 들어갔다 — 다시 열어 이어서 배우면 된다.` : '')
                  + (activeSlot >= 0 && activeSlot !== slot ? ' 쓰려면 [적용] 을 누른다.' : ''),
                  reenum);
   } catch (e) {
@@ -1313,10 +1334,22 @@ function buildDef(isVial) {
     name: $('name').value || (isVial ? 'QMK-LINK VIAL' : 'QMK-LINK VIA'),
     vendorId: '0x0483', productId: '0x' + hex4(slotPid()),
     matrix: { rows: 16, cols: 16 },
-    layouts: { keymap: buildLayout() },
+    layouts: { keymap: buildLayout(legendAddr) },
   };
   if (isVial) def.lighting = 'none';
   return def;
+}
+
+// 정의(VIA/Vial)용 — 좌표. 안 배운 자리는 "0,0" + 원래 이름
+function legendAddr(k) {
+  if (k.usage === null) return '0,0\n' + (k.label || '');
+  return `${k.usage >> 4},${k.usage & 0x0F}`;
+}
+
+// KLE 원본용 — 사람이 읽는 이름
+function legendName(k) {
+  if (k.usage === null) return k.label || '';
+  return NAME_OF[k.usage] || `${k.usage >> 4},${k.usage & 0x0F}`;
 }
 
 function exportVia()  { download(slug() + 'layout-via.json',  buildDef(false)); }
@@ -1332,10 +1365,7 @@ function exportVial() { download(slug() + 'layout-vial.json', buildDef(true)); }
  *   gen_keymap.py 는 두 모양을 다 받는다 (kle_rows).
  */
 function exportKle() {
-  const rows = buildLayout().map(row => row.map(it =>
-    typeof it === 'string'
-      ? (NAME_OF[(parseInt(it.split(',')[0]) << 4) | parseInt(it.split(',')[1])] || it)
-      : it));
+  const rows = buildLayout(legendName);
 
   const meta = {
     name: $('name').value || 'QMK-LINK',
