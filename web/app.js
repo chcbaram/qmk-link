@@ -2,7 +2,18 @@ import { USAGE, NAME_OF } from './usage-table.js';
 import { PRESETS } from './presets.js';
 
 // ── qmk-link raw HID 명령 (firmware/.../link_cmd.h 와 같아야 한다) ──
-const VID = 0x0483, PID = 0x5305;
+const VID = 0x0483;
+
+// ★ VID 만 보면 안 된다.
+//
+//   0x0483 은 baram 키보드들이 같이 쓴다. 다른 보드도 usage page 0xFF60 짜리
+//   raw HID 를 갖고 있어서, VID 만 걸러면 장치 선택 창에 그것들이 같이 뜨고
+//   잘못 고르면 "모르는 명령(0xFF)" 만 돌아온다. 실제로 파이썬 도구가 그렇게
+//   wish-he 를 열었다.
+//
+//   0x5305 는 지금 PID, 0x5400~0x540F 는 저장된 레이아웃마다 바뀔 PID 다.
+const PID_LIST = [0x5305];
+for (let i = 0; i < 16; i++) PID_LIST.push(0x5400 + i);
 const CMD_PREFIX  = 0xA0;
 const TREE_VIA    = 0;
 const TREE_VIAL   = 1;
@@ -52,7 +63,7 @@ const log = (msg) => { $('log').textContent = msg; };
 // ── 장치 ────────────────────────────────────────────────
 async function connect() {
   const list = await navigator.hid.requestDevice({
-    filters: [{ vendorId: VID, productId: PID, usagePage: 0xFF60 }],
+    filters: PID_LIST.map(pid => ({ vendorId: VID, productId: pid, usagePage: 0xFF60 })),
   });
   if (!list.length) { log('장치를 고르지 않았다'); return; }
 
@@ -61,8 +72,10 @@ async function connect() {
 
   device.addEventListener('inputreport', (e) => {
     if (!pending) return;
-    const r = pending; pending = null;
-    r(new Uint8Array(e.data.buffer));
+    const r = new Uint8Array(e.data.buffer);
+    if (r[0] !== pending.want[0] || r[1] !== pending.want[1]) return;   // 남의 응답
+    const done = pending.resolve; pending = null;
+    done(r);
   });
 
   const info = await send(CMD_INFO);
@@ -119,10 +132,17 @@ function send(sub, ...args) {
   const buf = new Uint8Array(REPORT_LEN);
   buf[0] = CMD_PREFIX; buf[1] = sub;
   args.forEach((v, i) => buf[2 + i] = v);
+
   return new Promise((resolve, reject) => {
-    pending = resolve;
+    // ★ 응답을 대조한다.
+    //
+    //   같은 raw HID 를 VIA · Vial · 이 페이지가 나눠 쓴다. 다른 쪽이 물어본
+    //   답이 우리에게 배달될 수 있다. 앞 두 바이트가 맞는 것만 받는다.
+    pending = { want: [CMD_PREFIX, sub], resolve };
     device.sendReport(0, buf).catch(reject);
-    setTimeout(() => { if (pending === resolve) { pending = null; reject(new Error('응답 없음')); } }, 1000);
+    setTimeout(() => {
+      if (pending && pending.resolve === resolve) { pending = null; reject(new Error('응답 없음')); }
+    }, 1000);
   });
 }
 

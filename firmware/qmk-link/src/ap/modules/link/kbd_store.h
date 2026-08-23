@@ -57,6 +57,14 @@ bool     kbdStoreWrite(uint8_t slot, const kbd_hdr_t *p_hdr, const uint8_t *p_da
 
 bool     kbdStoreErase(uint8_t slot);
 
+// ── 조각으로 받아 조립한 뒤 한 번에 굽는다 ──
+//
+// raw HID 리포트가 32바이트뿐이라 정의를 한 번에 못 보낸다.
+// Begin 으로 시작해 Data 를 여러 번 채우고 Commit 에서 굽는다.
+void     kbdStoreStageBegin(const kbd_hdr_t *p_hdr);
+bool     kbdStoreStageData(uint16_t offset, const uint8_t *p_data, uint8_t length);
+bool     kbdStoreStageCommit(uint8_t slot);
+
 uint16_t kbdStoreDataMax(void);   /* 한 칸에 들어가는 데이터 최대 길이 */
 uint8_t  kbdStoreUsedCount(void);
 

@@ -37,6 +37,22 @@
 //                   [8..]  키보드마다 vid(2) pid(2)  little endian
 //     0x01 PRESSED  [2] 개수 N  [3..] 눌린 usage N 개
 //
+//   ── 레이아웃 저장소 (09단계 2) ──
+//   슬롯 명령은 [2] 가 결과다 (0 = OK).
+//
+//     0x02 SLOT_INFO   req [2]슬롯
+//                      rsp [2]결과 [3]사용중 [4..5]vid [6..7]pid
+//                          [8..9]길이 [10..31]이름(22B, NUL 끝)
+//     0x03 SLOT_READ   req [2]슬롯 [3..4]오프셋
+//                      rsp [2]결과 [3]길이 [4..31]데이터(최대 28B)
+//     0x04 SLOT_BEGIN  req [2]슬롯 [3..4]vid [5..6]pid [7..8]길이 [9..31]이름(23B)
+//     0x05 SLOT_DATA   req [2..3]오프셋 [4..31]데이터(28B)
+//     0x06 SLOT_COMMIT req [2]슬롯
+//     0x07 SLOT_ERASE  req [2]슬롯
+//
+//   ★ 32바이트 리포트라 정의를 한 번에 못 보낸다. Begin -> Data 여러 번 ->
+//     Commit 으로 나눈다. Commit 에서만 플래시를 건드린다 (소거 수명 때문이다).
+//
 // ★ 잠금 바이트는 **알림용**이다. 우리 PRESSED 는 잠겨 있어도 답한다.
 //
 //   Vial 은 매트릭스 읽기를 잠금 뒤로 숨긴다 (raw HID 키로거 방지).
@@ -53,6 +69,16 @@
 
 #define LINK_CMD_INFO         0x00
 #define LINK_CMD_PRESSED      0x01
+#define LINK_CMD_SLOT_INFO    0x02
+#define LINK_CMD_SLOT_READ    0x03
+#define LINK_CMD_SLOT_BEGIN   0x04
+#define LINK_CMD_SLOT_DATA    0x05
+#define LINK_CMD_SLOT_COMMIT  0x06
+#define LINK_CMD_SLOT_ERASE   0x07
+
+#define LINK_RC_OK            0
+#define LINK_RC_FAIL          1
+#define LINK_RC_RANGE         2
 
 #define LINK_CMD_VERSION      2
 

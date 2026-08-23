@@ -24,7 +24,9 @@ static void cliCmd(cli_args_t *args);
  */
 static uint8_t slot_buf[SLOT_SIZE];
 
-static bool is_init = false;
+static bool      is_init    = false;
+static kbd_hdr_t stage_hdr;
+static bool      stage_open = false;
 
 
 
@@ -126,6 +128,42 @@ bool kbdStoreErase(uint8_t slot)
   if (slot >= KBD_SLOT_MAX) return false;
 
   return flashErase(SLOT_ADDR(slot), SLOT_SIZE);
+}
+
+void kbdStoreStageBegin(const kbd_hdr_t *p_hdr)
+{
+  memset(slot_buf, 0xFF, sizeof(slot_buf));
+  stage_hdr  = *p_hdr;
+  stage_open = true;
+}
+
+bool kbdStoreStageData(uint16_t offset, const uint8_t *p_data, uint8_t length)
+{
+  if (stage_open != true) return false;
+  if ((uint32_t)offset + length > kbdStoreDataMax()) return false;
+
+  memcpy(&slot_buf[DATA_OFFSET + offset], p_data, length);
+  return true;
+}
+
+bool kbdStoreStageCommit(uint8_t slot)
+{
+  kbd_hdr_t *p_dst = (kbd_hdr_t *)slot_buf;
+
+  if (stage_open != true) return false;
+  if (slot >= KBD_SLOT_MAX) return false;
+  if (stage_hdr.data_len > kbdStoreDataMax()) return false;
+
+  stage_open = false;
+
+  memcpy(p_dst, &stage_hdr, sizeof(kbd_hdr_t));
+  p_dst->magic   = KBD_MAGIC;
+  p_dst->version = KBD_VERSION;
+
+  if (flashErase(SLOT_ADDR(slot), SLOT_SIZE) != true) return false;
+  if (flashWrite(SLOT_ADDR(slot), slot_buf, SLOT_SIZE) != true) return false;
+
+  return true;
 }
 
 uint32_t kbdStoreHash(const uint8_t *p_data, uint16_t length)
