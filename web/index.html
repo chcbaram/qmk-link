@@ -5,8 +5,13 @@
 <title>QMK-LINK 배열 마법사</title>
 <style>
   :root { color-scheme: light; }
+  /* ★ 폭을 묶는다.
+       넓은 화면에서 그냥 두면 SLOT 줄의 이름 칸(1fr)이 화면을 다 먹어서
+       버튼이 저 멀리 오른쪽 끝으로 간다. 눈이 줄마다 화면을 가로지른다.
+       1180px 는 풀사이즈(104키) 배열 그림이 잘리지 않는 폭이다. */
   body { font: 14px/1.6 -apple-system, "Apple SD Gothic Neo", sans-serif;
-         background:#f6f6f8; color:#1c1c1e; margin:0; padding:24px; }
+         background:#f6f6f8; color:#1c1c1e; margin:0 auto; padding:24px;
+         max-width:1180px; }
   h1 { font-size:18px; margin:0 0 4px; }
   .sub { color:#5f5f68; margin:0 0 20px; }
   section { margin-bottom:18px; }
