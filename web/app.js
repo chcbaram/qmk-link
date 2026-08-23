@@ -337,25 +337,42 @@ function renderSlots() {
     }
 
     /*
-     * ★ 새 SLOT 을 늘리는 길을 여기 둔다.
+     * ★ 새 SLOT 은 "추가" 로 자리부터 만든다.
      *
-     *   전에는 "이미 담아 둔 것을 [편집] 으로 연 뒤" 에만 [새 SLOT 에 담기] 가
-     *   나왔다. 그래서 변형본을 하나 더 만들 방법이 사실상 없었다.
+     *   전에는 [SLOT n 에 새로 담기] 가 바로 저장을 시도했다. 그런데 그 시점엔
+     *   아직 배운 것이 없어서 조용히 아무 일도 안 했고, 아래 담기 칸은 여전히
+     *   옛 SLOT 을 가리켰다. 무엇을 만드는 중인지 화면 어디에도 없었다.
+     *
+     *   이제 자리를 먼저 만들고(아직 플래시는 안 건드린다) 거기서 배열을 넣고
+     *   배운 뒤에 담는다. 목록 -> 편집 -> 담기 순서가 다른 SLOT 과 같아진다.
      */
+    if (here && editSlot >= 0 && slots && !slots[editSlot].used) {
+      const row = document.createElement('div');
+
+      row.className = 'slot-row';
+      row.innerHTML = '<span class="dot"><i></i></span>'
+        + `<b>SLOT ${editSlot}</b> <span class="note">새로 만드는 중 — `
+        + `아래 <b>3</b> 에서 배열을 넣고 키를 배운다</span>`;
+      row.appendChild(btn('그만두기', () => { editSlot = -1; refreshUi(); }));
+      div.appendChild(row);
+    }
+
     if (here) {
       const free = slots ? slots.findIndex(x => !x.used) : -1;
       const foot = document.createElement('div');
 
       foot.className = 'slot-row';
-      if (free >= 0) foot.appendChild(btn(`SLOT ${free} 에 새로 담기`, () => saveSlot(free)));
-      else {
+      if (free < 0) {
         const n = document.createElement('span');
         n.className = 'note';
         n.textContent = '빈 SLOT 이 없다 — 하나 지워야 늘릴 수 있다.';
         foot.appendChild(n);
       }
+      else if (editSlot !== free || slots[editSlot].used) {
+        foot.appendChild(btn('새 SLOT 추가', () => startNewSlot()));
+      }
       if (g.rows.length > 1 && selSlot >= 0) foot.appendChild(btn('자동으로', () => applySlot(SEL_AUTO)));
-      div.appendChild(foot);
+      if (foot.childNodes.length) div.appendChild(foot);
     }
     box.appendChild(div);
   }
@@ -384,9 +401,13 @@ function updateSaveNote() {
   const mine = slotsOf(hostVid, hostPid);
   const free = slots ? slots.findIndex(s => !s.used) : -1;
 
-  $('save').textContent    = editSlot >= 0 ? `SLOT ${editSlot} 에 덮어쓰기` : '보드에 담기';
-  $('saveNew').style.display = (editSlot >= 0 && free >= 0) ? '' : 'none';
-  $('saveNew').textContent = free >= 0 ? `새 SLOT ${free} 에 담기` : '';
+  // ★ 버튼 이름이 곧 하는 일이다. 대상 SLOT 을 늘 달고 있어야
+  //   "어디에 담기는지" 를 화면 어딘가에서 다시 찾지 않는다.
+  const isNew = (editSlot >= 0 && slots && !slots[editSlot].used);
+
+  $('save').textContent = editSlot < 0 ? '보드에 담기'
+                        : (isNew ? `SLOT ${editSlot} 에 담기`
+                                 : `SLOT ${editSlot} 에 덮어쓰기`);
 
   if (!device) { note.textContent = '보드를 연결하면 담을 수 있다.'; return; }
   if (!has) {
@@ -857,6 +878,18 @@ async function saveSlot(slot) {
   }
 }
 
+// 빈 SLOT 자리를 잡는다. 아직 플래시는 안 건드린다 — 담을 때 쓴다.
+function startNewSlot() {
+  if (!device || !slots) { log('보드를 먼저 연결한다.'); return; }
+
+  const free = slots.findIndex(x => !x.used);
+  if (free < 0) { log('★ 빈 SLOT 이 없다. 하나 지워야 늘릴 수 있다.'); return; }
+
+  editSlot = free;
+  refreshUi();
+  log(`SLOT ${free} 을 만든다 — 아래에서 배열을 넣고 키를 배운 뒤 [SLOT ${free} 에 담기].`);
+}
+
 // ── 시나리오 2 : 담아 둔 것을 편집한다 ──────────────────
 //
 // ★ 이게 없어서 배열을 조금 고치려 해도 처음부터 다시 배워야 했다.
@@ -974,8 +1007,10 @@ function refreshUi() {
 
   const badge = $('editBadge');
   if (editSlot >= 0) {
-    badge.textContent = `SLOT ${editSlot} 을 고치는 중  ✕`;
-    badge.title = '누르면 그만둔다 — 새로 만드는 것이 된다';
+    const isNew = (slots && !slots[editSlot].used);
+
+    badge.textContent = `SLOT ${editSlot} 을 ${isNew ? '만드는' : '고치는'} 중  ✕`;
+    badge.title = '누르면 그만둔다';
     badge.style.display = '';
   } else {
     badge.style.display = 'none';
@@ -1024,7 +1059,6 @@ $('clear').onclick = clearCur;
 $('assign').onclick = manualAssign;
 $('editBadge').onclick = () => { editSlot = -1; refreshUi(); log('고치던 SLOT 을 놓았다 — 이제 새로 만든다.'); };
 $('save').onclick = () => saveSlot();
-$('saveNew').onclick = () => saveSlot(slots ? slots.findIndex(x => !x.used) : -1);
 $('exVia').onclick = exportVia;
 $('exVial').onclick = exportVial;
 $('exKle').onclick = exportKle;
