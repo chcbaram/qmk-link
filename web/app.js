@@ -45,6 +45,7 @@ let paused = false;          // 탭이 가려지면 멈춘다
 let firmware = null;         // 'via' | 'vial'
 let slots = null;            // [{used, name}] — 연결했을 때만 채워진다
 let hostVid = 0, hostPid = 0;// USB-A 에 꽂힌 키보드. SLOT 머리말에 적는다
+let activeSlot = -1;         // 보드가 지금 쓰고 있는 SLOT (-1 = 없음)
 let busy = false;            // 담기/지우기 중 — 폴링을 멈춘다
 
 // ★ 펌웨어에 따라 쓸 수 없는 것이 있다.
@@ -146,7 +147,8 @@ async function attach(dev) {
 //   있는지에 따라 PID 를 0x5400 + SLOT 으로 보고한다. 그래서 내보내는 JSON 의
 //   productId 가 **담을 SLOT** 과 맞아야 VIA 가 그 정의를 고른다.
 //   어긋나면 VIA 가 "모르는 키보드" 로 본다 — 조용히 틀리는 종류다.
-async function loadSlots(activeSlot) {
+async function loadSlots(active) {
+  activeSlot = (active !== undefined && active < SLOT_MAX) ? active : -1;
   slots = [];
   for (let i = 0; i < SLOT_MAX; i++) {
     let r;
@@ -155,12 +157,23 @@ async function loadSlots(activeSlot) {
     const name = used
       ? new TextDecoder().decode(r.slice(10, 32)).split('\0')[0]
       : '';
-    slots.push({ used, name });
+    slots.push({
+      used, name,
+      vid: r[4] | (r[5] << 8),
+      pid: r[6] | (r[7] << 8),
+    });
   }
-  fillSlots(activeSlot);
+  fillSlots(active);
 }
 
-function fillSlots(activeSlot) {
+// ★ 같은 키보드가 여러 SLOT 에 있으면 번호가 낮은 쪽이 이긴다 (kbd_store.h).
+//   진 SLOT 은 영영 안 쓰인다 — "담았는데 왜 안 바뀌지" 가 되는 자리다.
+function winnerSlot(vid, pid) {
+  if (!slots) return -1;
+  return slots.findIndex(s => s.used && s.vid === vid && s.pid === pid);
+}
+
+function fillSlots(active) {
   const sel = $('slot');
   const keep = sel.value;
 
@@ -168,7 +181,12 @@ function fillSlots(activeSlot) {
   sel.appendChild(new Option('담지 않음 (PID 5305)', '-1'));
   for (let i = 0; i < SLOT_MAX; i++) {
     const s = slots && slots[i];
-    const tag = !slots ? '' : (s.used ? ` — ${s.name || '이름 없음'}` : ' — 비어 있음');
+    let tag = '';
+    if (slots) {
+      tag = s.used ? ` — ${s.name || '이름 없음'}` : ' — 비어 있음';
+      if (i === activeSlot) tag += '  ← 지금 이 키보드';
+      else if (s.used && winnerSlot(s.vid, s.pid) !== i) tag += '  ★ 가려짐';
+    }
     sel.appendChild(new Option(`SLOT ${i} (PID ${hex4(PID_BASE + i)})${tag}`, String(i)));
   }
 
@@ -178,7 +196,7 @@ function fillSlots(activeSlot) {
   //   3. 사용자가 직전에 고른 것 — 연결 전 목록을 다시 그릴 때다
   let want;
 
-  if (activeSlot !== undefined && activeSlot < SLOT_MAX) want = String(activeSlot);
+  if (active !== undefined && active >= 0 && active < SLOT_MAX) want = String(active);
   else if (slots) {
     const empty = slots.findIndex((s) => !s.used);
     want = String(empty < 0 ? 0 : empty);
@@ -215,6 +233,14 @@ function slotChanged() {
     + '<br>담고 나면 보드가 스스로 다시 열거된다. 그래서 연결이 한 번 끊긴다.'
     + (!(hostVid || hostPid) && device
         ? '<br><b>★ 지금은 USB-A 에 키보드가 없어서 담을 수 없다.</b>' : '');
+
+  // ★ 같은 키보드를 더 낮은 SLOT 이 이미 갖고 있으면 여기 담아도 안 쓰인다.
+  //   담아 놓고 "왜 안 바뀌지" 로 헤매는 자리라 미리 말해 준다.
+  const win = winnerSlot(hostVid, hostPid);
+  if ((hostVid || hostPid) && win >= 0 && win < v) {
+    note.innerHTML += `<br><b>★ SLOT ${win} 에 같은 키보드(<code>${hex4(hostVid)}:${hex4(hostPid)}</code>) 가 이미 있다.</b> `
+      + `번호가 낮은 쪽이 이기므로 여기 담아도 쓰이지 않는다 — SLOT ${win} 에 담거나 그것을 먼저 지운다.`;
+  }
 }
 
 function hex4(v) { return v.toString(16).toUpperCase().padStart(4, '0'); }

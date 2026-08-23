@@ -116,17 +116,27 @@ def do_list(h):
               % ("없음" if act == 0xFF else str(act), r[29] | (r[30] << 8)))
 
     print("\n저장된 레이아웃")
-    used = 0
+    rows = []
     for slot in range(16):
         r = cmd(h, SLOT_INFO, slot)
         if r[2] != 0 or r[3] == 0:
             continue
-        used += 1
         name = bytes(r[10:32]).split(b"\x00")[0].decode("utf-8", "replace")
-        print("   [%2d] %04X:%04X  %5d B  PID 0x%04X  %s"
-              % (slot, r[4] | (r[5] << 8), r[6] | (r[7] << 8),
-                 r[8] | (r[9] << 8), 0x5400 + slot, name))
-    if not used:
+        rows.append((slot, r[4] | (r[5] << 8), r[6] | (r[7] << 8),
+                     r[8] | (r[9] << 8), name))
+
+    # ★ 같은 키보드가 여러 SLOT 에 있으면 번호가 낮은 쪽이 이긴다 (kbd_store.h).
+    #   진 SLOT 은 영영 안 쓰인다 — 담아 놓고 "왜 안 바뀌지" 로 헤매는 자리다.
+    winner = {}
+    for slot, vid, pid, _, _ in rows:
+        winner.setdefault((vid, pid), slot)
+
+    for slot, vid, pid, ln, name in rows:
+        mark = "   ★ 가려짐 (SLOT %d 가 이긴다)" % winner[(vid, pid)] \
+               if winner[(vid, pid)] != slot else ""
+        print("   [%2d] %04X:%04X  %5d B  PID 0x%04X  %s%s"
+              % (slot, vid, pid, ln, 0x5400 + slot, name, mark))
+    if not rows:
         print("   (없음)")
 
 

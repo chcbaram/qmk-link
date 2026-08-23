@@ -243,9 +243,15 @@ void cliCmd(cli_args_t *args)
     {
       if (kbdStoreGetHeader(i, &hdr) != true) continue;
 
-      cliPrintf("  [%2d] %04X:%04X  hash %08X  %5d B  PID 0x%04X  %s\n",
-                i, hdr.vid, hdr.pid, (unsigned)hdr.hash, hdr.data_len,
-                LINK_PID_BASE + i, hdr.name);
+      /* 같은 키보드를 담은 더 낮은 칸이 있으면 이 칸은 영영 안 쓰인다 */
+      {
+        int win = kbdStoreFind(hdr.vid, hdr.pid, hdr.hash);
+
+        cliPrintf("  [%2d] %04X:%04X  hash %08X  %5d B  PID 0x%04X  %s%s\n",
+                  i, hdr.vid, hdr.pid, (unsigned)hdr.hash, hdr.data_len,
+                  LINK_PID_BASE + i, hdr.name,
+                  (win >= 0 && win != i) ? "   ★ 가려짐" : "");
+      }
     }
     ret = true;
   }

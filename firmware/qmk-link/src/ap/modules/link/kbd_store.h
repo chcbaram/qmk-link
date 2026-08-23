@@ -48,6 +48,11 @@ bool     kbdStoreGetHeader(uint8_t slot, kbd_hdr_t *p_hdr);
 // ★ hash 는 vid/pid 가 같은 키보드를 가르는 데 쓴다.
 //   싸구려 키보드들이 같은 vid/pid 를 공유하고 0000 도 있다.
 //   0 을 넘기면 vid/pid 만 본다.
+//
+// ★ 같은 키보드가 여러 칸에 있으면 **번호가 낮은 칸이 이긴다.**
+//   (hash 까지 맞는 칸이 있으면 그것이 먼저다)
+//   진 칸은 영영 안 쓰인다 — 지워도 되는 데이터다. 눈에 안 보이면 "담았는데
+//   왜 안 바뀌지" 가 되므로, 웹 마법사와 `kbd info` 가 가려진 칸을 표시한다.
 int      kbdStoreFind(uint16_t vid, uint16_t pid, uint32_t hash);
 
 bool     kbdStoreRead(uint8_t slot, uint32_t offset, uint8_t *p_data, uint16_t length);
