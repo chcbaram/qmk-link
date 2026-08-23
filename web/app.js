@@ -277,8 +277,21 @@ function renderSlots() {
     // 이름 — 꽂혀 있으면 키보드가 말하는 진짜 이름, 아니면 담아 둔 이름
     const label = here ? hostName : (g.rows.length ? g.rows[0].name : '');
 
+    // ★ 이름이 없으면 "왜 없는지" 를 적는다.
+    //
+    //   그냥 비워 두면 펌웨어가 오래된 건지, 키보드가 이름을 안 주는 건지,
+    //   우리가 아직 못 받은 건지 구별이 안 된다. 이 프로젝트에서 몇 번이나
+    //   시간을 버린 "조용히 아무것도 안 함" 이다.
+    let why = '';
+    if (here && !label) {
+      why = cmdVer < 4
+        ? '이름 없음 — 펌웨어가 알려주지 않는다 (다시 구우면 뜬다)'
+        : '이름 없음 — 이 키보드가 USB 이름을 주지 않는다';
+    }
+
     head.innerHTML = `<code>${hex4(g.vid)}:${hex4(g.pid)}</code>`
       + (label ? `<span>${esc(label)}</span>` : '')
+      + (why ? `<span class="note">${why}</span>` : '')
       + (here ? '<span class="badge">지금 꽂힌 키보드</span>' : '');
     div.appendChild(head);
 
