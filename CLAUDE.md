@@ -51,8 +51,11 @@ USB-A 에 꽂은 일반 키보드를 QMK 로 처리해 PC 에는 VIA / Vial 키�
   core1 이 PIO USB 를 돌고 있다. `flash_safe_execute()` 로 core1 을 세워야 한다.
   `flash_range_erase()` 를 직접 부르면 안 된다
 - **`ap.c` 의 static 함수는 `ap` 접두어를 붙이지 않는다.**
-  `updateKeyboard()` · `isKeyDown()` 처럼 쓴다 (baram-kbd-tester 관례).
+  `isKeyDown()` 처럼 쓴다 (baram-kbd-tester 관례).
   외부로 나가는 `apInit()` / `apMain()` 만 접두어를 갖는다
+- **`ap.c` 에는 진입점만 둔다** — `apInit` · `apMain` · `cliLoopIdle`.
+  실제 일은 `ap/modules/<이름>/` 로 뺀다
+- **CLI 콜백은 파일 맨 아래에 둔다.** `cliLoopIdle()` 같은 일반 함수가 그 위다
 - 주석과 문서는 한국어
 
 ### 빌드

@@ -1,23 +1,19 @@
+/*
+ * ap.c 는 **진입점만** 갖는다.
+ *
+ *   apInit()      올릴 것을 올린다
+ *   apMain()      메인 루프
+ *   cliLoopIdle() 계속 돌아야 하는 것들 (아래 ★ 주석)
+ *
+ * 실제 일은 ap/modules/ 아래에 있다. USB-A 키보드를 받아 넘기는 300줄은
+ * link/link_kbd.c 로 뺐다.
+ */
 #include "ap.h"
 #include "led_status.h"
 #include "usbd_hid.h"
-#include "link.h"
-#include "link_cmd.h"
+#include "link_kbd.h"
 #include "kbd_store.h"
 #include "qmk/qmk.h"
-
-
-#ifdef _USE_HW_USB
-static void updateProductId(void);
-#endif
-
-#ifdef _USE_HW_USBH
-static bool isKeyDown(const usbh_hid_report_t *p_report);
-static void updateKeyboard(void);
-#ifdef _USE_HW_CLI
-static void cliKey(cli_args_t *args);
-#endif
-#endif
 
 
 
@@ -28,11 +24,8 @@ void apInit(void)
 
   ledStatusInit();
   kbdStoreInit();
+  linkKbdInit();
   qmkCliInit();
-
-#if defined(_USE_HW_CLI) && defined(_USE_HW_USBH)
-  cliAdd("key", cliKey);
-#endif
 
   // ★ 06단계부터 부팅 때 자동으로 올린다.
   //
@@ -65,356 +58,6 @@ void apMain(void)
 }
 
 
-#ifdef _USE_HW_USB
-
-// 지금 고른 레이아웃 칸에 맞춰 PC 에 보고할 PID 를 맞춘다.
-//
-// ★ VIA 를 위한 것이다.
-//
-//   VIA 는 정의를 VID/PID 로 찾는다. 우리가 늘 0x5305 하나면 VIA 안에 정의가
-//   한 벌만 남아서, 키보드를 바꿔 꽂을 때마다 Design 탭에 JSON 을 다시 넣어야
-//   한다. 칸마다 PID 를 달리 보고하면 VIA 가 알아서 고른다.
-//
-//   Vial 은 정의를 장치에서 읽어가므로 PID 가 필요 없다. 그래도 같이 바꾼다 —
-//   재열거되면서 새 정의를 곧바로 다시 읽어가기 때문이다. 안 그러면 칸을 담고도
-//   Vial 앱을 새로 열어야 배열이 바뀐다.
-//
-// ★ 칸이 없으면 원래 PID 로 돌아온다. 그래야 저장한 게 없을 때 늘 같은
-//   0483:5305 로 보이고, flash.py 나 도구가 헤매지 않는다.
-static void updateProductId(void)
-{
-  static int slot_pre = -2;          /* -1 도 유효한 값이라 -2 로 시작한다 */
-  int        slot     = kbdStoreGetActive();
-  uint16_t   pid;
-
-  if (slot == slot_pre) return;
-  slot_pre = slot;
-
-  pid = (slot >= 0) ? (uint16_t)(LINK_PID_BASE + slot) : (uint16_t)HW_USB_PID;
-
-  usbSetProductId(pid);
-
-  /*
-   * ★ 키맵도 같이 바뀐다 (09-3).
-   *
-   *   SLOT 이 곧 프로파일이다 — 배열과 키맵을 한 덩어리로 본다.
-   *   담아 둔 것이 없는 키보드는 0번(기본 배열)을 쓴다.
-   */
-  qmkSetProfile((slot >= 0) ? (uint8_t)(slot + 1) : 0);
-}
-
-#endif
-
-
-#ifdef _USE_HW_USBH
-
-// USB-A 에서 올라온 리포트를 꺼내 PC 로 그대로 넘긴다.
-//
-// 05단계에서는 ap/modules/link 가 가상 매트릭스로 바꿔 QMK 에 넣는다.
-// 지금은 QMK 없이 "USB 연장선" 이다.
-//
-// 이 루프가 없으면 core1 이 채운 큐가 가득 차서 계속 버려진다.
-// 진단용 — 큐에서 꺼낸 리포트가 어디로 갔는지 센다.
-// 리포트는 들어오는데(usbh rx) 키가 안 먹는 상황을 가리기 위한 것이다.
-static uint32_t kbd_drain_cnt = 0;   // 큐에서 꺼낸 총 개수
-static uint32_t kbd_pass_cnt  = 0;   // keyboard 프로토콜 + len>=8 (link 로 간 것)
-static uint32_t kbd_drop_cnt  = 0;   // 그 외 — 조용히 버려진 것
-static usbh_hid_report_t kbd_last_ok;
-static usbh_hid_report_t kbd_last_drop;
-
-void updateKeyboard(void)
-{
-  usbh_hid_report_t report;
-
-  // ★ 키보드가 빠지면 그 키보드가 누르고 있던 키를 뗀다.
-  //
-  //   안 그러면 그 순간 눌려 있던 키가 매트릭스에 남고, 아무도 떼 주지 않는다.
-  //   QMK 는 계속 눌린 것으로 보고 PC 에 키를 물고 있는다 — 타이핑이 죽은 것처럼
-  //   보인다.
-  //
-  //   ★ 인스턴스별로 본다. 두 대가 붙어 있을 때 한 대만 빼면 다른 대의 키까지
-  //     떼면 안 된다.
-  {
-    static bool connect_pre[CFG_TUH_HID] = {false, };
-    bool        is_changed = false;
-
-    for (int i=0; i<CFG_TUH_HID; i++)
-    {
-      usbh_hid_info_t info;
-
-      if (usbhHidGetInfo(i, &info) != true) continue;
-
-      if (info.is_connect != connect_pre[i])
-      {
-        connect_pre[i] = info.is_connect;
-        if (info.is_connect == false) linkClearInstance(i);
-
-        is_changed = true;
-      }
-    }
-
-    // ★ 꽂힌 키보드가 바뀌면 그 키보드의 레이아웃 칸을 고른다.
-    //
-    //   Vial 정의 서빙(port/vial_port.c)이 이 값을 본다.
-    //   저장된 것이 없으면 -1 이 되고, 그러면 컴파일에 박힌 기본 배열을 쓴다.
-    //
-    //   키보드 인터페이스를 고른다 — 같은 장치의 컨슈머 인터페이스도 같은
-    //   vid/pid 라 어느 쪽을 잡아도 값은 같지만, 없을 때 0 을 넘겨야 한다.
-    if (is_changed == true)
-    {
-      usbh_hid_info_t info;
-      uint16_t        vid = 0;
-      uint16_t        pid = 0;
-
-      for (int i=0; i<CFG_TUH_HID; i++)
-      {
-        if (usbhHidGetInfo(i, &info) != true) continue;
-        if (info.is_connect != true) continue;
-
-        vid = info.vid;
-        pid = info.pid;
-        if (info.itf_protocol == HID_ITF_PROTOCOL_KEYBOARD) break;
-      }
-
-      kbdStoreSelect(vid, pid, 0);
-    }
-  }
-
-  while(usbhHidGetReport(&report) == true)
-  {
-    kbd_drain_cnt++;
-
-    if (report.protocol == HID_ITF_PROTOCOL_KEYBOARD && report.len >= 8)
-    {
-      kbd_pass_cnt++;
-      kbd_last_ok = report;
-    }
-    else
-    {
-      kbd_drop_cnt++;
-      kbd_last_drop = report;
-    }
-
-    switch(report.protocol)
-    {
-      case HID_ITF_PROTOCOL_KEYBOARD:
-        if (report.len >= 8)
-        {
-          if (qmkIsOn() == true && qmkIsPassthrough() == false)
-          {
-            // QMK 가 올라와 있으면 비트맵만 채운다.
-            // port/matrix.c 가 읽어가고 QMK 가 키맵을 태워 내보낸다.
-            linkSetKeyboardReport(report.instance, report.data, report.len);
-          }
-          else
-          {
-            // 패스스루면 QMK 를 거치지 않는다 (VIA 의 Link > Passthrough).
-            // 키맵이 꼬였을 때의 탈출구다.
-            // QMK 가 없으면 04단계처럼 그대로 흘린다.
-            // QMK 기동에 실패해도 키보드는 계속 쓸 수 있다.
-            usbdHidSendKeyboard(report.data);
-          }
-        }
-        if (isKeyDown(&report) == true)
-        {
-          ledStatusKeyEvent();
-        }
-        break;
-
-      case HID_ITF_PROTOCOL_MOUSE:
-        // boot mouse 리포트 : [0] 버튼 [1] X [2] Y [3] 휠
-        if (report.len >= 3)
-        {
-          usbdHidSendMouse(report.data[0],
-                           (int8_t)report.data[1],
-                           (int8_t)report.data[2],
-                           (report.len >= 4) ? (int8_t)report.data[3] : 0,
-                           0);
-        }
-        break;
-
-      case HID_ITF_PROTOCOL_NONE:
-        /*
-         * ★ 미디어키 (볼륨 · 재생 · 뮤트).
-         *
-         *   키보드 인터페이스가 아니라 Consumer 페이지(0x0C)를 쓰는 별도
-         *   인터페이스로 온다. mount 때 디스크립터를 파싱해 표시해 뒀다
-         *   (usbh_hid.c 의 is_consumer).
-         *
-         *   ★ QMK 를 거치지 않고 그대로 흘린다.
-         *
-         *     QMK 의 키맵은 매트릭스 좌표 기반인데 컨슈머 usage 는 거기 없다.
-         *     마우스와 같은 취급이다.
-         *
-         *   보통 형식은 usage 16비트 하나다 (0 = 뗌).
-         *   report_id 가 있으면 첫 바이트가 ID 라 건너뛴다.
-         */
-        if (report.is_consumer == true)
-        {
-          const uint8_t *p_val = report.data;
-          uint8_t        len   = report.len;
-
-          if (report.report_id != 0 && len > 0) { p_val++; len--; }
-
-          if (len >= 2)
-          {
-            usbdHidSendConsumer((uint16_t)p_val[0] | ((uint16_t)p_val[1] << 8));
-          }
-          else if (len == 1)
-          {
-            usbdHidSendConsumer((uint16_t)p_val[0]);
-          }
-        }
-        break;
-
-      default:
-        break;
-    }
-  }
-}
-
-// boot keyboard 리포트에서 "새로 눌린 키" 가 있는지 본다.
-//   data[0]    모디파이어 비트
-//   data[2..7] 눌려 있는 키코드 (순서는 보장되지 않는다)
-//
-// 키를 떼거나 아무 변화가 없는 리포트는 무시한다.
-// 이 키보드는 폴링마다 리포트를 올려서 그냥 세면 계속 반짝인다.
-bool isKeyDown(const usbh_hid_report_t *p_report)
-{
-  static uint8_t pre_data[8] = {0, };
-  bool is_down = false;
-
-  if (p_report->protocol != HID_ITF_PROTOCOL_KEYBOARD) return false;
-  if (p_report->len < 8) return false;
-
-  // 직전에 안 눌려 있던 모디파이어가 눌렸나
-  if ((p_report->data[0] & ~pre_data[0]) != 0)
-  {
-    is_down = true;
-  }
-
-  for (int i=2; i<8 && is_down == false; i++)
-  {
-    uint8_t keycode = p_report->data[i];
-    bool    is_pre  = false;
-
-    // 0 = 빈 자리, 1 = ErrorRollOver (6키 초과). 둘 다 키가 아니다.
-    if (keycode == 0 || keycode == 1) continue;
-
-    for (int j=2; j<8; j++)
-    {
-      if (pre_data[j] == keycode)
-      {
-        is_pre = true;
-        break;
-      }
-    }
-
-    if (is_pre == false) is_down = true;
-  }
-
-  memcpy(pre_data, p_report->data, 8);
-
-  return is_down;
-}
-
-#endif
-
-
-#if defined(_USE_HW_CLI) && defined(_USE_HW_USBH)
-static void dumpReport(const char *p_name, const usbh_hid_report_t *p_report)
-{
-  cliPrintf("%s : inst %d  proto %d  len %d  ",
-            p_name, p_report->instance, p_report->protocol, p_report->len);
-  for (int i=0; i<p_report->len && i<8; i++) cliPrintf("%02X ", p_report->data[i]);
-  cliPrintf("\n");
-}
-
-static void cliKey(cli_args_t *args)
-{
-  bool ret = false;
-
-  if (args->argc == 0 || (args->argc == 1 && args->isStr(0, "info")))
-  {
-    cliPrintf("usbh rx/drop : %d / %d\n",
-              usbhHidGetRxCount(), usbhHidGetDropCount());
-    cliPrintf("drain        : %d   (큐에서 꺼낸 것)\n", kbd_drain_cnt);
-    cliPrintf("  -> link    : %d   (keyboard proto + len>=8)\n", kbd_pass_cnt);
-    cliPrintf("  -> 버림    : %d   (그 외 — 조용히 사라진다)\n", kbd_drop_cnt);
-    cliPrintf("qmk          : %s%s\n",
-              qmkIsOn() ? "on" : "off",
-              qmkIsPassthrough() ? " (passthrough)" : "");
-    cliPrintf("link set     : %d\n", linkGetSetCount());
-
-    {
-      usbd_hid_kbd_stat_t st;
-
-      usbdHidGetKbdStat(&st);
-      cliPrintf("PC 로 보내기 (IF0 키보드)\n");
-      cliPrintf("  호출 %d  보냄 %d  같아서 건너뜀 %d\n",
-                st.try_cnt, st.sent_cnt, st.same_cnt);
-      cliPrintf("  not ready %d   전송실패 %d   나중에보냄 %d   보류 %d\n",
-                st.busy_cnt, st.fail_cnt, st.retry_cnt, st.pending);
-      cliPrintf("  ready %d  mounted %d  suspend %d\n",
-                st.is_ready, st.is_mount, st.is_susp);
-    }
-
-    dumpReport("last ok  ", &kbd_last_ok);
-    dumpReport("last 버림", &kbd_last_drop);
-
-    {
-      uint32_t t, o;
-
-      usbhHidGetProductStat(&t, &o);
-      cliPrintf("이름 요청  : %d 회 시도 / %d 회 받음\n", (int)t, (int)o);
-    }
-
-    cliPrintf("HID 인스턴스\n");
-    for (int i=0; i<CFG_TUH_HID; i++)
-    {
-      usbh_hid_info_t info;
-
-      char name[32];
-
-      if (usbhHidGetInfo(i, &info) != true) continue;
-      if (usbhHidGetProduct(info.dev_addr, name, sizeof(name)) != true) name[0] = 0;
-
-      cliPrintf("  [%d] connect %d  addr %d  proto %d  %04X:%04X  %s  %s\n",
-                i, info.is_connect, info.dev_addr, info.itf_protocol,
-                info.vid, info.pid, name,
-                info.is_consumer ? "consumer(미디어키)" : "");
-    }
-    ret = true;
-  }
-
-  if (args->argc == 1 && args->isStr(0, "watch"))
-  {
-    uint32_t pre_drain = 0;
-    uint32_t pre_pass  = 0;
-
-    cliPrintf("초당 변화량. 아무 키나 누르면 멈춘다\n");
-    while(cliKeepLoop())
-    {
-      cliPrintf("drain +%-5d  link +%-5d  버림 +%-5d\n",
-                kbd_drain_cnt - pre_drain,
-                kbd_pass_cnt - pre_pass,
-                kbd_drop_cnt);
-      pre_drain = kbd_drain_cnt;
-      pre_pass  = kbd_pass_cnt;
-      delay(1000);
-    }
-    ret = true;
-  }
-
-  if (ret == false)
-  {
-    cliPrintf("key info\n");
-    cliPrintf("key watch\n");
-  }
-}
-#endif
-
-
 // bsp 의 delay() 와 cliKeepLoop() 이 이걸 부른다.
 //
 // ★ 계속 돌아야 하는 것은 전부 여기에 둔다.
@@ -432,7 +75,8 @@ void cliLoopIdle(void)
 #endif
 
 #ifdef _USE_HW_USBH
-  updateKeyboard();
+  // USB-A 리포트를 꺼내 QMK / PC 로 보낸다 (link/link_kbd.c)
+  linkKbdUpdate();
 #endif
 
   qmkUpdate();
@@ -443,6 +87,6 @@ void cliLoopIdle(void)
   //   레이아웃을 담는 우리 raw HID 명령이 거기서 처리되고, 담자마자
   //   kbdStoreReselect() 로 칸이 바뀐다. 응답은 이미 나간 뒤라 여기서 끊어도
   //   업로드 도구가 답을 놓치지 않는다.
-  updateProductId();
+  linkKbdApplySlot();
 #endif
 }

@@ -209,7 +209,7 @@ VIA 안에는 정의가 **한 벌만** 남는다. 키보드를 바꾸면 그 JSO
 동작 순서:
 
 1. 소스 키보드가 바뀐다 → `kbdStoreSelect()` 가 칸을 찾는다
-2. `ap.c` 의 `updateProductId()` 가 그 변화를 보고 `usbSetProductId()` 를 부른다
+2. `link_kbd.c` 의 `linkKbdApplySlot()` 이 그 변화를 보고 `usbSetProductId()` · `qmkSetProfile()` 을 부른다
 3. `usb.c` 가 `tud_disconnect()` → 100ms → `tud_connect()` — PC 가 새 장치로 다시 묻는다
 4. 저장된 것이 없으면 칸 없음 → `0x5305` (풀사이즈 기본)
 

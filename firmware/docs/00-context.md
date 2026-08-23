@@ -198,10 +198,14 @@ firmware/qmk-link/src/
 │   │   └── usbd_hid.c          tud_hid_* 콜백, 송신 헬퍼, usb_device_state 연결
 │   └── driver/usbh/            host : core1 태스크 + HID 큐
 └── ap/
-    ├── ap.c                    ★ updateKeyboard() / cliLoopIdle() — 여기엔 진입점만 둔다
+    ├── ap.c                    **진입점만** — apInit / apMain / cliLoopIdle
     └── modules/
         ├── display/            사람에게 보여주는 것 — led_status.c (LED 상태 표시)
-        ├── link/               HID usage -> 16x16 비트맵 · 저장소 · 우리 raw HID 명령
+        ├── link/               USB-A 쪽을 PC 쪽에 잇는 일
+        │   ├── link_kbd.c      ★ 리포트를 꺼내 QMK/PC 로 · SLOT -> PID·프로파일 · `key` CLI
+        │   ├── link.c          HID usage -> 16x16 비트맵 (키보드별 OR 합성)
+        │   ├── kbd_store.c     레이아웃 SLOT 저장소 · 선택 표
+        │   └── link_cmd.c      우리 raw HID 명령 (0xA0)
         └── qmk/
             ├── qmk.c           QMK 기동 · 패스스루 · CLI (via·vial 공용)
             └── via/
@@ -250,7 +254,7 @@ void cliLoopIdle(void)
 {
   usbUpdate();          // tud_task
   usbdHidUpdate();      // 못 보낸 키 리포트 재시도
-  updateKeyboard();     // USB 호스트 큐 -> link
+  linkKbdUpdate();      // USB 호스트 큐 -> link (link/link_kbd.c)
   qmkUpdate();          // eeprom_task + raw HID + keyboard_task
 }
 ```
@@ -273,7 +277,7 @@ void apMain(void)
 
 | 증상 | 빠져 있던 것 |
 |---|---|
-| `rx/drop 689/657` — 리포트의 95% 유실 | `updateKeyboard()` |
+| `rx/drop 689/657` — 리포트의 95% 유실 | `linkKbdUpdate()` |
 | `qmk matrix` 가 아무것도 못 보여줌 | `qmkUpdate()` |
 | **키를 떼도 PC 가 계속 눌린 것으로 앎** | `usbdHidUpdate()` — `cliLoopIdle()` 에만 넣고 `apMain()` 에는 안 넣었다 |
 
