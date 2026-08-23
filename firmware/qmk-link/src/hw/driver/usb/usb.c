@@ -53,6 +53,7 @@ static bool is_init = false;
 //   곧 0x54NN 으로 다시 떴다 — 열거가 두 번이었다. 키보드가 인식될 때까지
 //   (최대 USB_BOOT_HOLD_MS) 붙이지 않으면 처음부터 맞는 PID 로 한 번만 뜬다.
 #define USB_REENUM_ARM_MS   250     /* 요청 -> 실제로 끊기까지 */
+#define USB_REENUM_QUIET_MS 400     /* 우리 도구가 조용해지고 나서 이만큼 더 */
 #define USB_REENUM_GAP_MS   100     /* 끊고 -> 다시 붙이기까지 */
 #define USB_BOOT_HOLD_MS    1500    /* 부팅 후 PID 가 정해지기를 기다리는 한계 */
 
@@ -70,6 +71,7 @@ static uint32_t reenum_count = 0;
 
 static bool     boot_hold    = false;
 static uint32_t boot_time    = 0;
+static uint32_t talk_time    = 0;   /* 우리 도구가 마지막으로 말을 건 때 */
 
 
 #ifdef _USE_HW_CLI
@@ -122,6 +124,19 @@ void usbUpdate(void)
   {
     case REENUM_ARMED:
       if ((millis() - reenum_time) < USB_REENUM_ARM_MS) break;
+
+      /*
+       * ★ 예약을 "되감는" 방식이면 안 된다 — 순서가 어긋난다.
+       *
+       *   예약은 명령 처리가 **끝난 뒤** updateProductId() 가 건다. 그런데
+       *   usbPostponeReenum() 은 그 명령 안에서 먼저 불린다. 되감기로 짜면
+       *   아직 예약이 없어서 아무것도 못 밀고, 정작 그 명령 때문에 생긴
+       *   예약은 250ms 뒤 그대로 터진다 — 도구가 한창 일하는 중에.
+       *
+       *   그래서 "마지막으로 말을 건 때" 를 따로 두고 **조용해졌는지**를 본다.
+       *   순서와 무관해진다.
+       */
+      if ((millis() - talk_time) < USB_REENUM_QUIET_MS) break;
 
       // 여기서야 descriptor 를 바꾼다. 그 전에 호스트가 물어보면 옛 값이 맞다.
       usbdDescSetProductId(reenum_pid);
@@ -183,8 +198,8 @@ void usbSetProductId(uint16_t pid)
 
 void usbPostponeReenum(void)
 {
-  /* 예약된 것만 민다. 이미 끊은 뒤(GAP)라면 되돌릴 수 없다 */
-  if (reenum_state == REENUM_ARMED) reenum_time = millis();
+  /* 예약이 아직 없어도 기록해 둔다 (위 ★ 주석 참고) */
+  talk_time = millis();
 }
 
 bool usbIsReenumPending(void)

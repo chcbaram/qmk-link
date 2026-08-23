@@ -86,7 +86,7 @@ function applyFirmware(vialLocked) {
   $('exVial').style.display = isVial ? '' : 'none';
 
   $('fwNote').textContent = isVial
-    ? 'Vial 펌웨어 — 보드에 담기만 하면 Vial 이 장치에서 바로 읽어간다. 파일은 저장용이다.'
+    ? 'Vial 펌웨어 — 보드에 저장만 하면 Vial 이 장치에서 바로 읽어간다. 파일은 보관용이다.'
       + (vialLocked ? '  (Vial 잠금 상태 — 매크로 편집 등은 좌우 Shift 5초로 푼다. 키 읽기는 잠겨도 된다)' : '')
     : 'VIA 펌웨어 — 보드에 담은 뒤 layout-via.json 을 받아 VIA 의 Design 탭에 한 번 넣는다. '
       + '그 뒤로는 꽂는 대로 VIA 가 알아서 고른다.';
@@ -315,7 +315,7 @@ function renderSlots() {
       note.className = 'note';
       note.style.padding = '4px 0 0 18px';
       note.textContent = '담긴 것이 없다 — 지금은 기본 풀사이즈 배열로 동작한다. '
-                       + '아래에서 배열을 만들고 [보드에 담기] 를 누른다.';
+                       + '아래에서 배열을 만들고 [보드에 저장] 을 누른다.';
       div.appendChild(note);
     }
 
@@ -444,22 +444,34 @@ function updateSaveNote() {
   //   "어디에 담기는지" 를 화면 어딘가에서 다시 찾지 않는다.
   const isNew = (editSlot >= 0 && slots && !slots[editSlot].used);
 
-  $('save').textContent = editSlot < 0 ? '보드에 담기'
-                        : (isNew ? `SLOT ${editSlot} 에 담기`
+  /*
+   * ★ 무엇에 저장할지 정해지기 전에는 못 누르게 한다.
+   *
+   *   전에는 보드만 연결해도 눌렸고, 그러면 "이 키보드가 이미 쓰는 SLOT" 에
+   *   그대로 덮어썼다. 배열을 넣은 적도 없는데 실수로 지워 버릴 수 있었다.
+   *   위 2 에서 [편집] 하거나 [SLOT 추가] 를 눌러야 대상이 정해진다.
+   */
+  $('save').disabled = (editSlot < 0);
+  $('save').textContent = editSlot < 0 ? '보드에 저장'
+                        : (isNew ? `SLOT ${editSlot} 에 저장`
                                  : `SLOT ${editSlot} 에 덮어쓰기`);
 
-  if (!device) { note.textContent = '보드를 연결하면 담을 수 있다.'; return; }
+  if (!device) { note.textContent = '보드를 연결하면 저장할 수 있다.'; return; }
   if (!has) {
-    note.innerHTML = '<b>★ USB-A 에 키보드가 없다.</b> 어느 키보드의 배열인지 알아야 담을 수 있다.';
+    note.innerHTML = '<b>★ USB-A 에 키보드가 없다.</b> 어느 키보드의 배열인지 알아야 저장할 수 있다.';
+    return;
+  }
+  if (editSlot < 0) {
+    note.innerHTML = '어디에 저장할지 먼저 정한다 — 위 <b>2</b> 에서 <b>[편집]</b> 을 누르거나 '
+      + '<b>[SLOT 추가]</b> 로 새 자리를 만든다.';
     return;
   }
 
-  const target = editSlot >= 0 ? editSlot : (mine.length ? mine[0].i : free);
-  if (target < 0) { note.innerHTML = '<b>★ 빈 SLOT 이 없다.</b> 위에서 하나 지운다.'; return; }
+  const target = editSlot;
 
   note.innerHTML =
-    `<code>${hex4(hostVid)}:${hex4(hostPid)}</code> 의 배열로 <b>SLOT ${target}</b> 에 담는다.`
-    + '<br>담는 동안 연결은 끊기지 않는다. 적용되는 SLOT 이 바뀌면 <b>[연결 끊기]</b> 를 '
+    `<code>${hex4(hostVid)}:${hex4(hostPid)}</code> 의 배열로 <b>SLOT ${target}</b> 에 저장한다.`
+    + '<br>저장하는 동안 연결은 끊기지 않는다. 적용되는 SLOT 이 바뀌면 <b>[연결 끊기]</b> 를 '
     + `누르는 순간 보드가 <code>0x${hex4(PID_BASE + target)}</code> 로 다시 뜬다.`
     + '<br>같은 키보드의 변형본을 따로 두려면 위 <b>2</b> 의 [SLOT 추가] 를 쓴다.';
 }
@@ -877,7 +889,7 @@ function nameBytes23() {
 async function saveSlot(slot) {
   if (!device) { log('보드를 먼저 연결한다.'); return; }
   if (!hostVid && !hostPid) {
-    log('★ USB-A 쪽에 키보드가 없다. 어느 키보드의 배열인지 알아야 담을 수 있다.');
+    log('★ USB-A 쪽에 키보드가 없다. 어느 키보드의 배열인지 알아야 저장할 수 있다.');
     return;
   }
   if (!keys.some(k => k.usage !== null)) { log('먼저 배열을 읽고 키를 배운다.'); return; }
@@ -900,7 +912,7 @@ async function saveSlot(slot) {
   busy = true;
   await sleep(80);                       // 폴링이 멎기를 기다린다
   try {
-    log(`SLOT ${slot} 에 담는 중… ${raw.length} B -> ${blob.length} B`);
+    log(`SLOT ${slot} 에 저장 중… ${raw.length} B -> ${blob.length} B`);
 
     let r = await send(CMD_SLOT_BEGIN, slot,
                        hostVid & 0xFF, hostVid >> 8, hostPid & 0xFF, hostPid >> 8,
@@ -953,13 +965,33 @@ async function saveSlot(slot) {
         vid: hostVid, pid: hostPid, len: blob.length,
       };
     }
-    finishSlotOp(`SLOT ${slot} 에 담았다 (${blob.length} B).`
+    finishSlotOp(`SLOT ${slot} 에 저장했다 (${blob.length} B).`
                  + (activeSlot >= 0 && activeSlot !== slot ? ' 쓰려면 [적용] 을 누른다.' : ''),
                  reenum);
   } catch (e) {
-    busy = false;
-    log('담기 실패 — ' + e.message);
+    recoverAfterOp('저장', e);
   }
+}
+
+/*
+ * 명령이 실패했을 때 — 정말 실패인지, 보드가 다시 열거된 것인지 가른다.
+ *
+ * ★ 보드가 재열거하면 응답이 사라진다. 그때 "실패" 라고만 적으면 사용자는
+ *   이미 끝난 일을 다시 하려 든다 (실제로 지우기가 그랬다 — 보드에서는
+ *   지워졌는데 화면은 '실패 — 응답 없음' 이었다).
+ *   말을 걸어 보고, 죽었으면 다시 붙여서 진짜 상태를 읽어 온다.
+ */
+async function recoverAfterOp(what, e) {
+  busy = false;
+
+  try {
+    const info = await send(CMD_INFO);
+    await loadSlots(info[2] >= 3 ? info[28] : 0xFF, info[2] >= 3 ? info[31] : 0xFF);
+    log(`${what} 실패 — ${e.message}`);
+    return;
+  } catch { /* 장치가 사라졌다 */ }
+
+  afterSlotWrite(`${what} 중 보드가 다시 열거됐다.`);
 }
 
 /*
@@ -1000,7 +1032,7 @@ function startNewSlot() {
 
   editSlot = free;
   refreshUi();
-  log(`SLOT ${free} 을 만든다 — 아래에서 배열을 넣고 키를 배운 뒤 [SLOT ${free} 에 담기].`);
+  log(`SLOT ${free} 을 만든다 — 아래에서 배열을 넣고 키를 배운 뒤 [SLOT ${free} 에 저장].`);
 }
 
 // ── 시나리오 2 : 담아 둔 것을 편집한다 ──────────────────
@@ -1059,8 +1091,7 @@ async function applySlot(slot) {
     finishSlotOp(slot === SEL_AUTO ? '자동으로 되돌렸다.' : `SLOT ${slot} 을 적용했다.`,
                  r[3] === 1);
   } catch (e) {
-    busy = false;
-    log('적용 실패 — ' + e.message);
+    recoverAfterOp('적용', e);
   }
 }
 
@@ -1078,8 +1109,7 @@ async function eraseSlot(slot) {
     if (slots && slots[slot]) slots[slot] = { used: false, name: '', vid: 0, pid: 0, len: 0 };
     finishSlotOp(`SLOT ${slot} 을 지웠다.`, r[3] === 1);
   } catch (e) {
-    busy = false;
-    log('지우기 실패 — ' + e.message);
+    recoverAfterOp('지우기', e);
   }
 }
 

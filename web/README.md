@@ -61,7 +61,7 @@ Received invalid protocol version from device
                           키보드 이름은 USB product string 을 읽어 보여 준다
 ③ 배열 넣기 + 마법사
 ④ 배열 그림 / 눌린 키 / 직접 넣기
-⑤ 보드에 담기
+⑤ 보드에 저장
 ⑥ 파일로 내보내기
 ```
 
@@ -73,12 +73,12 @@ Received invalid protocol version from device
 ### 처음 만든다
 
 1. **[보드 연결]** — USB-A 쪽에도 배우려는 키보드를 꽂아 둔다
-2. ② 에 그 키보드가 `담긴 것이 없다` 로 뜬다
+2. ② 에 그 키보드가 `담긴 것이 없다` 로 뜬다 → **[SLOT 추가]**
 3. 배열을 넣는다 — **프리셋** / **KLE json 파일 열기** / KLE **Raw data** 붙여넣기
    - 프리셋: HHKB Lite 2 · F1-40 722 · BARAM 45K · 60% ANSI/HHKB · 65% · 75% · TKL · 풀사이즈
 4. **[배열 읽기]** → **[마법사 시작]** → 강조된 자리의 키를 누른다
 5. 못 누르는 키는 자리를 클릭하고 이름으로 직접 넣는다
-6. **[보드에 담기]** — 빈 SLOT 에 담고 그 SLOT 을 고정한다
+6. **[SLOT n 에 저장]** — 그 SLOT 에 저장한다
 
 ### 담아 둔 것을 편집한다
 
@@ -90,7 +90,7 @@ Received invalid protocol version from device
 
 1. ② 트리의 **[SLOT 추가]** — 빈 자리가 잡힌다 (아직 보드는 안 건드린다)
 2. ③ 에서 배열을 넣고 키를 배운다
-3. **[SLOT n 에 담기]**
+3. **[SLOT n 에 저장]**
 
 ★ **자리를 먼저 만들고 채운다.** 예전에는 `[SLOT n 에 새로 담기]` 가 바로
 저장을 시도했는데, 그 시점엔 아직 배운 것이 없어서 조용히 아무 일도 안 하고
