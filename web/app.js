@@ -39,10 +39,10 @@ function applyFirmware(vialLocked) {
   $('exVial').style.display = isVial ? '' : 'none';
 
   $('fwNote').textContent = isVial
-    ? 'Vial 펌웨어다. Vial 은 정의를 장치에서 읽어가므로 layout-vial.json 을 앱에 넣을 일이 없다 — '
-      + '지금은 저장소 워크플로용으로만 받는다.'
-      + (vialLocked ? '  (Vial 잠금 상태 — 매크로 편집 등은 좌우 Shift 5초로 풀어야 한다. 키 읽기는 잠겨도 된다)' : '')
-    : 'VIA 펌웨어다. layout-via.json 을 VIA 의 Design 탭에 넣는다.';
+    ? 'Vial 펌웨어 — Vial 은 정의를 장치에서 읽어가므로 앱에 파일을 넣을 일이 없다. '
+      + 'layout-vial.json 은 저장소에 두거나 나중에 보드에 담을 때 쓴다.'
+      + (vialLocked ? '  (Vial 잠금 상태 — 매크로 편집 등은 좌우 Shift 5초로 푼다. 키 읽기는 잠겨도 된다)' : '')
+    : 'VIA 펌웨어 — layout-via.json 을 VIA 의 Design 탭에 넣는다.';
   $('fwNote').style.display = '';
 }
 
