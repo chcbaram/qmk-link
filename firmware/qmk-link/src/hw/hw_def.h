@@ -33,7 +33,8 @@
 //
 //   0x1F0000  VIA  EEPROM  16KB (4섹터)
 //   0x1F4000  Vial EEPROM  16KB (4섹터)
-//   0x1F8000  (예약)       32KB
+//   0x1F8000  (예약)       28KB
+//   0x1FF000  flash test    4KB   <- CLI `flash test` 가 쓰는 자리
 //
 // ★ VIA 와 Vial 을 다른 자리에 두는 이유
 //
@@ -50,6 +51,10 @@
 #define      HW_FLASH_E2P_VIA_SIZE    0x004000UL
 #define      HW_FLASH_E2P_VIAL_BEGIN  0x1F4000UL
 #define      HW_FLASH_E2P_VIAL_SIZE   0x004000UL
+
+// ★ CLI `flash test` 전용 섹터. 다른 용도로 잡지 않는다.
+//   소거/기록 시간을 재고 core1 이 계속 도는지 확인하는 데 쓴다.
+#define      HW_FLASH_TEST_BEGIN      0x1FF000UL
 
 //-- RESET
 //

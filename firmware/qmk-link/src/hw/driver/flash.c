@@ -414,7 +414,7 @@ void cliFlash(cli_args_t *args)
    */
   if (args->argc == 1 && args->isStr(0, "test"))
   {
-    uint32_t addr = HW_FLASH_SIZE - HW_FLASH_SECTOR_SIZE;   /* 예약 영역 마지막 섹터 */
+    uint32_t addr = HW_FLASH_TEST_BEGIN;   /* 이 명령 전용 섹터 (hw_def.h) */
     static uint8_t buf[HW_FLASH_SECTOR_SIZE];
     uint32_t t_erase;
     uint32_t t_write;
@@ -425,7 +425,7 @@ void cliFlash(cli_args_t *args)
 
     for (int i=0; i<HW_FLASH_SECTOR_SIZE; i++) buf[i] = (uint8_t)i;
 
-    cliPrintf("addr 0x%06X (예약 영역 마지막 섹터)\n", (unsigned)addr);
+    cliPrintf("addr 0x%06X (flash test 전용 섹터)\n", (unsigned)addr);
 
 #ifdef _USE_HW_USBH
     task_pre = usbhGetTaskCount();
