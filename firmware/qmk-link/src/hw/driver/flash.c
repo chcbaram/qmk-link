@@ -75,7 +75,7 @@ typedef struct
  */
 static const flash_tbl_t flash_tbl[FLASH_TBL_MAX] =
     {
-      { HW_FLASH_USER_BEGIN, HW_FLASH_SIZE - HW_FLASH_USER_BEGIN },
+      { HW_FLASH_USER_BEGIN, HW_FLASH_SIZE - HW_FLASH_USER_BEGIN },   /* 0x1D0000~끝 */
     };
 
 

@@ -31,6 +31,7 @@
 //
 // W25Q16JV = 2MB. 끝 64KB 를 데이터 영역으로 예약한다 (펌웨어는 여기까지 오지 않는다).
 //
+//   0x1D0000  키보드 레이아웃 저장소  128KB (8KB x 16칸)
 //   0x1F0000  VIA  EEPROM  16KB (4섹터)
 //   0x1F4000  Vial EEPROM  16KB (4섹터)
 //   0x1F8000  (예약)       28KB
@@ -46,7 +47,15 @@
 #define      HW_FLASH_SECTOR_SIZE     4096         /* 소거 단위 */
 #define      HW_FLASH_PAGE_SIZE       256          /* 기록 단위 */
 #define      HW_FLASH_SIZE            (2*1024*1024)
-#define      HW_FLASH_USER_BEGIN      0x1F0000UL   /* 이 아래로는 쓰지 않는다 */
+#define      HW_FLASH_USER_BEGIN      0x1D0000UL   /* 이 아래로는 쓰지 않는다 */
+
+// 꽂힌 키보드마다 레이아웃 정의를 담아 둔다 (09단계).
+//
+// ★ 한 칸이 섹터(4KB)의 배수여야 한다. 소거 단위가 섹터라 그렇다.
+//   8KB 면 압축된 Vial 정의(실측 552B)가 넉넉히 들어가고, 비압축이어도 남는다.
+#define      HW_FLASH_KBD_BEGIN       0x1D0000UL
+#define      HW_FLASH_KBD_SLOT_SIZE   0x002000UL   /* 8KB */
+#define      HW_FLASH_KBD_SLOT_MAX    16           /* 합 128KB */
 #define      HW_FLASH_E2P_VIA_BEGIN   0x1F0000UL
 #define      HW_FLASH_E2P_VIA_SIZE    0x004000UL
 #define      HW_FLASH_E2P_VIAL_BEGIN  0x1F4000UL
