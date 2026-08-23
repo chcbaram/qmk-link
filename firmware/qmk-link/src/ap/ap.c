@@ -2,6 +2,7 @@
 #include "led_status.h"
 #include "usbd_hid.h"
 #include "link.h"
+#include "kbd_store.h"
 #include "qmk/qmk.h"
 
 
@@ -21,6 +22,7 @@ void apInit(void)
   cliOpen(HW_UART_CH_CLI, 115200);
 
   ledStatusInit();
+  kbdStoreInit();
   qmkCliInit();
 
 #if defined(_USE_HW_CLI) && defined(_USE_HW_USBH)

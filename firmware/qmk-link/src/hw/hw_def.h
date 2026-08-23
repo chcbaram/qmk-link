@@ -139,6 +139,7 @@
 //
 #define _USE_CLI_HW_RESET           1
 #define _USE_CLI_HW_FLASH           1
+#define _USE_CLI_AP_KBD             1
 
 
 #endif

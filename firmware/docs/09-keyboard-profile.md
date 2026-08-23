@@ -136,6 +136,25 @@ VIA 안에는 정의가 **한 벌만** 남는다. 키보드를 바꾸면 그 JSO
 Vial 은 이 장치가 필요 없다 — 정의를 직접 내주므로 PID 는 하나로 둬도 된다.
 **PID 전환은 VIA 를 위한 것이다.**
 
+### ★ Vial 의 잠금 — 우리 명령만 연다
+
+Vial 은 매트릭스 읽기를 잠금 뒤로 숨긴다 (raw HID 키로거 방지).
+**우리 명령은 잠겨 있어도 답한다.** via 빌드에서 `VIA_INSECURE` 로 이미 열어 둔 것과
+같은 문이고, 이 보드는 "어떤 usage 가 오는가" 를 알아야 쓸 수 있기 때문이다.
+
+**★ `VIAL_INSECURE` 로 통째로 푸는 것은 안 된다.**
+
+```c
+/* vial-qmk 의 quantum/via.c */
+#if defined(VIAL_ENABLE) && !defined(VIAL_INSECURE)
+case id_bootloader_jump: {          /* <- VIAL_INSECURE 를 켜면 이 케이스가 사라진다 */
+```
+
+부트로더 버튼이 죽는다. 매크로 쓰기와 키맵에 `QK_BOOT` 심기도 같이 열린다.
+그쪽은 잠가 둔 채로 두고 **우리 명령 하나만** 연다.
+
+`INFO` 의 잠금 바이트는 그래서 **알림용**이다 — "Vial 의 다른 기능이 잠겨 있는가".
+
 ### 4. 온디바이스 저장
 
 플래시 뒤쪽에 blob 저장소를 둔다. 용량 추산 —

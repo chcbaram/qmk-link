@@ -5,7 +5,7 @@
 #include <string.h>
 
 
-bool linkCmdHandle(uint8_t *p_data, uint8_t length, bool allow_matrix)
+bool linkCmdHandle(uint8_t *p_data, uint8_t length, bool vial_locked)
 {
   if (length < 2) return false;
   if (p_data[0] != LINK_CMD_PREFIX) return false;
@@ -18,6 +18,12 @@ bool linkCmdHandle(uint8_t *p_data, uint8_t length, bool allow_matrix)
       uint8_t n = 0;
 
       p_data[i++] = LINK_CMD_VERSION;
+#ifdef VIAL_ENABLE
+      p_data[i++] = LINK_TREE_VIAL;
+#else
+      p_data[i++] = LINK_TREE_VIA;
+#endif
+      p_data[i++] = (vial_locked == true) ? 1 : 0;    /* 알림용 */
       p_data[i++] = LINK_MATRIX_ROWS;
       p_data[i++] = LINK_MATRIX_COLS;
 
@@ -50,7 +56,7 @@ bool linkCmdHandle(uint8_t *p_data, uint8_t length, bool allow_matrix)
       uint8_t i = 3;
       uint8_t n = 0;
 
-      if (allow_matrix == true)
+      /* ★ 잠금과 무관하게 답한다 (link_cmd.h 주석 참고) */
       {
         for (uint8_t r=0; r<LINK_MATRIX_ROWS; r++)
         {

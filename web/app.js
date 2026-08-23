@@ -4,6 +4,8 @@ import { PRESETS } from './presets.js';
 // ── qmk-link raw HID 명령 (firmware/.../link_cmd.h 와 같아야 한다) ──
 const VID = 0x0483, PID = 0x5305;
 const CMD_PREFIX  = 0xA0;
+const TREE_VIA    = 0;
+const TREE_VIAL   = 1;
 const CMD_INFO    = 0x00;
 const CMD_PRESSED = 0x01;
 const REPORT_LEN  = 32;
@@ -15,6 +17,26 @@ let keys = [];              // {x,y,w,h,usage|null,label}
 let cursor = -1;             // 마법사가 가리키는 키
 let prevPressed = new Set(); // 직전에 눌려 있던 usage
 let paused = false;          // 탭이 가려지면 멈춘다
+let firmware = null;         // 'via' | 'vial'
+
+// ★ 펌웨어에 따라 쓸 수 없는 것이 있다.
+//
+//   내려받는 정의가 다르다 — VIA 는 layout-via.json 을 Design 탭에 넣고,
+//   Vial 은 장치가 정의를 직접 내주므로 그 파일이 지금은 쓸모가 없다.
+//   (보드에 담는 것은 09단계 2단계에서 한다)
+function applyFirmware(vialLocked) {
+  const isVial = firmware === 'vial';
+
+  $('exVia').style.display  = isVial ? 'none' : '';
+  $('exVial').style.display = isVial ? '' : 'none';
+
+  $('fwNote').textContent = isVial
+    ? 'Vial 펌웨어다. Vial 은 정의를 장치에서 읽어가므로 vial.json 을 앱에 넣을 일이 없다 — '
+      + '지금은 저장소 워크플로용으로만 받는다.'
+      + (vialLocked ? '  (Vial 잠금 상태 — 매크로 편집 등은 좌우 Shift 5초로 풀어야 한다. 키 읽기는 잠겨도 된다)' : '')
+    : 'VIA 펌웨어다. layout-via.json 을 VIA 의 Design 탭에 넣는다.';
+  $('fwNote').style.display = '';
+}
 
 const $ = (id) => document.getElementById(id);
 const log = (msg) => { $('log').textContent = msg; };
@@ -36,18 +58,25 @@ async function connect() {
   });
 
   const info = await send(CMD_INFO);
-  const rows = info[3], cols = info[4], n = info[5];
+  const ver = info[2], tree = info[3], locked = info[4];
+  const rows = info[5], cols = info[6], n = info[7];
+
   let kbds = [];
   for (let i = 0; i < n; i++) {
-    const o = 6 + i * 4;
+    const o = 8 + i * 4;
     kbds.push(hex4(info[o] | (info[o+1] << 8)) + ':' + hex4(info[o+2] | (info[o+3] << 8)));
   }
+
+  firmware = (tree === TREE_VIAL) ? 'vial' : 'via';
   $('dev').textContent =
-    `연결됨 — 매트릭스 ${rows}x${cols}, 꽂힌 키보드 ${n}대 ${kbds.length ? '(' + kbds.join(', ') + ')' : ''}`;
+    `${firmware.toUpperCase()} 펌웨어 — 매트릭스 ${rows}x${cols}, 꽂힌 키보드 ${n}대`
+    + (kbds.length ? ` (${kbds.join(', ')})` : '');
   $('dev').className = 'ok';
 
+  applyFirmware(locked !== 0);
+
   if (n === 0) log('★ USB-A 쪽에 키보드가 안 꽂혀 있다. 꽂아야 키를 배울 수 있다.');
-  else log('KLE 를 붙여넣고 [배열 읽기] 를 누른다.');
+  else log('배열을 넣고 [마법사 시작] 을 누른다.');
 
   poll();
 }

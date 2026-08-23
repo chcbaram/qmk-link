@@ -32,23 +32,43 @@
 //     요청  [0] 0xA0  [1] 서브명령
 //     응답  [0] 0xA0  [1] 서브명령  [2..] 결과
 //
-//     0x00 INFO     [2] 버전 [3] 행 [4] 열 [5] 키보드 수
-//                   [6..]  키보드마다 vid(2) pid(2)  little endian
+//     0x00 INFO     [2] 버전  [3] 트리(0=via 1=vial)  [4] 잠금(1=잠김)
+//                   [5] 행  [6] 열  [7] 키보드 수
+//                   [8..]  키보드마다 vid(2) pid(2)  little endian
 //     0x01 PRESSED  [2] 개수 N  [3..] 눌린 usage N 개
+//
+// ★ 잠금 바이트는 **알림용**이다. 우리 PRESSED 는 잠겨 있어도 답한다.
+//
+//   Vial 은 매트릭스 읽기를 잠금 뒤로 숨긴다 (raw HID 키로거 방지).
+//   우리는 그 문 하나만 연다 — via 빌드에서 VIA_INSECURE 로 이미 열어 둔 것과
+//   같은 문이고, 이 보드는 "어떤 usage 가 오는가" 를 알아야 쓸 수 있기 때문이다.
+//
+//   ★ VIAL_INSECURE 로 통째로 푸는 것은 안 된다.
+//     그 매크로는 id_bootloader_jump 케이스를 **컴파일에서 뺀다** —
+//     Vial/VIA 앱의 부트로더 버튼이 죽는다. 매크로 쓰기와 QK_BOOT 심기도
+//     같이 열린다. 그쪽은 잠가 둔 채로 둔다.
+//
+//   그래서 이 바이트는 "Vial 의 다른 기능(매크로 편집 등)이 잠겨 있는가" 다.
 #define LINK_CMD_PREFIX       0xA0
 
 #define LINK_CMD_INFO         0x00
 #define LINK_CMD_PRESSED      0x01
 
-#define LINK_CMD_VERSION      1
+#define LINK_CMD_VERSION      2
+
+#define LINK_TREE_VIA         0
+#define LINK_TREE_VIAL        1
+
+// ★ 저장된 키보드마다 PID 를 다르게 보고한다 (VIA 가 정의를 자동으로 고르게).
+//   0x5400 + 슬롯. 다른 baram 키보드(0x5200~0x5305)와 겹치지 않는 블록이다.
+//   → firmware/docs/09-keyboard-profile.md
+#define LINK_PID_BASE         0x5400
 
 
 // 우리 명령이면 처리하고 응답까지 보낸 뒤 true. 아니면 아무것도 안 하고 false.
 //
-// allow_matrix : 눌린 키를 알려줘도 되는가.
-//   vial 빌드에서는 Vial 의 잠금 정책을 따른다 (vial_unlocked).
-//   잠겨 있으면 개수 0 으로 답한다 — 명령 자체는 응답해야 앱이 안 멈춘다.
-bool linkCmdHandle(uint8_t *p_data, uint8_t length, bool allow_matrix);
+// vial_locked : Vial 의 잠금 상태 (알림용. via 빌드에서는 늘 false)
+bool linkCmdHandle(uint8_t *p_data, uint8_t length, bool vial_locked);
 
 
 #ifdef __cplusplus
