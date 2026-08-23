@@ -64,6 +64,7 @@ let fwVer = '';              // 펌웨어 버전 문자열
 let activeSlot = -1;         // 보드가 지금 쓰고 있는 SLOT (-1 = 없음)
 let selSlot    = -1;         // 사용자가 고정해 둔 SLOT (-1 = 자동)
 let editSlot   = -1;         // 지금 열어서 고치고 있는 SLOT (-1 = 새로 만드는 중)
+let dirty      = false;      // 저장하지 않은 편집이 있다
 let busy = false;            // 담기/지우기 중 — 폴링을 멈춘다
 
 // ★ 펌웨어에 따라 쓸 수 없는 것이 있다.
@@ -132,6 +133,7 @@ async function attach(dev) {
   //   나중에 넣었더니 showDev() 가 v0 를 그려서 "오래됐다" 고 잘못 알렸다.
   cmdVer = ver;
   reenumPending = false;
+  dirty = false;
 
   let kbds = [];
   hostVid = 0; hostPid = 0;
@@ -341,8 +343,23 @@ function renderSlots() {
       pick.disabled = !here;
       pick.title = here ? (on ? '이미 적용 중이다' : '이 SLOT 을 적용한다')
                         : '꽂혀 있는 키보드만 적용할 수 있다';
-      pick.onchange = () => applySlot(r.i);
+      pick.onchange = (e) => { e.stopPropagation(); applySlot(r.i); };
       row.appendChild(pick);
+
+      /*
+       * ★ 줄을 클릭하면 편집한다 ([편집] 버튼을 없앴다).
+       *
+       *   적용(라디오)은 보드 상태를 바꾸고, 편집은 웹에서만 일어난다.
+       *   둘을 한 동작에 묶으면 "오타 하나 고치려다 적용까지 옮겨간다".
+       *   그래서 위험한 쪽을 작은 과녁(라디오)으로, 안전한 쪽을 넓은 줄로 둔다.
+       */
+      row.classList.add('pickable');
+      if (r.i === editSlot) row.classList.add('editing');
+      row.title = '클릭하면 편집한다';
+      row.onclick = (e) => {
+        if (e.target === pick || e.target.closest('button')) return;
+        loadSlotForEdit(r.i);
+      };
 
       row.appendChild(cell('b', `SLOT ${r.i}`));
       row.appendChild(cell('span', esc(r.name) || '(이름 없음)', 'nm'));
@@ -351,7 +368,6 @@ function renderSlots() {
 
       const acts = document.createElement('span');
       acts.className = 'acts';
-      acts.appendChild(btn('편집', () => loadSlotForEdit(r.i)));
       acts.appendChild(btn('지우기', () => eraseSlot(r.i)));
 
       row.appendChild(acts);
@@ -752,6 +768,7 @@ function loadKle() {
   try {
     keys = parseKle($('kle').value);
     cursor = -1;
+    dirty = true;
     // ★ 배열을 바꿔도 "어느 SLOT 을 고치는 중" 은 유지한다.
     //
     //   SLOT 0 을 열어 놓고 프리셋을 고르는 것은 "SLOT 0 의 배열을 이걸로
@@ -801,6 +818,7 @@ function onKeyDown(u) {
     keys[dup].usage = null;
   }
   keys[cursor].usage = u;
+  dirty = true;
   next();
 }
 
@@ -836,6 +854,7 @@ function clearAll() {
   if (!confirm(`배운 키 ${n}개를 모두 지운다. 배열은 그대로 둔다.`)) return;
 
   keys.forEach(k => { k.usage = null; });
+  dirty = true;
   cursor = -1;
   render();
   refreshUi();
@@ -848,6 +867,7 @@ function clearCur() {
 
   const had = keys[cursor].usage;
   keys[cursor].usage = null;
+  dirty = true;
   render();
   log(had === null ? '이미 비어 있다.'
                    : `0x${had.toString(16).toUpperCase()} 를 비웠다. 이 자리의 키를 다시 누른다.`);
@@ -1014,6 +1034,7 @@ async function saveSlot(slot) {
     }
 
     editSlot = slot;
+    dirty = false;
 
     /*
      * ★ 담긴 사실을 화면에도 바로 반영한다.
@@ -1087,12 +1108,31 @@ async function finishSlotOp(msg, pending) {
   refreshUi();
 }
 
+/*
+ * 저장하지 않은 편집을 버려도 되는지 묻는다.
+ *
+ * ★ 다른 SLOT 으로 옮길 때만 묻는다.
+ *
+ *   프리셋을 바꾸거나 파일을 여는 것은 "이 SLOT 의 배열을 이걸로 바꾸겠다" 는
+ *   의도적인 행동이고, 되돌릴 길(첫 칸의 "원래 배열로")이 이미 있다.
+ *   거기까지 물으면 금방 성가셔진다.
+ */
+function askDiscard(to) {
+  if (!dirty || editSlot < 0) return true;
+
+  const n = keys.filter(k => k.usage !== null).length;
+
+  return confirm(`SLOT ${editSlot} 에 저장하지 않은 편집이 있다 (배운 키 ${n}개).\n`
+                 + `버리고 ${to} 로 옮길까?`);
+}
+
 // 빈 SLOT 자리를 잡는다. 아직 플래시는 안 건드린다 — 담을 때 쓴다.
 function startNewSlot() {
   if (!device || !slots) { log('보드를 먼저 연결한다.'); return; }
 
   const free = slots.findIndex(x => !x.used);
   if (free < 0) { log('★ 빈 SLOT 이 없다. 하나 지워야 늘릴 수 있다.'); return; }
+  if (free !== editSlot && !askDiscard(`새 SLOT ${free}`)) return;
 
   editSlot = free;
   refreshUi();
@@ -1106,6 +1146,12 @@ function startNewSlot() {
 //   그래서 불러온 순간 이미 다 배운 상태다 — 곧바로 고칠 수 있다.
 async function loadSlotForEdit(slot) {
   if (!device || !slots || !slots[slot] || !slots[slot].used) return;
+
+  if (slot === editSlot) {
+    // 같은 줄을 다시 클릭 — 원래 배열로 되돌리는 뜻이다
+    if (dirty && !confirm(`SLOT ${slot} 을 보드에 담긴 원래 배열로 되돌릴까?`)) return;
+  }
+  else if (!askDiscard(`SLOT ${slot}`)) return;
 
   busy = true;
   await sleep(80);
@@ -1126,6 +1172,7 @@ async function loadSlotForEdit(slot) {
     if (!def.layouts || !def.layouts.keymap) throw new Error('배열이 없는 정의다');
 
     trustCoords = true;                   // 보드에 담긴 것은 우리 정의다
+    dirty = false;                        // 방금 보드에서 읽어 왔다
     $('preset').value = '';               // 프리셋이 아니라 SLOT 을 보고 있다
     $('name').value = def.name || '';
     $('kle').value  = JSON.stringify(def.layouts.keymap);
@@ -1228,8 +1275,10 @@ function refreshUi() {
   if (editSlot >= 0) {
     const isNew = (slots && !slots[editSlot].used);
 
-    badge.textContent = `SLOT ${editSlot} 을 ${isNew ? '만드는' : '고치는'} 중  ✕`;
-    badge.title = '누르면 그만둔다';
+    badge.textContent = `SLOT ${editSlot} 을 ${isNew ? '만드는' : '고치는'} 중`
+                      + (dirty ? '  ●' : '') + '  ✕';
+    badge.title = dirty ? '● = 저장하지 않은 편집이 있다. 누르면 그만둔다'
+                        : '누르면 그만둔다';
     badge.style.display = '';
   } else {
     badge.style.display = 'none';
@@ -1279,7 +1328,7 @@ $('clear').onclick = clearCur;
 $('clearAll').onclick = clearAll;
 $('assign').onclick = manualAssign;
 $('manual').onkeydown = (e) => { if (e.key === 'Enter') manualAssign(); };
-$('editBadge').onclick = () => { editSlot = -1; refreshUi(); log('고치던 SLOT 을 놓았다 — 이제 새로 만든다.'); };
+$('editBadge').onclick = () => { if (!askDiscard('새로 만들기')) return; editSlot = -1; dirty = false; refreshUi(); log('고치던 SLOT 을 놓았다 — 이제 새로 만든다.'); };
 $('save').onclick = () => saveSlot();
 $('exVia').onclick = exportVia;
 $('exVial').onclick = exportVial;

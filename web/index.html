@@ -57,6 +57,10 @@
   .slot-row .nm   { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .slot-row .acts { display:flex; gap:6px; }
   .slot-row.on { color:#1e5c30; }
+  /* 줄을 클릭하면 편집한다. 위험한 쪽(적용)은 라디오라 과녁이 훨씬 작다 */
+  .slot-row.pickable { cursor:pointer; border-radius:6px; }
+  .slot-row.pickable:hover { background:#eaf1fb; }
+  .slot-row.editing { background:#fff6dd; }
   .slot-row .on-mark { color:#1e5c30; }
   .slot-row button { padding:2px 8px; font-size:12px; }
   .slot-row button:disabled { color:#b0b0b8; border-color:#e2e2e8;
@@ -116,7 +120,8 @@
   <div class="step-body">
     <div id="slotTree" class="tree">보드를 연결하면 여기 보인다.</div>
     <div class="note" style="margin-top:6px">
-      이미 있으면 <b>[편집]</b>, 없으면 아래 <b>3</b> 으로.
+      <b>줄을 클릭하면 편집</b>한다. 왼쪽 <b>동그라미</b>는 지금 쓸 것을 고르는 자리다.
+      담긴 것이 없으면 <b>[SLOT 추가]</b> 로 새로 만든다.
     </div>
   </div>
 </section>
