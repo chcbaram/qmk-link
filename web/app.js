@@ -273,7 +273,7 @@ function renderSlots() {
       row.appendChild(txt);
 
       if (here && !on) row.appendChild(btn('적용', () => applySlot(r.i)));
-      row.appendChild(btn('열기', () => openSlot(r.i)));
+      row.appendChild(btn('편집', () => loadSlotForEdit(r.i)));
       row.appendChild(btn('지우기', () => eraseSlot(r.i)));
       div.appendChild(row);
     }
@@ -281,7 +281,7 @@ function renderSlots() {
     /*
      * ★ 새 SLOT 을 늘리는 길을 여기 둔다.
      *
-     *   전에는 "이미 담아 둔 것을 [열기] 로 연 뒤" 에만 [새 SLOT 에 담기] 가
+     *   전에는 "이미 담아 둔 것을 [편집] 으로 연 뒤" 에만 [새 SLOT 에 담기] 가
      *   나왔다. 그래서 변형본을 하나 더 만들 방법이 사실상 없었다.
      */
     if (here) {
@@ -746,11 +746,12 @@ async function saveSlot(slot) {
   }
 }
 
-// ── 시나리오 2 : 담아 둔 것을 열어 고친다 ────────────────
+// ── 시나리오 2 : 담아 둔 것을 편집한다 ──────────────────
 //
 // ★ 이게 없어서 배열을 조금 고치려 해도 처음부터 다시 배워야 했다.
 //   범례가 "행,열" 이라 parseKle 가 usage 까지 되살린다 (decodeLegend).
-async function openSlot(slot) {
+//   그래서 불러온 순간 이미 다 배운 상태다 — 곧바로 고칠 수 있다.
+async function loadSlotForEdit(slot) {
   if (!device || !slots || !slots[slot] || !slots[slot].used) return;
 
   busy = true;
@@ -778,9 +779,9 @@ async function openSlot(slot) {
     editSlot = slot;
     render();
     refreshUi();
-    log(`SLOT ${slot} 을 열었다 — ${keys.length} 키. 고친 뒤 [SLOT ${slot} 에 덮어쓰기].`);
+    log(`SLOT ${slot} 을 편집한다 — ${keys.length} 키. 고친 뒤 [SLOT ${slot} 에 덮어쓰기].`);
   } catch (e) {
-    log('열기 실패 — ' + e.message);
+    log('편집 실패 — ' + e.message);
   }
   busy = false;
 }
