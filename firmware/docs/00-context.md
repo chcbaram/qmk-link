@@ -46,10 +46,12 @@ PC 에는 **VIA / Vial 로 편집 가능한 키보드**로 보이게 한다.
 - 키맵이 **내장 플래시에 저장되어 재부팅을 넘는다** (0x1F0000, 16KB)
 - VIA 커스텀 메뉴 6개 — 탭텀 / hold-okp / permissive / retro / NKRO / 패스스루
 - VIA 의 bootloader 버튼 → BOOTSEL
+- VIA 의 Key Tester > Test Matrix — 누른 키의 usage 가 배열에서 반짝인다
 
-**미검증**: 마우스 패스스루(USB 마우스 없음), BIOS 화면, Windows / Linux,
-그리고 **VIA 웹앱 실물** (프로토콜은 hidapi 로 전부 확인했지만 `layout-via.json` 을
-Design 탭에 넣어 그림이 제대로 나오는지는 아직 안 봤다).
+**진단은 CLI `key info`** 로 한다. 이 단계의 고장들은 `mounted` / `drop` 으로는
+안 보였다 → [06-via.md](06-via.md#진단-도구--key-info)
+
+**미검증**: 마우스 패스스루(USB 마우스 없음), BIOS 화면, Windows / Linux.
 
 BOOTSEL 진입 경로 (전부 실기 확인):
 1. `flash.py` 의 CDC 1200bps touch — 버튼 없이 굽는다
