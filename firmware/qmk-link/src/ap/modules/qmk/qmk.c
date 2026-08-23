@@ -30,6 +30,7 @@ bool vialServeDefinition(uint8_t *p_data, uint8_t length);   /* port/vial_port.c
 #include "matrix.h"
 #include "action.h"
 #include "action_util.h"
+#include "action_layer.h"
 #include "keycode_config.h"
 #include "usb_device_state.h"
 #include "usbd_hid.h"
@@ -102,6 +103,36 @@ bool qmkIsPassthrough(void)
   return is_passthrough;
 }
 
+void qmkSetProfile(uint8_t profile)
+{
+  if (eepromGetProfile() == profile) return;
+
+  /*
+   * ★ 바꾸기 전에 눌린 키와 레이어를 비운다.
+   *
+   *   프로파일이 바뀌면 같은 자리의 키코드가 달라진다. 눌린 채로 넘어가면
+   *   뗄 때 다른 키가 떼진다. 레이어도 이전 키맵 기준이라 그대로 두면 안 된다.
+   */
+  if (is_qmk_on == true)
+  {
+    clear_keyboard();
+    layer_clear();
+  }
+
+  eepromSetProfile(profile);
+  logPrintf("[  ] qmk 키맵 프로파일 %d\r\n", profile);
+}
+
+uint8_t qmkGetProfile(void)
+{
+  return eepromGetProfile();
+}
+
+void qmkProfileCopyTo(uint8_t profile)
+{
+  eepromProfileCopy(profile);
+}
+
 void qmkUpdate(void)
 {
   // ★ QMK 가 꺼져 있어도 돌린다.
@@ -111,6 +142,10 @@ void qmkUpdate(void)
   eeprom_task();
 
   if (is_qmk_on != true) return;
+
+  // 프로파일이 안 채워져 있으면 채운다 (처음 부팅 · EEPROM 초기화 뒤).
+  // 매직 4바이트 비교라 매 루프 돌아도 부담이 없다.
+  eepromProfileEnsure();
 
 #ifdef RAW_ENABLE
   // ★ VIA 요청 처리는 여기서 한다 — USB 콜백 안이 아니다 (usbd_hid.h 주석 참고).
@@ -247,6 +282,8 @@ static void cliCmd(cli_args_t *args)
 
     cliPrintf("size      : %d B  @ 0x%06X\n",
               TOTAL_EEPROM_BYTE_COUNT, (unsigned)eepromGetBase());
+    cliPrintf("프로파일  : %d / %d  (키맵 한 벌 %d B)\n",
+              eepromGetProfile(), EEPROM_PROFILE_MAX, EEPROM_PROFILE_KEYMAP_SIZE);
     cliPrintf("섀도      : %s\n",
               eepromIsInit() ? "읽어 둠" : "미초기화 (qmk start 전)");
     cliPrintf("dirty     : 0x%X\n", (unsigned)eepromGetDirtyMask());

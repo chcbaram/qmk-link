@@ -38,9 +38,18 @@
 #include "log.h"
 #include <string.h>
 
+/*
+ * ★ 설정을 여기서도 읽어야 한다.
+ *
+ *   예전에는 include 가 없어서 TOTAL_EEPROM_BYTE_COUNT 가 아래 기본값(16384)으로
+ *   잡히고 있었다. config.h 값과 우연히 같아서 아무도 몰랐다 — 그 값을 바꾸는
+ *   순간 조용히 어긋난다. 키맵 프로파일은 MATRIX_ROWS · DYNAMIC_KEYMAP_* 도
+ *   봐야 하므로 확실히 끌어온다.
+ */
+#include QMK_KEYMAP_CONFIG_H
 
 #ifndef TOTAL_EEPROM_BYTE_COUNT
-#define TOTAL_EEPROM_BYTE_COUNT 16384
+#error "config.h 가 안 잡혔다 — TOTAL_EEPROM_BYTE_COUNT 가 없다"
 #endif
 
 /*
@@ -66,6 +75,10 @@
 #if (TOTAL_EEPROM_BYTE_COUNT % EE_SECTOR_SIZE) != 0
 #error "TOTAL_EEPROM_BYTE_COUNT 는 섹터 크기의 배수여야 한다"
 #endif
+/* dirty 표시가 uint32_t 비트마스크다. 32섹터(128KB)를 넘기면 조용히 잘린다 */
+#if EE_SECTOR_CNT > 32
+#error "EEPROM 이 32섹터를 넘는다 — dirty_mask 를 uint64_t 로 바꿔야 한다"
+#endif
 
 
 static uint8_t  eeprom_buf[TOTAL_EEPROM_BYTE_COUNT];
@@ -74,6 +87,136 @@ static uint32_t dirty_time = 0;
 static uint32_t flush_cnt  = 0;   /* 진단용 — 실제 소거 횟수 */
 static uint32_t flush_time = 0;   /* 진단용 — 마지막 플러시에 걸린 us */
 static bool     is_init    = false;
+
+/* ────────────────────────── 키맵 프로파일 (09-3) ──────────────────────────
+ *
+ * ★ upstream 을 건드리지 않는다.
+ *
+ *   키맵 읽기/쓰기는 전부 eeprom_read_block / eeprom_write_block 을 지난다.
+ *   그러니 여기서 **주소만 옮기면** 프로파일이 된다. nvm_dynamic_keymap.c 를
+ *   복사해 올 필요도, QMK 를 패치할 필요도 없다.
+ *
+ *   프로파일 0 은 upstream 이 정한 자리 그대로다. 1~16 은 기본 영역 뒤에
+ *   4096B 씩 늘어놓는다. 그래서 **09-2 까지 쓰던 키맵이 프로파일 0 이 된다.**
+ *
+ * ★ 걸치는 접근은 옮기지 않는다.
+ *
+ *   키맵 구간 안에 완전히 들어올 때만 옮긴다. 걸쳐 있으면 그대로 둔다 —
+ *   경계를 넘는 덩어리 접근은 upstream 에 없고(via.c 가 키맵 크기로 자른다),
+ *   반만 옮기면 조용히 섞이기 때문이다.
+ */
+#define KM_BEGIN     ((uintptr_t)DYNAMIC_KEYMAP_EEPROM_ADDR)
+#define KM_SIZE      ((uintptr_t)EEPROM_PROFILE_KEYMAP_SIZE)
+#define KM_EXTRA     ((uintptr_t)(DYNAMIC_KEYMAP_EEPROM_MAX_ADDR + 1))
+
+static uint8_t km_profile   = 0;
+static bool    km_need_fill = false;
+
+/* 프로파일 p 의 키맵이 시작하는 주소 */
+static uintptr_t kmBase(uint8_t p)
+{
+  return (p == 0) ? KM_BEGIN : (KM_EXTRA + (uintptr_t)(p - 1) * KM_SIZE);
+}
+
+static uintptr_t kmRemap(uintptr_t off, size_t len)
+{
+  if (km_profile == 0) return off;
+  if (off < KM_BEGIN) return off;
+  if (off + len > KM_BEGIN + KM_SIZE) return off;
+
+  return kmBase(km_profile) + (off - KM_BEGIN);
+}
+
+static void kmDirty(uintptr_t off, size_t len)
+{
+  for (uintptr_t i = off; i < off + len; i += EE_SECTOR_SIZE)
+    dirty_mask |= (1U << (i / EE_SECTOR_SIZE));
+
+  dirty_mask |= (1U << ((off + len - 1) / EE_SECTOR_SIZE));
+  dirty_time  = millis();
+}
+
+void eepromSetProfile(uint8_t p)
+{
+  if (p >= EEPROM_PROFILE_MAX) p = 0;
+  km_profile = p;
+}
+
+uint8_t eepromGetProfile(void)
+{
+  return km_profile;
+}
+
+/* 지금 벌을 다른 벌로 베낀다. SLOT 을 새로 만들 때 쓴다 —
+   빈 키맵으로 시작하면 키보드를 늘릴 때마다 설정을 처음부터 다시 해야 한다. */
+void eepromProfileCopy(uint8_t to)
+{
+  uintptr_t src;
+  uintptr_t dst;
+
+  if (to >= EEPROM_PROFILE_MAX) return;
+  if (to == km_profile) return;
+
+  src = kmBase(km_profile);
+  dst = kmBase(to);
+
+  if (memcmp(&eeprom_buf[dst], &eeprom_buf[src], KM_SIZE) == 0) return;
+
+  memcpy(&eeprom_buf[dst], &eeprom_buf[src], KM_SIZE);
+  kmDirty(dst, KM_SIZE);
+}
+
+/* ★ 전 벌을 채운다.
+ *
+ *   dynamic_keymap_reset() 은 **지금 벌 하나만** 채운다. 그대로 두면 나머지가
+ *   전부 0xFF 라, 다른 키보드를 꽂는 순간 키가 하나도 안 나간다.
+ *   초기화 직후 한 번 지금 벌을 전부에 베껴 둔다. */
+void eepromProfileFillAll(void)
+{
+  uint8_t keep = km_profile;
+
+  km_need_fill = false;
+
+  for (uint8_t p = 0; p < EEPROM_PROFILE_MAX; p++)
+  {
+    km_profile = keep;
+    eepromProfileCopy(p);
+  }
+  km_profile = keep;
+
+  logPrintf("[  ] eeprom 프로파일 %d벌 채움 (기준 %d)\r\n", EEPROM_PROFILE_MAX, keep);
+}
+
+/*
+ * 프로파일이 채워져 있는지 보고, 아니면 채운다.
+ *
+ * ★ 표시를 EEPROM 안에 둔다.
+ *
+ *   "언제 채워야 하나" 가 갈래가 많다 — 처음 굽고 부팅했을 때, VIA 의
+ *   Reset EEPROM 을 눌렀을 때, EEPROM 자리를 옮겼을 때. 각각을 코드로 쫓으면
+ *   반드시 하나를 빠뜨린다. 매직 하나를 두고 **없으면 채운다** 로 통일한다.
+ *
+ *   512 는 eeconfig 가 안 쓰는 자리다 (거긴 100바이트 남짓이고 키맵은 1024 부터).
+ */
+#define KM_MAGIC_ADDR   512
+#define KM_MAGIC        0x314D4B50UL   /* "PKM1" */
+
+void eepromProfileEnsure(void)
+{
+  uint32_t magic;
+
+  if (is_init != true) return;
+
+  memcpy(&magic, &eeprom_buf[KM_MAGIC_ADDR], sizeof(magic));
+  if (magic == KM_MAGIC && km_need_fill == false) return;
+
+  eepromProfileFillAll();
+
+  magic = KM_MAGIC;
+  memcpy(&eeprom_buf[KM_MAGIC_ADDR], &magic, sizeof(magic));
+  kmDirty(KM_MAGIC_ADDR, sizeof(magic));
+}
+
 
 
 
@@ -173,6 +316,9 @@ void eeprom_driver_format(bool erase)
 
 void eeprom_driver_erase(void)
 {
+  /* 다 지웠으니 프로파일도 다시 채워야 한다. QMK 가 기본 키맵을 만든 뒤에 한다 */
+  km_need_fill = true;
+
   memset(eeprom_buf, 0xFF, sizeof(eeprom_buf));
 
   dirty_mask = (1U << EE_SECTOR_CNT) - 1;
@@ -207,7 +353,7 @@ uint32_t eepromGetDirtyMask(void)  { return dirty_mask; }
 
 void eeprom_read_block(void *buf, const void *addr, size_t len)
 {
-  uintptr_t offset = (uintptr_t)addr;
+  uintptr_t offset = kmRemap((uintptr_t)addr, len);
 
   if (offset >= sizeof(eeprom_buf)) return;
   if (offset + len > sizeof(eeprom_buf)) len = sizeof(eeprom_buf) - offset;
@@ -217,7 +363,7 @@ void eeprom_read_block(void *buf, const void *addr, size_t len)
 
 void eeprom_write_block(const void *buf, void *addr, size_t len)
 {
-  uintptr_t offset = (uintptr_t)addr;
+  uintptr_t offset = kmRemap((uintptr_t)addr, len);
 
   if (offset >= sizeof(eeprom_buf)) return;
   if (offset + len > sizeof(eeprom_buf)) len = sizeof(eeprom_buf) - offset;

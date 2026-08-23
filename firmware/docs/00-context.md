@@ -37,12 +37,13 @@ PC 에는 **VIA / Vial 로 편집 가능한 키보드**로 보이게 한다.
 | **완료** | **09-1 학습 마법사** — `web/`, GitHub Actions 로 Pages 배포 |
 | **완료** | **09-2 온디바이스 저장** — 저장소 · 업로드 도구 · **Vial 정의 서빙** |
 | **완료** | **09-2-4 PID 전환** — VIA 도 정의를 자동으로 고른다 (`0x5400` + SLOT) |
-| **다음** | **09-3 키맵 프로파일** — 키보드마다 다른 키맵 |
+| **완료** | **09-3 키맵 프로파일** — **SLOT 이 곧 프로파일.** 키보드마다 키맵이 따로다 |
 
 **릴리스** : [v1.0.0](https://github.com/chcbaram/qmk-link/releases/tag/v1.0.0) — `.uf2` 두 개 첨부.
 **웹 마법사** : <https://chcbaram.github.io/qmk-link/>
 
-실측: via FLASH 115,752 B / vial 134,112 B, RAM 164~184 KB / 512 KB (copy_to_ram).
+실측: via FLASH 122,764 B / vial 141,164 B, RAM 238~258 KB / 512 KB (copy_to_ram).
+RAM 이 커진 것은 EEPROM 섀도가 16KB → 80KB 가 됐기 때문이다 (키맵 프로파일 17벌).
 `0483:5305 QMK-LINK` 로 열거된다 — HID(keyboard / extra / raw) + CDC 복합 장치.
 ★ 09단계부터 **PID 가 고정이 아니다.** 꽂힌 키보드의 레이아웃 SLOT 에 따라
 `0x5400`+SLOT 으로 바뀐다. 담아 둔 것이 없을 때만 `0x5305` 다.
@@ -62,6 +63,8 @@ PC 에는 **VIA / Vial 로 편집 가능한 키보드**로 보이게 한다.
 - **레이아웃 저장소** — `0x1D0000` 부터 8KB x 16칸. `tools/kbd_upload.py` 로 담고 꺼낸다.
   **via · vial 공용이다** (EEPROM 과 반대다). 펌웨어를 바꿔 구워도 남는다
 - **PID 전환** — 꽂힌 키보드의 SLOT 에 따라 `0x5400`+SLOT 으로 재열거한다. VIA 가 정의를 스스로 고른다
+- **키맵 프로파일** — SLOT 이 곧 프로파일이다. 키보드를 바꿔 꽂으면 **키맵도 같이 바뀐다**.
+  새 SLOT 은 쓰던 키맵을 물려받는다
 - **★ Vial 정의를 장치가 내준다** — 꽂힌 키보드에 맞는 칸을 찾아 그 정의를 준다.
   저장된 것이 없으면 컴파일에 박힌 풀사이즈 기본값이 나간다
 - **Vial 트리** — `-DKEY_PROTOCOL=vial`. 장치가 자기 정의를 내준다 (552 B, LZMA)
@@ -398,19 +401,33 @@ Vial 은 정의를 장치에서 읽어가서 이미 자동이었다. **VIA 는 �
 ★ VIA 트리에서도 SLOT 에 뭔가를 담아야 PID 가 바뀐다. 담는 파일은 두 트리 모두
 `layout-vial.json` 이고, VIA 트리는 내용을 안 쓰고 **머리말의 vid/pid 만** 본다.
 
-### 남은 것 ① 키맵 프로파일 (09-3)
+### 끝난 것 ③ 키맵 프로파일 (09-3) ✅
 
-지금은 **모든 키보드가 키맵 한 벌을 공유한다.** 이쪽이 그림보다 체감이 크다.
+**SLOT 이 곧 프로파일이다** — 프로파일 0 = SLOT 없음, 1~16 = SLOT 0~15.
 
-`nvm_dynamic_keymap_*()` 이 교체 가능한 seam 이다 —
-`quantum/nvm/eeprom/nvm_dynamic_keymap.c` 를 빌드에서 빼고 우리 것을 넣어
-주소에 프로파일 오프셋만 더한다. **upstream 을 패치하지 않아도 된다.**
+| | |
+|---|---|
+| `hw_def.h` | 플래시 지도를 다시 잡았다. EEPROM 을 저장소 **아래**로 (`0x1A0000` / `0x1B4000`, 각 80KB) |
+| `keyboards/qmk-link/config.h` | `DYNAMIC_KEYMAP_EEPROM_ADDR` · `..._MAX_ADDR` 을 못 박고 `TOTAL_EEPROM_BYTE_COUNT` 81920 |
+| `port/platforms/eeprom.c` | `kmRemap()` — 키맵 구간이면 주소만 옮긴다. **upstream 을 안 건드린다** |
+| `qmk.c` / `ap.c` | 적용 SLOT 이 바뀌면 프로파일도 바뀐다. 눌린 키·레이어를 비운다 |
+| `link_cmd.c` | 빈 칸에 처음 담을 때 쓰던 키맵을 베낀다 (`kbdStoreReselect()` **앞**) |
 
-`KEYMAP_BLOCK_SIZE` = 8레이어 x 16 x 16 x 2 = **4096B**. 프로파일 4벌이면 16KB 라
-지금 EEPROM(16KB)을 넘는다 — **영역을 다시 잡아야 한다.**
+★ **`nvm_dynamic_keymap.c` 를 복사해 오지 않았다.** 키맵 접근이 전부
+`eeprom_read_block`/`eeprom_write_block` 을 지나므로 거기서 주소만 옮기면 된다.
 
-★ 함정: `dynamic_keymap_reset()` 은 **지금 프로파일 한 벌만** 채운다. 그대로 두면
-나머지가 전부 `KC_NO` 라 옮기는 순간 키보드가 죽는다 (wish-he 가 같은 함정을 겪었다).
+★ `MAX_ADDR` 을 안 박으면 매크로 영역이 EEPROM 끝까지 잡혀 **프로파일을 덮어쓴다.**
+
+★ `dynamic_keymap_reset()` 은 한 벌만 채운다. 매직(주소 512)을 두고
+**없으면 전 벌을 채운다** 로 통일했다 (`eepromProfileEnsure`).
+
+→ 자세한 것은 [09-keyboard-profile.md](09-keyboard-profile.md#3단계--키보드별-키맵-프로파일--완료)
+
+### 남은 것 ① VIA 커스텀 메뉴에 프로파일 수동 선택 (선택)
+
+지금은 SLOT 이 프로파일을 정한다. 사람이 "이 키보드는 저 키맵을 쓴다" 고 따로
+고르고 싶어지면 그때 만든다 — `kbd_sel_t` 에 `profile` 바이트를 비워 뒀다.
+필요해지기 전에는 만들지 않는다.
 
 ### 끝난 것 ② 웹에서 담기 · 지우기 ✅ — 파이썬 없이 된다
 
@@ -437,6 +454,8 @@ SLOT 이 8,144 B 라 세 배 가까이 남는다. `web/xz.js`, 60줄.
 | 어긴 것 | 어떻게 드러났나 |
 |---|---|
 | **컨트롤 전송을 열거 중에 던졌다** | `tuh_hid_mount_cb()` 안에서 product string 을 요청했더니 컨트롤 슬롯이 차 있어 `false` 만 돌아왔다. 오류가 안 나니 이름이 그냥 비어 보였다 → core1 루프에서 재시도한다 |
+| **EEPROM 주소를 upstream 이 정하게 두면** | 매크로 영역이 "EEPROM 끝까지" 로 잡혀서 뒤에 둔 키맵 프로파일을 통째로 덮어쓴다. `DYNAMIC_KEYMAP_EEPROM_MAX_ADDR` 을 같이 못 박아야 한다 |
+| **`eeprom.c` 가 config.h 를 안 읽고 있었다** | `#ifndef TOTAL_EEPROM_BYTE_COUNT` 기본값(16384)이 config 값과 우연히 같아서 아무도 몰랐다. 그 값을 바꾸는 순간 조용히 어긋난다 |
 | **남의 VIA 정의는 범례가 좌표다** | 우리 정의는 좌표가 곧 usage 라 `"3,6"` 을 그대로 믿어도 됐다. 그런데 BARAM 45K 의 VIA json 도 `"3,6"` 인데 그건 **그 키보드의 매트릭스**다 (스페이스). 그대로 믿으면 usage 0x36(마침표)로 읽어 엉뚱한 키를 다 배운 상태가 된다 → `matrix` 가 16x16 일 때만 믿는다 |
 
 

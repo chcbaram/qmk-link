@@ -61,5 +61,32 @@
 #define VIA_EEPROM_ALLOW_RESET
 
 #define EECONFIG_USER_DATA_SIZE     64
-#define TOTAL_EEPROM_BYTE_COUNT     16384
+
+// ── 키맵 프로파일 (09-3) ──
+//
+// 꽂은 키보드마다 키맵을 따로 갖는다. **SLOT 이 곧 프로파일**이다 —
+// 개념을 둘로 늘리지 않으려고 그렇게 뒀다.
+//
+//   프로파일 0        담아 둔 SLOT 이 없는 키보드 (기본 풀사이즈 배열)
+//   프로파일 1~16     SLOT 0~15
+//
+// 한 벌 = 8레이어 x 16 x 16 x 2B = 4096 B.
+//
+// ★ 주소를 여기서 못 박는다.
+//
+//   upstream 은 이 값을 알아서 정하지만(#ifndef), 그러면 우리 eeprom.c 가
+//   "키맵이 어디부터 어디까지인지" 를 알 수 없다. 프로파일 전환은 그 구간의
+//   주소를 옮기는 일이라 경계를 알아야 한다.
+//
+// ★ MAX_ADDR 을 반드시 같이 못 박는다.
+//
+//   안 그러면 매크로 영역이 "EEPROM 끝까지" 로 잡혀서 뒤에 둔 프로파일들을
+//   통째로 덮어쓴다. 기본 영역은 16KB 로 자르고 그 뒤를 프로파일이 쓴다.
+#define EEPROM_PROFILE_MAX          17
+#define EEPROM_PROFILE_KEYMAP_SIZE  (DYNAMIC_KEYMAP_LAYER_COUNT * MATRIX_ROWS * MATRIX_COLS * 2)
+
+#define DYNAMIC_KEYMAP_EEPROM_ADDR      1024
+#define DYNAMIC_KEYMAP_EEPROM_MAX_ADDR  16383
+
+#define TOTAL_EEPROM_BYTE_COUNT     (16384 + (EEPROM_PROFILE_MAX - 1) * EEPROM_PROFILE_KEYMAP_SIZE)
 

@@ -4,6 +4,7 @@
 #include "usbd_hid.h"
 #include "usb.h"
 #include "usbh.h"
+#include "qmk/qmk.h"
 #include <string.h>
 
 
@@ -197,7 +198,20 @@ bool linkCmdHandle(uint8_t *p_data, uint8_t length, bool vial_locked)
 
     case LINK_CMD_SLOT_COMMIT:
     {
-      bool ok = kbdStoreStageCommit(p_data[2]);
+      uint8_t   slot = p_data[2];
+      kbd_hdr_t hdr;
+      bool      is_new = (kbdStoreGetHeader(slot, &hdr) != true);
+      bool      ok     = kbdStoreStageCommit(slot);
+
+      /*
+       * ★ 새로 만든 SLOT 은 **쓰던 키맵을 물려받는다** (09-3).
+       *
+       *   빈 키맵으로 시작하면 키보드를 하나 늘릴 때마다 하던 설정을 처음부터
+       *   다시 해야 한다. 기본은 다 같고 그 키보드에서만 다른 것을 고치는 쪽이
+       *   맞다. 아직 프로파일을 안 옮긴 지금 베껴야 "쓰던 것" 이 원본이 된다 —
+       *   그래서 kbdStoreReselect() **앞**이다.
+       */
+      if (ok == true && is_new == true) qmkProfileCopyTo((uint8_t)(slot + 1));
 
       /* 담자마자 반영되게 — 안 그러면 키보드를 뽑았다 꽂아야 한다 */
       if (ok == true) kbdStoreReselect();

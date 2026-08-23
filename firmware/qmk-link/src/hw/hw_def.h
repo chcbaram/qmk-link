@@ -47,7 +47,27 @@
 #define      HW_FLASH_SECTOR_SIZE     4096         /* 소거 단위 */
 #define      HW_FLASH_PAGE_SIZE       256          /* 기록 단위 */
 #define      HW_FLASH_SIZE            (2*1024*1024)
-#define      HW_FLASH_USER_BEGIN      0x1D0000UL   /* 이 아래로는 쓰지 않는다 */
+#define      HW_FLASH_USER_BEGIN      0x1A0000UL   /* 이 아래로는 쓰지 않는다 */
+
+/*
+ * 지도 (09-3 에서 다시 잡았다)
+ *
+ *   0x1A0000  VIA  EEPROM    80KB   키맵 프로파일 17벌이 여기 산다
+ *   0x1B4000  Vial EEPROM    80KB
+ *   0x1C8000  (예약)         32KB
+ *   0x1D0000  SLOT 저장소   128KB   8KB x 16
+ *   0x1F0000  (예약)         32KB   ← 09-2 까지 EEPROM 이 있던 자리
+ *   0x1F8000  선택 표         4KB
+ *   0x1F9000  (예약)         24KB
+ *   0x1FF000  flash test      4KB
+ *
+ * ★ EEPROM 을 저장소 **아래**로 내렸다.
+ *
+ *   프로파일 17벌이면 트리당 80KB 다. 저장소 위(0x1F0000)에서 키우면 선택 표와
+ *   부딪히고, 저장소를 옮기면 **담아 둔 배열이 통째로 날아간다**. 아래로 내리면
+ *   저장소와 선택 표의 주소가 그대로라 배열과 선택이 살아남는다.
+ *   키맵은 자리가 바뀌므로 한 번 초기화된다 — 이건 피할 수 없다.
+ */
 
 // 꽂힌 키보드마다 레이아웃 정의를 담아 둔다 (09단계).
 //
@@ -56,6 +76,10 @@
 #define      HW_FLASH_KBD_BEGIN       0x1D0000UL
 #define      HW_FLASH_KBD_SLOT_SIZE   0x002000UL   /* 8KB */
 #define      HW_FLASH_KBD_SLOT_MAX    16           /* 합 128KB */
+// 키맵 프로파일 17벌이 EEPROM 안에 산다 (SLOT 16 + SLOT 없을 때 1벌).
+// 한 벌이 8레이어 x 16 x 16 x 2B = 4096B → 16384(기본 영역) + 16*4096 = 81920B.
+#define      HW_FLASH_E2P_SIZE        0x014000UL   /* 80KB */
+
 // 키보드마다 "어느 SLOT 을 적용할지" 를 기억한다 (09단계).
 //
 // ★ EEPROM 에 두면 안 된다.
@@ -69,10 +93,10 @@
 #define      HW_FLASH_KBD_SEL_BEGIN   0x1F8000UL
 #define      HW_FLASH_KBD_SEL_SIZE    0x001000UL   /* 4KB = 16B x 256 */
 
-#define      HW_FLASH_E2P_VIA_BEGIN   0x1F0000UL
-#define      HW_FLASH_E2P_VIA_SIZE    0x004000UL
-#define      HW_FLASH_E2P_VIAL_BEGIN  0x1F4000UL
-#define      HW_FLASH_E2P_VIAL_SIZE   0x004000UL
+#define      HW_FLASH_E2P_VIA_BEGIN   0x1A0000UL
+#define      HW_FLASH_E2P_VIA_SIZE    HW_FLASH_E2P_SIZE
+#define      HW_FLASH_E2P_VIAL_BEGIN  0x1B4000UL
+#define      HW_FLASH_E2P_VIAL_SIZE   HW_FLASH_E2P_SIZE
 
 // ★ CLI `flash test` 전용 섹터. 다른 용도로 잡지 않는다.
 //   소거/기록 시간을 재고 core1 이 계속 도는지 확인하는 데 쓴다.

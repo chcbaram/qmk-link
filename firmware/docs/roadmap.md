@@ -17,7 +17,7 @@
 
 | 항목 | 왜 | 무엇을 해야 하나 |
 |---|---|---|
-| **[09 키보드 프로파일](09-keyboard-profile.md)** — 1 ✅ / 2 ✅ / 3 ⬜ | 꽂은 키보드를 알아보고 그 키보드의 레이아웃·키맵을 쓴다. **키맵 쪽이 기능이고 체감이 크다** — 지금은 모든 키보드가 키맵 한 벌을 공유한다 | 1) 학습 마법사 웹페이지(펌웨어 변경 0) 2) 온디바이스 저장 + Vial 정의 서빙 + PID 전환 3) 키맵 프로파일.<br>★ Vial 은 정의를 장치에서 읽어가지만 **VIA 는 그 통로가 없다** — 그래서 SLOT 마다 PID 를 다르게 보고한다 |
+| **[09 키보드 프로파일](09-keyboard-profile.md)** — 1 ✅ / 2 ✅ / 3 ✅ | 꽂은 키보드를 알아보고 그 키보드의 레이아웃·키맵을 쓴다. **키맵 쪽이 기능이고 체감이 크다** — 배열과 키맵이 **SLOT 단위로 갈린다** | 1) 학습 마법사 웹페이지(펌웨어 변경 0) 2) 온디바이스 저장 + Vial 정의 서빙 + PID 전환 3) 키맵 프로파일.<br>★ Vial 은 정의를 장치에서 읽어가지만 **VIA 는 그 통로가 없다** — 그래서 SLOT 마다 PID 를 다르게 보고한다 |
 |---|---|---|
 | **EEPROM 을 wear leveling 으로** | 지금은 저장 1회 = 섹터 소거 1회다. **수명은 문제가 아니다** (섹터당 10만 회 / 하루 10번 저장이면 27년). 진짜 구멍은 **소거 → 기록 사이 45ms** 다. 그때 전원이 끊기면 섹터가 빈 채로 남아 키맵이 기본값으로 돌아간다. QMK 의 wear leveling 은 append 로그라 이 창이 없다 | `upstream.json` 의 sparse 에 `drivers` 추가 → `quantum/wear_leveling/wear_leveling.c` 와 `drivers/eeprom/eeprom_wear_leveling.c` 는 그대로 쓰고, backing store 7함수(`backing_store_init/unlock/erase/write/write_bulk/read/lock`)를 우리 `hw/driver/flash.c` 위에 새로 쓴다. `port/platforms/eeprom.c` 는 걷어낸다. **via·vial 두 트리가 같은 backing store 를 쓰므로 07단계 뒤에 한 번에 한다.**<br>★ `wear_leveling_rp2040_flash.c` 는 못 가져온다 — RP2040 의 SSI 레지스터를 직접 두드린다 |
 

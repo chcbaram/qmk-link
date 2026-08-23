@@ -93,6 +93,14 @@ static void updateProductId(void)
   pid = (slot >= 0) ? (uint16_t)(LINK_PID_BASE + slot) : (uint16_t)HW_USB_PID;
 
   usbSetProductId(pid);
+
+  /*
+   * ★ 키맵도 같이 바뀐다 (09-3).
+   *
+   *   SLOT 이 곧 프로파일이다 — 배열과 키맵을 한 덩어리로 본다.
+   *   담아 둔 것이 없는 키보드는 0번(기본 배열)을 쓴다.
+   */
+  qmkSetProfile((slot >= 0) ? (uint8_t)(slot + 1) : 0);
 }
 
 #endif

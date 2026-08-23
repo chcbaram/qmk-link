@@ -33,6 +33,14 @@ void     eeprom_flush(void);
 
 // 진단용
 bool     eepromIsInit(void);
+// ── 키맵 프로파일 (09-3) ──
+// 프로파일 0 = SLOT 없음, 1~16 = SLOT 0~15. eeprom.c 주석 참고.
+void     eepromSetProfile(uint8_t p);
+uint8_t  eepromGetProfile(void);
+void     eepromProfileCopy(uint8_t to);      // 지금 벌을 to 로 베낀다
+void     eepromProfileFillAll(void);         // 지금 벌을 전부에 베낀다
+void     eepromProfileEnsure(void);          // 안 채워져 있으면 채운다
+
 uint32_t eepromGetBase(void);     // 트리마다 다르다 (via / vial)      // eeprom_driver_init() 전에는 섀도가 비어 있다
 uint32_t eepromGetFlushCount(void);
 uint32_t eepromGetFlushTime(void);
