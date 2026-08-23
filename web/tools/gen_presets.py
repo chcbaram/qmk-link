@@ -336,7 +336,6 @@ def find_pairs(names, ortho):
 
 # (표시 이름, 커뮤니티 레이아웃 이름)
 COMMUNITY = [
-    ("40% ortho MIT", "planck_mit"),     # 12/12/12 + 2U 스페이스
     ("60% ANSI",      "60_ansi"),
     ("60% HHKB",      "60_hhkb"),
     ("65% ANSI",      "65_ansi"),
@@ -345,8 +344,12 @@ COMMUNITY = [
     ("풀사이즈 ANSI", "fullsize_ansi"),
 ]
 
-# 붙어 있어야 하는 배열 — 구멍이 있으면 그 정의를 버린다 (has_gap 주석 참고)
-ORTHO = {"planck_mit"}
+# 붙어 있어야 하는 배열 — 구멍이 있으면 그 정의를 버린다 (has_gap 주석 참고).
+#
+# ★ 지금은 비어 있다. ortho 프리셋을 뺐기 때문이지 검사가 필요 없어서가 아니다.
+#   ortho 계열(planck_mit · ortho_4x12 …)을 다시 넣으면 반드시 여기 적는다 —
+#   안 적으면 폭이 빠진 정의가 뽑혀 스페이스가 1U 로 그려진다. 실제로 겪었다.
+ORTHO = set()
 
 # 커뮤니티 레이아웃이 아닌 것 — 키보드 자기 정의를 그대로 쓴다
 #
