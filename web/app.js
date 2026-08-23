@@ -35,7 +35,7 @@ const CMD_BOARD_INFO  = 0x0A;   // 버전 5 — 펌웨어 버전
 //   펌웨어를 안 굽고 웹만 새로 고치면(또는 그 반대면) 새 기능이 조용히 안 돈다.
 //   실제로 "키보드 이름이 왜 안 뜨지" 로 한참 헤맸다. 화면이 답하게 한다.
 //   ★ link_cmd.h 의 LINK_CMD_VERSION 을 올리면 여기도 올린다.
-const CMD_VERSION_NEED = 5;
+const CMD_VERSION_NEED = 6;
 const SEL_AUTO        = 0xFF;
 const REPORT_LEN  = 32;
 
@@ -862,10 +862,24 @@ async function saveSlot(slot) {
     r = await sendReport(CMD_SLOT_COMMIT, [slot], 5000);
     if (r[2] !== 0) throw new Error('굽기 실패 (' + r[2] + ')');
 
-    // ★ 담은 SLOT 을 곧바로 고정한다.
-    //   안 그러면 같은 키보드의 낮은 번호 SLOT 이 이겨서, 새로 담은 것이
-    //   적용되지 않는다 — "담았는데 왜 안 바뀌지" 가 되는 자리다.
-    try { await sendReport(CMD_SEL_SET, [slot], 5000); } catch { /* 구형 펌웨어 */ }
+    let reenum = (r[3] === 1);
+
+    /*
+     * ★ 담자마자 적용하는 것은 **처음 한 벌일 때만** 이다.
+     *
+     *   전에는 담을 때마다 그 SLOT 을 고정했다. 그러면 변형본을 하나 더
+     *   만들 때마다 PID 가 바뀌어 연결이 끊긴다 — 여러 번 고쳐 담는 동안
+     *   계속 끊기는 게 이상했다.
+     *
+     *   쓰던 것이 이미 있으면 그대로 두고, 바꾸고 싶을 때 [적용] 을 누른다.
+     *   무엇이 적용 중인지는 트리의 녹색 등이 말해 준다.
+     */
+    if (activeSlot < 0) {
+      try {
+        const rs = await sendReport(CMD_SEL_SET, [slot], 5000);
+        if (rs[2] === 0) reenum = reenum || (rs[3] === 1);
+      } catch { /* 구형 펌웨어 */ }
+    }
 
     editSlot = slot;
 
@@ -883,11 +897,34 @@ async function saveSlot(slot) {
         vid: hostVid, pid: hostPid, len: blob.length,
       };
     }
-    afterSlotWrite(`SLOT ${slot} 에 담았다 (${blob.length} B).`);
+    finishSlotOp(`SLOT ${slot} 에 담았다 (${blob.length} B).`
+                 + (activeSlot >= 0 && activeSlot !== slot ? ' 쓰려면 [적용] 을 누른다.' : ''),
+                 reenum);
   } catch (e) {
     busy = false;
     log('담기 실패 — ' + e.message);
   }
+}
+
+/*
+ * 슬롯을 건드린 뒤 뒷정리.
+ *
+ * ★ 끊길지 말지는 보드가 알려 준다 (link_cmd.h 의 [3]).
+ *
+ *   PID 가 안 바뀌면 재열거도 없다. 그때까지 연결을 놓아 버리면 같은 SLOT 을
+ *   여러 번 고쳐 담는 동안 매번 끊긴다. 규칙을 여기 한 벌 더 적으면 반드시
+ *   보드 쪽과 갈라지므로 응답을 그대로 믿는다.
+ */
+async function finishSlotOp(msg, reenum) {
+  if (reenum) { afterSlotWrite(msg); return; }
+
+  try {
+    const info = await send(CMD_INFO);
+    await loadSlots(info[2] >= 3 ? info[28] : 0xFF, info[2] >= 3 ? info[31] : 0xFF);
+  } catch { refreshUi(); }
+
+  busy = false;
+  log(msg);
 }
 
 // 빈 SLOT 자리를 잡는다. 아직 플래시는 안 건드린다 — 담을 때 쓴다.
@@ -954,7 +991,8 @@ async function applySlot(slot) {
     if (r[2] !== 0) throw new Error('결과 ' + r[2]);
 
     if (slot !== SEL_AUTO) { activeSlot = slot; selSlot = slot; }
-    afterSlotWrite(slot === SEL_AUTO ? '자동으로 되돌렸다.' : `SLOT ${slot} 을 적용했다.`);
+    finishSlotOp(slot === SEL_AUTO ? '자동으로 되돌렸다.' : `SLOT ${slot} 을 적용했다.`,
+                 r[3] === 1);
   } catch (e) {
     busy = false;
     log('적용 실패 — ' + e.message);
@@ -973,7 +1011,7 @@ async function eraseSlot(slot) {
 
     if (editSlot === slot) editSlot = -1;
     if (slots && slots[slot]) slots[slot] = { used: false, name: '', vid: 0, pid: 0, len: 0 };
-    afterSlotWrite(`SLOT ${slot} 을 지웠다.`);
+    finishSlotOp(`SLOT ${slot} 을 지웠다.`, r[3] === 1);
   } catch (e) {
     busy = false;
     log('지우기 실패 — ' + e.message);

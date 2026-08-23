@@ -7,6 +7,25 @@
 #include <string.h>
 
 
+/*
+ * 이 명령 때문에 PC 쪽이 다시 열거될 것인가.
+ *
+ * ★ 응답을 보내는 지금은 아직 안 끊겼다. ap.c 의 updateProductId() 가
+ *   cliLoopIdle() 끝에서 보고 결정한다. 그 판단을 여기서 미리 해 준다 —
+ *   고른 SLOT 은 이미 바뀐 뒤고, 보고 중인 PID 는 아직 옛 값이다.
+ */
+static uint8_t willReenum(void)
+{
+#ifdef _USE_HW_USB
+  int      slot = kbdStoreGetActive();
+  uint16_t want = (slot >= 0) ? (uint16_t)(LINK_PID_BASE + slot) : (uint16_t)HW_USB_PID;
+
+  return (want != usbGetProductId()) ? 1 : 0;
+#else
+  return 0;
+#endif
+}
+
 bool linkCmdHandle(uint8_t *p_data, uint8_t length, bool vial_locked)
 {
   if (length < 2) return false;
@@ -182,6 +201,7 @@ bool linkCmdHandle(uint8_t *p_data, uint8_t length, bool vial_locked)
 
       memset(&p_data[2], 0, length - 2);
       p_data[2] = ok ? LINK_RC_OK : LINK_RC_FAIL;
+      p_data[3] = willReenum();
       break;
     }
 
@@ -193,6 +213,7 @@ bool linkCmdHandle(uint8_t *p_data, uint8_t length, bool vial_locked)
 
       memset(&p_data[2], 0, length - 2);
       p_data[2] = ok ? LINK_RC_OK : LINK_RC_FAIL;
+      p_data[3] = willReenum();
       break;
     }
 
@@ -241,6 +262,7 @@ bool linkCmdHandle(uint8_t *p_data, uint8_t length, bool vial_locked)
 
       memset(&p_data[2], 0, length - 2);
       p_data[2] = ok ? LINK_RC_OK : LINK_RC_FAIL;
+      p_data[3] = willReenum();
       break;
     }
 

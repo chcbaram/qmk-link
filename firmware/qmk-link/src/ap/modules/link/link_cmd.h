@@ -54,9 +54,17 @@
 //                      rsp [2]결과 [3]길이 [4..31]데이터(최대 28B)
 //     0x04 SLOT_BEGIN  req [2]슬롯 [3..4]vid [5..6]pid [7..8]길이 [9..31]이름(23B)
 //     0x05 SLOT_DATA   req [2..3]오프셋 [4..31]데이터(28B)
-//     0x06 SLOT_COMMIT req [2]슬롯
-//     0x07 SLOT_ERASE  req [2]슬롯
+//     0x06 SLOT_COMMIT req [2]슬롯   rsp [3]재열거 예정(1/0)  ← 버전 6
+//     0x07 SLOT_ERASE  req [2]슬롯   rsp [3]재열거 예정(1/0)  ← 버전 6
+//
+//   ★ [3] 이 왜 필요한가 — 끊길지 말지는 **보드만 안다.**
+//
+//     PID 는 "지금 고른 SLOT" 에서 나온다. 담아도 고른 SLOT 이 그대로면
+//     PID 도 그대로고 재열거도 없다. 그런데 웹이 그걸 모르면 담을 때마다
+//     연결을 놓아야 해서, 같은 SLOT 을 여러 번 고쳐 담는 동안 계속 끊긴다.
+//     규칙을 웹에 한 벌 더 적으면 반드시 갈라지므로 보드가 알려 준다.
 //     0x08 SEL_SET     req [2]슬롯 (0xFF = 자동)   ← 버전 3
+//                      rsp [3]재열거 예정(1/0)      ← 버전 6
 //                      지금 꽂힌 키보드가 쓸 SLOT 을 고정한다. 바로 반영된다
 //     0x0A BOARD_INFO  rsp [2]결과 [3]명령버전 [4..31] 펌웨어 버전  ← 버전 5
 //
@@ -104,7 +112,7 @@
 #define LINK_RC_FAIL          1
 #define LINK_RC_RANGE         2
 
-#define LINK_CMD_VERSION      5
+#define LINK_CMD_VERSION      6
 
 #define LINK_TREE_VIA         0
 #define LINK_TREE_VIAL        1
