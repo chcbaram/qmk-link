@@ -86,7 +86,7 @@ export const PRESETS = [
      "w": 1.75
     },
     "RSFT",
-    ""
+    "FN"
    ],
    [
     {
@@ -143,11 +143,223 @@ export const PRESETS = [
   ]
  },
  {
+  "name": "F1-40 Ortho (48)",
+  "keys": 48,
+  "layout": [
+   [
+    "TAB",
+    "Q",
+    "W",
+    "E",
+    "R",
+    "T",
+    "Y",
+    "U",
+    "I",
+    "O",
+    "P",
+    "BSPC"
+   ],
+   [
+    "ESC",
+    "A",
+    "S",
+    "D",
+    "F",
+    "G",
+    "H",
+    "J",
+    "K",
+    "L",
+    "SCLN",
+    "QUOT"
+   ],
+   [
+    "LSFT",
+    "Z",
+    "X",
+    "C",
+    "V",
+    "B",
+    "N",
+    "M",
+    "COMM",
+    "DOT",
+    "SLSH",
+    "ENT"
+   ],
+   [
+    "GRV",
+    "LCTL",
+    "LALT",
+    "LGUI",
+    "FN",
+    "SPC",
+    "SPC",
+    "FN",
+    "LEFT",
+    "DOWN",
+    "UP",
+    "RGHT"
+   ]
+  ]
+ },
+ {
+  "name": "F1-40 Staggered (42)",
+  "keys": 42,
+  "layout": [
+   [
+    "ESC",
+    "Q",
+    "W",
+    "E",
+    "R",
+    "T",
+    "Y",
+    "U",
+    "I",
+    "O",
+    "P",
+    "BSPC"
+   ],
+   [
+    {
+     "w": 1.25
+    },
+    "TAB",
+    "A",
+    "S",
+    "D",
+    "F",
+    "G",
+    "H",
+    "J",
+    "K",
+    "L",
+    {
+     "w": 1.75
+    },
+    "ENT"
+   ],
+   [
+    {
+     "w": 1.75
+    },
+    "LSFT",
+    "Z",
+    "X",
+    "C",
+    "V",
+    "B",
+    "N",
+    "M",
+    "COMM",
+    "RSFT",
+    {
+     "w": 1.25
+    },
+    "FN"
+   ],
+   [
+    {
+     "w": 1.25
+    },
+    "LCTL",
+    "LGUI",
+    {
+     "w": 1.25
+    },
+    "LALT",
+    {
+     "w": 2.25
+    },
+    "SPC",
+    {
+     "w": 2.75
+    },
+    "SPC",
+    {
+     "w": 1.25
+    },
+    "RALT",
+    "RGUI",
+    {
+     "w": 1.25
+    },
+    "RCTL"
+   ]
+  ]
+ },
+ {
+  "name": "40% ortho MIT (47)",
+  "keys": 47,
+  "layout": [
+   [
+    "ESC",
+    "Q",
+    "W",
+    "E",
+    "R",
+    "T",
+    "Y",
+    "U",
+    "I",
+    "O",
+    "P",
+    "BSPC"
+   ],
+   [
+    "TAB",
+    "A",
+    "S",
+    "D",
+    "F",
+    "G",
+    "H",
+    "J",
+    "K",
+    "L",
+    "SCLN",
+    "ENT"
+   ],
+   [
+    "LSFT",
+    "Z",
+    "X",
+    "C",
+    "V",
+    "B",
+    "N",
+    "M",
+    "COMM",
+    "DOT",
+    "UP",
+    "SLSH"
+   ],
+   [
+    "LCTL",
+    "FN",
+    "LALT",
+    "DEL",
+    "PGDN",
+    {
+     "w": 2
+    },
+    "SPC",
+    "PGUP",
+    "FN",
+    "LEFT",
+    "DOWN",
+    "RGHT"
+   ]
+  ]
+ },
+ {
   "name": "60% ANSI (61)",
   "keys": 61,
   "layout": [
    [
-    "GRV",
+    "ESC",
     "1",
     "2",
     "3",
@@ -256,7 +468,7 @@ export const PRESETS = [
     {
      "w": 1.25
     },
-    "",
+    "FN",
     {
      "w": 1.25
     },
@@ -305,13 +517,13 @@ export const PRESETS = [
     {
      "w": 1.5
     },
-    "DEL"
+    "BSPC"
    ],
    [
     {
      "w": 1.75
     },
-    "LCTL",
+    "CAPS",
     "A",
     "S",
     "D",
@@ -346,14 +558,14 @@ export const PRESETS = [
     {
      "w": 1.75
     },
-    "LSFT",
-    ""
+    "RSFT",
+    "FN"
    ],
    [
     {
      "x": 1.5
     },
-    "RGUI",
+    "LGUI",
     {
      "w": 1.5
     },
@@ -365,8 +577,8 @@ export const PRESETS = [
     {
      "w": 1.5
     },
-    "LALT",
-    "LGUI"
+    "RALT",
+    "RGUI"
    ]
   ]
  },
@@ -392,7 +604,7 @@ export const PRESETS = [
      "w": 2
     },
     "BSPC",
-    "GRV"
+    "HOME"
    ],
    [
     {
@@ -415,7 +627,7 @@ export const PRESETS = [
      "w": 1.5
     },
     "BSLS",
-    "DEL"
+    "END"
    ],
    [
     {
@@ -479,7 +691,7 @@ export const PRESETS = [
     },
     "SPC",
     "RALT",
-    "",
+    "FN",
     "RCTL",
     "LEFT",
     "DOWN",
@@ -648,7 +860,7 @@ export const PRESETS = [
     },
     "SPC",
     "RALT",
-    "",
+    "FN",
     "RCTL"
    ],
    [
@@ -700,7 +912,7 @@ export const PRESETS = [
    ],
    [
     {
-     "y": 0.5
+     "y": 0.25
     },
     "GRV",
     "1",
@@ -827,7 +1039,7 @@ export const PRESETS = [
     {
      "w": 1.25
     },
-    "",
+    "FN",
     {
      "w": 1.25
     },
@@ -877,7 +1089,7 @@ export const PRESETS = [
    ],
    [
     {
-     "y": 0.25
+     "y": 0.5
     },
     "GRV",
     "1",
@@ -1037,7 +1249,7 @@ export const PRESETS = [
     {
      "w": 1.25
     },
-    "",
+    "APP",
     {
      "w": 1.25
     },

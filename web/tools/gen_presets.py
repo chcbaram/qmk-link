@@ -69,9 +69,26 @@ KC = _kc_map()
 
 
 def norm(tok):
-    """KC_xxx -> 이름. MO(1) · QK_BOOT 같은 것은 이름이 없다 (빈 칸으로 둔다)."""
+    """
+    KC_xxx -> 이름.
+
+    ★ 40% 처럼 레이어 키가 많은 배열은 그냥 두면 범례가 거의 다 빈다.
+      범례는 "이 자리의 키를 누르라" 는 힌트일 뿐이고 좌표에 영향이 없으므로,
+      감싸인 것 안쪽의 KC_ 를 꺼내 쓴다 — LT(1,KC_SPC) -> SPC.
+      레이어 전환만 하는 것(MO/TG/TT/DF/OSL)은 FN 으로 적는다.
+    """
     m = re.match(r"^\s*KC_([A-Z0-9_]+)\s*$", tok)
-    return KC.get(m.group(1)) if m else None
+    if m:
+        return KC.get(m.group(1))
+
+    inner = re.findall(r"KC_([A-Z0-9_]+)", tok)
+    for name in reversed(inner):                 # LT(1,KC_SPC) 는 뒤쪽이 실제 키다
+        if name in KC:
+            return KC[name]
+
+    if re.search(r"\b(MO|TG|TT|DF|OSL|LM|LT)\s*\(", tok):
+        return "FN"
+    return None
 
 
 def keymap_tokens(path, macro="LAYOUT"):
@@ -156,14 +173,46 @@ def build(label, layout_path, macro, keymap_path):
             "layout": to_kle(L, [norm(t) for t in toks])}
 
 
-def find_pairs(names):
+def has_gap(layout):
+    """
+    한 행에서 앞 키의 오른쪽 끝과 다음 키의 왼쪽이 안 붙어 있으면 구멍이다.
+
+    ★ 왜 보나 — 폭(w)이 빠진 정의가 흔하다.
+
+      contra 의 LAYOUT_planck_mit 은 2U 스페이스를 **w 없이** 적어 두고 다음
+      키를 한 칸 건너뛴 자리에 놓는다. 그대로 쓰면 마법사 화면에서 스페이스가
+      1U 로 그려지고 그 옆에 빈 구멍이 생긴다. baram F1-40 / 45K 의 info.json 도
+      같다 — 그쪽은 아예 매트릭스 표라 45키로 나온다.
+
+      다만 TKL · 65% · 풀사이즈는 클러스터 사이가 실제로 떨어져 있다.
+      그래서 이 검사는 **붙어 있어야 하는 배열(ortho)** 에만 건다.
+    """
+    rows = {}
+    for k in layout:
+        rows.setdefault(k["y"], []).append(k)
+
+    for ks in rows.values():
+        ks.sort(key=lambda a: a["x"])
+        for a, b in zip(ks, ks[1:]):
+            if round(b["x"] - (a["x"] + a.get("w", 1)), 3) > 0.001:
+                return True
+    return False
+
+
+def find_pairs(names, ortho):
     """
     커뮤니티 레이아웃 이름마다 (좌표, 키맵) 짝을 찾는다.
 
     조건 셋을 다 만족해야 한다 — 매크로 이름이 같고, 기본 키맵이 그 매크로를
     부르고, 토큰 수가 자리 수와 같다. 하나라도 어긋나면 범례가 밀린다.
+    ortho 에 든 이름은 구멍까지 없어야 한다 (has_gap 주석 참고).
+
+    ★ 조건을 통과한 것이 여럿이면 **범례가 가장 많이 채워지는 것**을 고른다.
+      범례는 좌표에 영향이 없는 힌트일 뿐이지만, 마법사가 "이 자리의 키를
+      누르라" 고 가리킬 때 이름이 있는 편이 훨씬 낫다. 이름이 없으면 빈 칸이다.
+      같은 점수면 경로 순으로 — 돌릴 때마다 결과가 바뀌면 안 된다.
     """
-    found = {}
+    best = {}
 
     for kb in (QMK / "keyboards").rglob("*.json"):
         if kb.name not in ("keyboard.json", "info.json"):
@@ -174,7 +223,7 @@ def find_pairs(names):
             continue
 
         for name in (d.get("community_layouts") or []):
-            if name not in names or name in found:
+            if name not in names:
                 continue
 
             macro = "LAYOUT_" + name
@@ -189,14 +238,20 @@ def find_pairs(names):
                 continue
             if len(toks) != len(lay["layout"]):      # ★ 이 검사가 밀림을 막는다
                 continue
+            if name in ortho and has_gap(lay["layout"]):
+                continue                             # 폭이 빠진 정의다. 다음 것을 본다
 
-            found[name] = (kb.relative_to(QMK), macro, km.relative_to(QMK))
+            blank = sum(1 for t in toks if norm(t) is None)
+            key   = (blank, str(kb))
+            if name not in best or key < best[name][0]:
+                best[name] = (key, (kb.relative_to(QMK), macro, km.relative_to(QMK)))
 
-    return found
+    return {k: v[1] for k, v in best.items()}
 
 
 # (표시 이름, 커뮤니티 레이아웃 이름)
 COMMUNITY = [
+    ("40% ortho MIT", "planck_mit"),     # 12/12/12 + 2U 스페이스
     ("60% ANSI",      "60_ansi"),
     ("60% HHKB",      "60_hhkb"),
     ("65% ANSI",      "65_ansi"),
@@ -205,11 +260,32 @@ COMMUNITY = [
     ("풀사이즈 ANSI", "fullsize_ansi"),
 ]
 
+# 붙어 있어야 하는 배열 — 구멍이 있으면 그 정의를 버린다 (has_gap 주석 참고)
+ORTHO = {"planck_mit"}
+
 # 커뮤니티 레이아웃이 아닌 것 — 키보드 자기 정의를 그대로 쓴다
+#
+# ★ baram F1-40 은 vial-qmk 안에 정식으로 들어가 있다. 그쪽 정의는 폭까지
+#   제대로 적혀 있어서 그대로 쓴다 (구멍 없음을 확인했다).
+#
+# ★ BARAM 45K / WISH45-LP 는 뺐다.
+#
+#   그쪽 keyboard.json 은 아랫줄이 x=0,1,2,5,8,9,10,11 로 **폭(w)이 빠진**
+#   매트릭스 표다. 그대로 그리면 스페이스가 1U 로 나오고 옆이 뻥 뚫린다.
+#   폭을 추측해 채울 수도 있지만(다음 키까지 늘리기), 윗줄이 13U 인데 그렇게
+#   늘리면 12U 가 되어 어느 쪽이 맞는지 알 수 없다.
+#   **모양을 틀리게 그리느니 넣지 않는다** — 이 파일이 존재하는 이유다.
+#   upstream 의 keyboard.json 에 w 를 채우면 바로 넣을 수 있다.
 OWN = [
     ("HHKB Lite 2",
      "keyboards/hhkb_lite_2/keyboard.json", "LAYOUT",
      "keyboards/hhkb_lite_2/keymaps/default/keymap.c"),
+    ("F1-40 Ortho",
+     "keyboards/baram/geon/f1_40/ortho/keyboard.json", "LAYOUT_ortho_4x12",
+     "keyboards/baram/geon/f1_40/ortho/keymaps/default/keymap.c"),
+    ("F1-40 Staggered",
+     "keyboards/baram/geon/f1_40/staggered/keyboard.json", "LAYOUT_all",
+     "keyboards/baram/geon/f1_40/staggered/keymaps/default/keymap.c"),
 ]
 
 
@@ -219,7 +295,7 @@ def main():
     for label, path, macro, km in OWN:
         out.append(build(label, path, macro, km))
 
-    pairs = find_pairs({n for _, n in COMMUNITY})
+    pairs = find_pairs({n for _, n in COMMUNITY}, ORTHO)
     for label, name in COMMUNITY:
         if name not in pairs:
             print("// 짝을 못 찾음 : %s" % name, file=sys.stderr)
