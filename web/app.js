@@ -512,7 +512,20 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 //   우리가 내보낸 layout-via.json / layout-vial.json 이나 보드에 담긴 정의를
 //   다시 열 때가 그렇다. 이걸 안 하면 배열을 조금 고치려 해도 전부 다시
 //   눌러야 했다. 좌표가 곧 usage 라 되살리는 데 표가 필요 없다.
+//
+// ★ 단, **우리 정의일 때만**이다.
+//
+//   남의 VIA 정의도 범례가 "행,열" 인데 그건 **그 키보드의 매트릭스 좌표**다.
+//   BARAM 45K 의 VIA json 은 "3,6" 이 스페이스인데, 그대로 믿으면 usage 0x36
+//   (마침표) 으로 읽는다. 배열을 넣자마자 엉뚱한 키를 다 배운 상태가 된다.
+//
+//   우리 것은 16x16 이다 — 좌표가 곧 usage 라서 그 크기일 수밖에 없다.
+//   그래서 파일을 열 때 matrix 를 보고 이 스위치를 켠다.
+let trustCoords = true;
+
 function decodeLegend(label) {
+  if (!trustCoords) return { label, usage: null };
+
   const m = /^(\d{1,2}),(\d{1,2})$/.exec(label.trim());
   if (!m) return { label, usage: null };
 
@@ -563,6 +576,7 @@ function fillPresets() {
   sel.onchange = () => {
     const p = PRESETS[Number(sel.value)];
     if (!p) return;
+    trustCoords = true;                 // 프리셋 범례는 키 이름이다 (좌표가 아니다)
     $('kle').value = JSON.stringify(p.layout, null, 0).slice(1, -1).replace(/\],\[/g, '],\n[');
     loadKle();
     // 이름 칸도 채운다 — 내려받는 파일명이 키보드마다 구별된다
@@ -579,10 +593,16 @@ $('file') && ($('file').onchange = async (e) => {
   const text = await f.text();
   // KLE raw · 우리 layout-kle.json · VIA/Vial 정의 셋 다 받는다
   let body = text;
+  trustCoords = true;
   try {
     const j = JSON.parse(text);
     if (j.layout) body = JSON.stringify(j.layout);                       // layout-kle.json
-    else if (j.layouts && j.layouts.keymap) body = JSON.stringify(j.layouts.keymap);  // via / vial
+    else if (j.layouts && j.layouts.keymap) {                            // via / vial
+      body = JSON.stringify(j.layouts.keymap);
+      // ★ 우리 정의만 좌표를 usage 로 믿는다 (decodeLegend 주석 참고)
+      trustCoords = !!(j.matrix && j.matrix.rows === 16 && j.matrix.cols === 16);
+      if (!trustCoords && j.name) $('name').value = j.name;
+    }
   } catch { /* KLE raw 는 그대로 둔다 */ }
   $('kle').value = body;
   loadKle();
@@ -812,6 +832,7 @@ async function loadSlotForEdit(slot) {
     const def = JSON.parse(new TextDecoder().decode(xzRead(buf)));
     if (!def.layouts || !def.layouts.keymap) throw new Error('배열이 없는 정의다');
 
+    trustCoords = true;                   // 보드에 담긴 것은 우리 정의다
     $('name').value = def.name || '';
     $('kle').value  = JSON.stringify(def.layouts.keymap);
     keys = parseKle($('kle').value);

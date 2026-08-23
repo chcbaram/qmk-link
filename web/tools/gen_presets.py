@@ -39,6 +39,10 @@ import sys
 QMK = pathlib.Path(sys.argv[1] if len(sys.argv) > 1
                    else pathlib.Path.home() / "hdd/git/vial-qmk")
 
+# baram 자체 키보드 중 QMK 트리에 없는 것 (VIA 정의 + 행렬형 키맵).
+# 없으면 그 프리셋만 건너뛴다 — 이 저장소 밖이라 없을 수 있다.
+BARAM = pathlib.Path.home() / "hdd/git/baram-qmk-8k/src/ap/modules/qmk/keyboards/baram"
+
 
 # ── QMK 키코드 -> 마법사가 쓰는 이름 (gen_keymap.py 의 표와 같은 이름) ──
 def _kc_map():
@@ -199,6 +203,87 @@ def has_gap(layout):
     return False
 
 
+def matrix_keymap(path):
+    """
+    행렬형 키맵을 [행][열] 로 읽는다.
+
+    baram 쪽 키보드는 LAYOUT(...) 이 아니라
+        [0] = { {KC_A, ...}, {KC_B, ...} }
+    로 적혀 있다. VIA 정의의 범례가 "행,열" 이므로 이 표로 이름을 찾는다.
+    """
+    s = re.sub(r"/\*.*?\*/", "", path.read_text(), flags=re.S)
+    s = re.sub(r"//[^\n]*", "", s)
+
+    m = re.search(r"\[\s*0\s*\]\s*=\s*\{", s)
+    if not m:
+        raise ValueError("[0] = { 를 못 찾았다: %s" % path)
+
+    i, depth = m.end() - 1, 0
+    for j in range(i, len(s)):
+        if s[j] == "{":
+            depth += 1
+        elif s[j] == "}":
+            depth -= 1
+            if depth == 0:
+                break
+
+    rows = []
+    for row in re.findall(r"\{([^{}]*)\}", s[i + 1:j]):
+        out, d, cur = [], 0, ""
+        for ch in row:
+            if ch == "(":
+                d += 1
+            elif ch == ")":
+                d -= 1
+            if ch == "," and d == 0:
+                out.append(cur)
+                cur = ""
+            else:
+                cur += ch
+        if cur.strip():
+            out.append(cur)
+        rows.append(out)
+    return rows
+
+
+def build_via(label, via_json, keymap_c):
+    """
+    VIA 정의(KLE 그대로) + 행렬형 키맵으로 프리셋을 만든다.
+
+    ★ VIA 정의의 범례는 **그 키보드의 매트릭스 좌표**다. 키 이름이 아니다.
+      그대로 두면 마법사가 "0,0" 을 usage 0x00 으로 읽어 이미 배운 것처럼
+      보인다. 키맵을 통해 이름으로 바꾼다.
+
+    ★ 색(c) 같은 꾸밈은 버린다. 마법사는 x/y/w/h 만 본다.
+    """
+    d = json.loads(via_json.read_text())
+    km = matrix_keymap(keymap_c)
+
+    rows, n = [], 0
+    for row in d["layouts"]["keymap"]:
+        cur = []
+        for it in row:
+            if isinstance(it, dict):
+                keep = {k: v for k, v in it.items() if k in ("x", "y", "w", "h")}
+                if keep:
+                    cur.append(keep)
+                continue
+
+            m = re.match(r"^(\d+),(\d+)$", str(it).strip())
+            if not m:
+                raise ValueError("%s : 범례가 좌표가 아니다 — %r" % (label, it))
+
+            r, c = int(m.group(1)), int(m.group(2))
+            if r >= len(km) or c >= len(km[r]):
+                raise ValueError("%s : 키맵에 [%d][%d] 이 없다" % (label, r, c))
+
+            cur.append(norm(km[r][c]) or "")
+            n += 1
+        rows.append(cur)
+
+    return {"name": "%s (%d)" % (label, n), "keys": n, "layout": rows}
+
+
 def find_pairs(names, ortho):
     """
     커뮤니티 레이아웃 이름마다 (좌표, 키맵) 짝을 찾는다.
@@ -268,24 +353,25 @@ ORTHO = {"planck_mit"}
 # ★ baram F1-40 은 vial-qmk 안에 정식으로 들어가 있다. 그쪽 정의는 폭까지
 #   제대로 적혀 있어서 그대로 쓴다 (구멍 없음을 확인했다).
 #
-# ★ BARAM 45K / WISH45-LP 는 뺐다.
-#
-#   그쪽 keyboard.json 은 아랫줄이 x=0,1,2,5,8,9,10,11 로 **폭(w)이 빠진**
-#   매트릭스 표다. 그대로 그리면 스페이스가 1U 로 나오고 옆이 뻥 뚫린다.
-#   폭을 추측해 채울 수도 있지만(다음 키까지 늘리기), 윗줄이 13U 인데 그렇게
-#   늘리면 12U 가 되어 어느 쪽이 맞는지 알 수 없다.
-#   **모양을 틀리게 그리느니 넣지 않는다** — 이 파일이 존재하는 이유다.
-#   upstream 의 keyboard.json 에 w 를 채우면 바로 넣을 수 있다.
 OWN = [
     ("HHKB Lite 2",
      "keyboards/hhkb_lite_2/keyboard.json", "LAYOUT",
      "keyboards/hhkb_lite_2/keymaps/default/keymap.c"),
-    ("F1-40 Ortho",
-     "keyboards/baram/geon/f1_40/ortho/keyboard.json", "LAYOUT_ortho_4x12",
-     "keyboards/baram/geon/f1_40/ortho/keymaps/default/keymap.c"),
-    ("F1-40 Staggered",
+    ("F1-40 722",
      "keyboards/baram/geon/f1_40/staggered/keyboard.json", "LAYOUT_all",
      "keyboards/baram/geon/f1_40/staggered/keymaps/default/keymap.c"),
+]
+
+
+# VIA 정의를 그대로 쓰는 것 — QMK 트리 밖의 baram 키보드다.
+#
+# ★ keyboard.json 이 아니라 json/*.JSON (VIA 정의) 을 쓴다.
+#
+#   그쪽 keyboard.json 은 폭(w)이 빠진 매트릭스 표라 아랫줄에 구멍이 뚫린다.
+#   VIA 정의에는 폭이 제대로 적혀 있다 — 실제로 VIA 가 그걸로 그리기 때문이다.
+#   범례가 좌표라서 행렬형 키맵으로 이름을 찾는다 (build_via 주석 참고).
+VIA_OWN = [
+    ("BARAM 45K", BARAM / "45k/json/BARAM-45K-HS-VIA..JSON", BARAM / "45k/keymap.c"),
 ]
 
 
@@ -294,6 +380,13 @@ def main():
 
     for label, path, macro, km in OWN:
         out.append(build(label, path, macro, km))
+
+    for label, via, km in VIA_OWN:
+        if not via.exists() or not km.exists():
+            print("// 건너뜀 (경로 없음) : %s" % label, file=sys.stderr)
+            continue
+        out.append(build_via(label, via, km))
+        print("//   %-14s <- %s" % (label, via), file=sys.stderr)
 
     pairs = find_pairs({n for _, n in COMMUNITY}, ORTHO)
     for label, name in COMMUNITY:

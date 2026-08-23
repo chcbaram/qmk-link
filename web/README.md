@@ -57,7 +57,7 @@ Received invalid protocol version from device
 1. **[보드 연결]** — USB-A 쪽에도 배우려는 키보드를 꽂아 둔다
 2. ② 에 그 키보드가 `담긴 것이 없다` 로 뜬다
 3. 배열을 넣는다 — **프리셋** / **KLE json 파일 열기** / KLE **Raw data** 붙여넣기
-   - 프리셋: HHKB Lite 2 · F1-40 Ortho/Staggered · 40% ortho MIT · 60% ANSI/HHKB · 65% · 75% · TKL · 풀사이즈
+   - 프리셋: HHKB Lite 2 · F1-40 722 · BARAM 45K · 40% ortho MIT · 60% ANSI/HHKB · 65% · 75% · TKL · 풀사이즈
 4. **[배열 읽기]** → **[마법사 시작]** → 강조된 자리의 키를 누른다
 5. 못 누르는 키는 자리를 클릭하고 이름으로 직접 넣는다
 6. **[보드에 담기]** — 빈 SLOT 에 담고 그 SLOT 을 고정한다
@@ -171,14 +171,20 @@ ortho 배열은 키가 **붙어 있어야 한다**. 그런데 2U 스페이스를
 
 ### 40% 는 어디서 왔나
 
-`F1-40 Ortho` · `F1-40 Staggered` 는 vial-qmk 안의
-`keyboards/baram/geon/f1_40/` 정의를 그대로 쓴다. 폭까지 제대로 적혀 있다.
+| | 출처 |
+|---|---|
+| `F1-40 722` | vial-qmk 의 `keyboards/baram/geon/f1_40/staggered` |
+| `BARAM 45K` | `baram-qmk-8k` 의 **VIA 정의** `.../baram/45k/json/*.JSON` |
 
-**BARAM 45K / WISH45-LP 는 뺐다.** 그쪽 `keyboard.json` 은 아랫줄이
-`x=0,1,2,5,8,9,10,11` 로 폭이 빠진 매트릭스 표다. 폭을 추측해 채울 수도 있지만
-(다음 키까지 늘리기) 윗줄이 13U 인데 그렇게 늘리면 12U 가 되어 어느 쪽이 맞는지
-알 수 없다. **모양을 틀리게 그리느니 넣지 않는다.**
-upstream 의 `keyboard.json` 에 `w` 를 채우면 바로 들어간다.
+★ 45K 는 `keyboard.json` 이 아니라 **VIA 정의**를 쓴다. `keyboard.json` 은
+아랫줄이 `x=0,1,2,5,8,9,10,11` 로 **폭(w)이 빠진** 매트릭스 표라 스페이스가 1U 로
+나오고 옆이 뚫린다. VIA 정의에는 폭이 제대로 있다 — VIA 가 실제로 그걸로 그리기
+때문이다.
+
+★ 그 대신 **VIA 정의의 범례는 그 키보드의 매트릭스 좌표**(`"3,6"`)라 키 이름이
+아니다. 행렬형 `keymap.c` 를 읽어 이름으로 바꾼다 (`build_via()`).
+같은 이유로 마법사도 남의 VIA 정의를 열 때는 좌표를 usage 로 믿지 않는다 —
+`matrix` 가 16x16 일 때만 믿는다.
 
 ## 배포
 

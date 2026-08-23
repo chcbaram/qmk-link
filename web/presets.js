@@ -143,69 +143,7 @@ export const PRESETS = [
   ]
  },
  {
-  "name": "F1-40 Ortho (48)",
-  "keys": 48,
-  "layout": [
-   [
-    "TAB",
-    "Q",
-    "W",
-    "E",
-    "R",
-    "T",
-    "Y",
-    "U",
-    "I",
-    "O",
-    "P",
-    "BSPC"
-   ],
-   [
-    "ESC",
-    "A",
-    "S",
-    "D",
-    "F",
-    "G",
-    "H",
-    "J",
-    "K",
-    "L",
-    "SCLN",
-    "QUOT"
-   ],
-   [
-    "LSFT",
-    "Z",
-    "X",
-    "C",
-    "V",
-    "B",
-    "N",
-    "M",
-    "COMM",
-    "DOT",
-    "SLSH",
-    "ENT"
-   ],
-   [
-    "GRV",
-    "LCTL",
-    "LALT",
-    "LGUI",
-    "FN",
-    "SPC",
-    "SPC",
-    "FN",
-    "LEFT",
-    "DOWN",
-    "UP",
-    "RGHT"
-   ]
-  ]
- },
- {
-  "name": "F1-40 Staggered (42)",
+  "name": "F1-40 722 (42)",
   "keys": 42,
   "layout": [
    [
@@ -287,6 +225,92 @@ export const PRESETS = [
      "w": 1.25
     },
     "RCTL"
+   ]
+  ]
+ },
+ {
+  "name": "BARAM 45K (45)",
+  "keys": 45,
+  "layout": [
+   [
+    "ESC",
+    "Q",
+    "W",
+    "E",
+    "R",
+    "T",
+    "Y",
+    "U",
+    "I",
+    "O",
+    "P",
+    {
+     "w": 1.75
+    },
+    "BSPC"
+   ],
+   [
+    {
+     "w": 1.25
+    },
+    "TAB",
+    "A",
+    "S",
+    "D",
+    "F",
+    "G",
+    "H",
+    "J",
+    "K",
+    "L",
+    "SCLN",
+    {
+     "w": 1.5
+    },
+    "ENT"
+   ],
+   [
+    {
+     "w": 1.75
+    },
+    "FN",
+    "Z",
+    "X",
+    "C",
+    "V",
+    "B",
+    "N",
+    "M",
+    "COMM",
+    "DOT",
+    "UP",
+    "FN"
+   ],
+   [
+    {
+     "w": 1.25
+    },
+    "LCTL",
+    {
+     "w": 1.25
+    },
+    "LGUI",
+    {
+     "w": 1.25
+    },
+    "LALT",
+    {
+     "w": 2.25
+    },
+    "SPC",
+    {
+     "w": 2.75
+    },
+    "SPC",
+    "LEFT",
+    "",
+    "DOWN",
+    "RGHT"
    ]
   ]
  },
