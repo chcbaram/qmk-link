@@ -198,10 +198,10 @@ firmware/qmk-link/src/
 │   │   └── usbd_hid.c          tud_hid_* 콜백, 송신 헬퍼, usb_device_state 연결
 │   └── driver/usbh/            host : core1 태스크 + HID 큐
 └── ap/
-    ├── ap.c                    ★ updateKeyboard() / cliLoopIdle()
-    ├── led_status.c            LED 상태 표시
+    ├── ap.c                    ★ updateKeyboard() / cliLoopIdle() — 여기엔 진입점만 둔다
     └── modules/
-        ├── link/               HID usage -> 16x16 비트맵 (QMK 무관)
+        ├── led_status/         LED 상태 표시 (QMK 무관)
+        ├── link/               HID usage -> 16x16 비트맵 · 저장소 · 우리 raw HID 명령
         └── qmk/
             ├── qmk.c           QMK 기동 · 패스스루 · CLI (via·vial 공용)
             └── via/
@@ -229,9 +229,15 @@ python3 tools/gen_keymap.py --show   # 매핑 표 + KLE 에 빠진 usage
 python3 tools/gen_keymap.py --check  # 생성물이 최신인지만 확인
 ```
 
-**`ap/modules/` 아래는 프로젝트 glob 에서 제외**되어 있다 (`src/CMakeLists.txt` 의
-`list(FILTER ... EXCLUDE REGEX "/ap/modules/")`). 모듈의 CMakeLists 가 정한다.
-안 그러면 QMK 소스가 중복 컴파일되고 `-include quantum/led.h` 도 못 받는다.
+**`ap/` 에는 진입점만 둔다.** 자족적인 것은 `ap/modules/<이름>/` 로 뺀다.
+
+`ap/modules/` 중 **`qmk` 와 `link` 만** 프로젝트 glob 에서 제외된다
+(`src/CMakeLists.txt` 의 `EXCLUDE REGEX "/ap/modules/(qmk|link)/"`).
+그 둘은 QMK 모듈의 CMakeLists 가 정한다 — 안 그러면 중복 컴파일되고
+`-include quantum/led.h` 도 못 받는다.
+
+★ **QMK 와 무관한 모듈은 거기 얹지 않는다.** 얹으면 트리(via·vial)마다 목록을
+두 벌 관리하게 되고, 필요도 없는 컴파일 옵션이 따라붙는다. 그냥 glob 이 긁는다.
 
 ## ★ 계속 돌아야 하는 것은 `cliLoopIdle()` 에 넣는다
 

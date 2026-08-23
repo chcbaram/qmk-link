@@ -8,9 +8,15 @@ file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS
   hw/*.c
 )
 
-# ap/modules 아래(QMK · link)는 모듈의 CMakeLists 가 정한다.
-# 여기서 같이 긁으면 중복 컴파일되고, QMK 소스에만 주는 컴파일 옵션도 못 받는다.
-list(FILTER SRC_FILES EXCLUDE REGEX "/ap/modules/")
+# ★ qmk 와 link 만 뺀다.
+#
+#   그 둘은 QMK 모듈의 CMakeLists 가 정한다 — 여기서 같이 긁으면 중복
+#   컴파일되고, QMK 소스에만 주는 컴파일 옵션(-include quantum/led.h)도 못 받는다.
+#
+#   나머지 모듈(led_status …)은 QMK 와 무관하므로 여기서 그냥 긁는다.
+#   QMK 쪽에 얹으면 트리마다 목록을 두 벌 관리하게 되고, 필요도 없는
+#   컴파일 옵션까지 따라붙는다.
+list(FILTER SRC_FILES EXCLUDE REGEX "/ap/modules/(qmk|link)/")
 
 include(ap/modules/qmk/${KEY_PROTOCOL}/CMakeLists.txt)
 
@@ -34,6 +40,7 @@ target_include_directories(${PRJ_NAME} PUBLIC
   .
   ap
   ap/modules
+  ap/modules/led_status
   bsp
   common
   common/core
