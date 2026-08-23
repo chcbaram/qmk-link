@@ -200,7 +200,7 @@ firmware/qmk-link/src/
 └── ap/
     ├── ap.c                    ★ updateKeyboard() / cliLoopIdle() — 여기엔 진입점만 둔다
     └── modules/
-        ├── led_status/         LED 상태 표시 (QMK 무관)
+        ├── display/            사람에게 보여주는 것 — led_status.c (LED 상태 표시)
         ├── link/               HID usage -> 16x16 비트맵 · 저장소 · 우리 raw HID 명령
         └── qmk/
             ├── qmk.c           QMK 기동 · 패스스루 · CLI (via·vial 공용)

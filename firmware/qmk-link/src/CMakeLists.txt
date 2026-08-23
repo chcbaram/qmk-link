@@ -40,7 +40,7 @@ target_include_directories(${PRJ_NAME} PUBLIC
   .
   ap
   ap/modules
-  ap/modules/led_status
+  ap/modules/display
   bsp
   common
   common/core
