@@ -86,3 +86,17 @@ python3 tools/gen_presets.py > presets.js      # vial-qmk 경로가 필요하다
 - **토큰 수 == 자리 수**
 
 마지막 검사가 이 오류를 자동으로 잡는다.
+
+## 배포
+
+`web/` 을 `gh-pages` 브랜치 **루트**로 올린다.
+
+```bash
+git subtree push --prefix=web origin gh-pages
+```
+
+저장소 설정에서 한 번만 켜면 된다 —
+**Settings → Pages → Source: Deploy from a branch → `gh-pages` / `(root)`**
+
+그러면 <https://chcbaram.github.io/qmk-link/> 로 열린다.
+`file://` 로는 WebHID 가 안 되므로 이 경로가 있어야 남에게 줄 수 있다.
