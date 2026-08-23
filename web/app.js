@@ -667,6 +667,20 @@ function fillPresets() {
     sel.appendChild(o);
   });
   sel.onchange = () => {
+    /*
+     * ★ 첫 칸은 편집 중일 때 "원래 배열로" 가 된다.
+     *
+     *   SLOT 을 열어 놓고 프리셋을 이것저것 골라 보다가 첫 칸을 다시 고르면
+     *   되돌아갈 것처럼 보이는데, 예전에는 아무 일도 안 했다. 원래 것을
+     *   보려면 위로 올라가 [편집] 을 다시 눌러야 했다.
+     */
+    if (sel.value === '') {
+      if (editSlot >= 0 && slots && slots[editSlot] && slots[editSlot].used) {
+        loadSlotForEdit(editSlot);
+      }
+      return;
+    }
+
     const p = PRESETS[Number(sel.value)];
     if (!p) return;
     trustCoords = true;                 // 프리셋 범례는 키 이름이다 (좌표가 아니다)
@@ -1000,6 +1014,7 @@ async function loadSlotForEdit(slot) {
     if (!def.layouts || !def.layouts.keymap) throw new Error('배열이 없는 정의다');
 
     trustCoords = true;                   // 보드에 담긴 것은 우리 정의다
+    $('preset').value = '';               // 프리셋이 아니라 SLOT 을 보고 있다
     $('name').value = def.name || '';
     $('kle').value  = JSON.stringify(def.layouts.keymap);
     keys = parseKle($('kle').value);
@@ -1088,6 +1103,14 @@ async function afterSlotWrite(msg) {
 function refreshUi() {
   renderSlots();
   updateSaveNote();
+
+  // 첫 칸의 이름 — 되돌릴 것이 있을 때만 그렇게 말한다
+  {
+    const stored = (editSlot >= 0 && slots && slots[editSlot] && slots[editSlot].used);
+
+    $('preset').options[0].textContent =
+      stored ? `— SLOT ${editSlot} 의 원래 배열로 —` : '— 프리셋에서 고르기 —';
+  }
 
   const badge = $('editBadge');
   if (editSlot >= 0) {
