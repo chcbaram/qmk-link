@@ -108,7 +108,95 @@ arm-none-eabi-size -A build/src/qmk-link.elf                          # 크기
 VSCode 는 `firmware/qmk-link/prj/qmk-link.code-workspace` 를 연다.
 `build-build` 가 기본 빌드 태스크다.
 
+### QMK 원본 (05단계부터)
+
+```bash
+python3 firmware/firm-sdk/tools/fetch_upstream.py           # 받는다 (없으면 CMake 가 막는다)
+python3 firmware/firm-sdk/tools/fetch_upstream.py --check   # 리비전 확인
+python3 firmware/firm-sdk/tools/fetch_upstream.py --update  # 최신으로 upstream.json 갱신
+```
+
+### CLI 로 상태 보기 — 이번 이식에서 실제로 쓴 방법
+
+CDC 콘솔에 붙는 파이썬 조각. 터미널을 띄우는 것보다 자동화가 쉽다.
+**엔터는 반드시 `\r` 만 보낸다** (`\r\n` 은 keep-loop 명령을 즉시 중단시킨다).
+
+```python
+import serial, time, glob
+s = serial.Serial(sorted(glob.glob("/dev/cu.usbmodem14*"))[0], 115200, timeout=0.5)
+time.sleep(0.4); s.reset_input_buffer()
+s.write(b"qmk info\r"); time.sleep(1.5)
+print(s.read(32768).decode(errors="replace").replace("\r\n","\n"))
+```
+
+주요 명령:
+
+| 명령 | 용도 |
+|---|---|
+| `usbh info` | 호스트 상태 · 열거된 키보드 · `rx / drop` |
+| `usbh dump` | 올라온 HID 리포트를 그대로 찍는다 |
+| `usb info` | device 상태 · `hid ready` · `host led` |
+| `qmk start` | **QMK 기동. 부팅 때 자동으로 안 켜진다** |
+| `qmk info` | QMK 상태 · link 비트맵 · QMK 매트릭스 |
+| `log boot` | 부팅 로그 재생 (CDC 열거 전 로그가 여기 쌓인다) |
+| `reset boot` | BOOTSEL 로 재부팅 |
+
 ---
+
+## 소스 구조 (05단계 기준)
+
+```
+firmware/qmk-link/src/
+├── main.c                      hwInit -> apInit -> apMain
+├── bsp/
+│   ├── bsp.c                   ★ delay() 안에서 cliLoopIdle() 을 돌린다
+│   └── board/qmk_link.h        핀 상수는 전부 여기
+├── common/                     ★ 손대지 않는다 (원본과 바이트 단위 동일)
+├── hw/
+│   ├── hw_def.h                _USE_HW_* 기능 스위치
+│   ├── driver/usb/             device : descriptor · HID · CDC
+│   │   ├── usbd_desc.c         ★ 인터페이스 배치 + 리포트 디스크립터 (sizeof 때문에 한 파일)
+│   │   └── usbd_hid.c          tud_hid_* 콜백, 송신 헬퍼, usb_device_state 연결
+│   └── driver/usbh/            host : core1 태스크 + HID 큐
+└── ap/
+    ├── ap.c                    ★ updateKeyboard() / cliLoopIdle()
+    ├── led_status.c            LED 상태 표시
+    └── modules/
+        ├── link/               HID usage -> 16x16 비트맵 (QMK 무관)
+        └── qmk/
+            ├── qmk.c           QMK 기동 · CLI
+            └── via/
+                ├── CMakeLists.txt   ★ 어떤 upstream 파일을 넣을지 여기서 정한다
+                ├── config.h · keymap.c · version.h
+                └── port/             wish-he 판 (driver_usb · matrix · platforms)
+```
+
+**`ap/modules/` 아래는 프로젝트 glob 에서 제외**되어 있다 (`src/CMakeLists.txt` 의
+`list(FILTER ... EXCLUDE REGEX "/ap/modules/")`). 모듈의 CMakeLists 가 정한다.
+안 그러면 QMK 소스가 중복 컴파일되고 `-include quantum/led.h` 도 못 받는다.
+
+## ★ 계속 돌아야 하는 것은 `cliLoopIdle()` 에 넣는다
+
+이 프로젝트에서 **두 번 발목을 잡은 패턴**이라 따로 적는다.
+
+`bsp.c` 의 `delay()` 와 `cliKeepLoop()` 이 `cliLoopIdle()` 을 부른다.
+오래 도는 CLI 명령(`usbh dump`, `qmk matrix` …) 안에서는 `apMain()` 의 루프가
+**진행되지 않는다.** 그 동안에도 돌아야 하는 것은 전부 여기 있어야 한다.
+
+현재 내용 (`ap/ap.c`):
+
+```c
+void cliLoopIdle(void)
+{
+  usbUpdate();        // tud_task()  — 없으면 CDC 가 끊긴다
+  updateKeyboard();   // USB-A 리포트 소비 — 없으면 큐가 차서 버려진다
+  qmkUpdate();        // keyboard_task() — 없으면 키 처리가 멎는다
+}
+```
+
+실제로 겪은 증상:
+- `usbUpdate()` 만 있을 때 → `qmk matrix` 가 아무것도 못 보여줬다
+- 소비자가 아예 없을 때 → `rx / drop : 689 / 657` (95% 손실)
 
 ## 확정된 결정과 이유
 
@@ -175,12 +263,64 @@ VSCode 는 `firmware/qmk-link/prj/qmk-link.code-workspace` 를 연다.
 |---|---|---|
 | boot vs report protocol | 3단계 | report protocol 이 NKRO 를 살리지만 리포트 디스크립터 파싱이 필요하다 |
 | ~~VID / PID~~ ✅ | — | `info.json` / `vial.json` 과 반드시 일치해야 한다. 04단계에서 descriptor 가 바뀌므로 PID 를 한 번 올린다 |
+| **EEPROM 이 RAM 이다** | 6단계 | `port/platforms/eeprom.c` 가 RAM 백엔드다. 전원을 내리면 사라진다. **06단계 첫 항목** |
 | **EEPROM 쓰기 vs core1** | 6단계 | flash 를 쓰는 동안 XIP 가 멈추는데 core1 이 PIO USB 를 돌고 있다. `flash_safe_execute()` + `multicore_lockout_victim_init()` 로 core1 을 잠가야 한다. **06단계 착수 시 이것부터 실험한다** |
 | **hola-mini 포트 ↔ QMK 0.33.13 API 차이** | 5단계 | hola-mini 가 이식한 QMK 는 0.33.13 보다 한참 이전이다. `keycodes.h` 재편 · `keyboard.c` 스캔 흐름 · `eeconfig` 레이아웃 등에서 차이가 날 수 있다. 착수 시 **먼저 컴파일 가능 여부부터 확인**하고, 차이가 크면 QMK 리비전을 내릴지 포트를 올릴지 정한다 |
 | ~~sparse-checkout 범위~~ ✅ | — | `quantum/` 만으로 부족하면 `sparse-checkout set` 에 경로를 추가한다. `keyboards/` 만 빠지면 크기는 여전히 작다 |
 | Windows / Linux 에서 `flash.py` | 해당 OS 실기가 있을 때 | macOS 에서만 검증했다. `setup-windows.md` · `setup-linux.md` 도 미검증이다 |
 
 ---
+
+## 06단계 착수 — 이 순서로 한다
+
+**첫 항목이 가장 위험하다. 그것부터 실험하고 나머지를 정한다.**
+
+### 1. EEPROM 을 flash 로 (★ 여기서 막히면 06단계 전체가 막힌다)
+
+지금 `qmk/via/port/platforms/eeprom.c` 는 **RAM 백엔드**다. 전원을 내리면 사라진다.
+
+문제는 **flash 를 쓰는 동안 XIP 가 멈추는데 core1 이 PIO USB 를 돌고 있다**는 것이다.
+core1 이 그 사이 flash 코드를 실행하면 그대로 죽고 USB 호스트 타이밍도 깨진다.
+
+```c
+multicore_lockout_victim_init();   // usbhCore1Main() 초기에 (core1 쪽)
+flash_safe_execute(...);           // core0 에서 flash 작업
+```
+
+재야 할 것:
+- core1 을 잠근 동안 USB 가 멈추는 시간 (섹터 지우기 수십 ms)
+- 호스트가 장치를 놓치지 않을 만큼 짧은가
+- VIA 는 키 하나 바꿀 때마다 쓴다 → 모아서 쓸지 (wish-he 는 `eeprom_flush()` 로 지연 기록한다)
+
+### 2. NVM 계층에 맞추기
+
+QMK 0.33 은 `eeconfig` / `dynamic_keymap` 이 `quantum/nvm/` 인터페이스를 거친다.
+백엔드는 `quantum/nvm/eeprom/nvm_*.c` 다 (지금 `nvm_eeconfig.c` 만 빌드에 있다).
+06단계에서 `nvm_dynamic_keymap.c` · `nvm_via.c` 를 켠다.
+
+### 3. VIA 켜기
+
+`qmk/via/CMakeLists.txt` 에서 되돌리면 된다 — 05단계에 주석으로 꺼 뒀다:
+
+```cmake
+VIA_ENABLE / RAW_ENABLE / DYNAMIC_KEYMAP_ENABLE
+${QMK_QUANTUM_PATH}/via.c
+${QMK_QUANTUM_PATH}/dynamic_keymap.c
+${QMK_QUANTUM_PATH}/nvm/eeprom/nvm_dynamic_keymap.c
+${QMK_QUANTUM_PATH}/nvm/eeprom/nvm_via.c
+```
+
+raw HID 엔드포인트(IF2)는 04단계에서 이미 뚫려 있다. `via_hid.c` 를 새로 쓴다
+(wish-he 판은 CherryUSB 용이라 TinyUSB 로 바꿔야 한다).
+
+### 4. `info.json` — VIA 정의
+
+**16x16 = 256키를 그대로 그리면 못 쓴다.** 실제로 쓰는 키만 추린 레이아웃을 만든다.
+좌표가 HID usage 라는 점을 이용하면 일반 키보드 배열 그대로 그릴 수 있다.
+
+### 5. custom menu 로 빌드 옵션 런타임화
+
+→ [06-via.md](06-via.md#빌드-옵션을-via-로-뺀다--custom-menu)
 
 ## 문서 읽는 순서
 
