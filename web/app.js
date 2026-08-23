@@ -626,9 +626,12 @@ function loadKle() {
   try {
     keys = parseKle($('kle').value);
     cursor = -1;
-    // ★ 새 배열을 넣었으면 더는 그 SLOT 을 고치는 중이 아니다.
-    //   안 그러면 엉뚱한 SLOT 에 덮어쓴다.
-    editSlot = -1;
+    // ★ 배열을 바꿔도 "어느 SLOT 을 고치는 중" 은 유지한다.
+    //
+    //   SLOT 0 을 열어 놓고 프리셋을 고르는 것은 "SLOT 0 의 배열을 이걸로
+    //   바꾸겠다" 는 뜻이다. 여기서 맥락을 버리면 덮어쓸 길이 사라진다.
+    //   위험한 쪽 — 키보드를 바꿔 꽂는 것 — 은 checkHost() 가 따로 막는다.
+    //   그만두고 싶으면 위 뱃지를 누른다.
     render();
     refreshUi();
     log(`${keys.length} 키를 읽었다. [마법사 시작] 을 누르고 강조된 자리의 키를 누른다.`);
@@ -936,7 +939,8 @@ function refreshUi() {
 
   const badge = $('editBadge');
   if (editSlot >= 0) {
-    badge.textContent = `SLOT ${editSlot} 을 고치는 중`;
+    badge.textContent = `SLOT ${editSlot} 을 고치는 중  ✕`;
+    badge.title = '누르면 그만둔다 — 새로 만드는 것이 된다';
     badge.style.display = '';
   } else {
     badge.style.display = 'none';
@@ -983,6 +987,7 @@ $('start').onclick = startWizard;
 $('skip').onclick = skip;
 $('clear').onclick = clearCur;
 $('assign').onclick = manualAssign;
+$('editBadge').onclick = () => { editSlot = -1; refreshUi(); log('고치던 SLOT 을 놓았다 — 이제 새로 만든다.'); };
 $('save').onclick = () => saveSlot();
 $('saveNew').onclick = () => saveSlot(slots ? slots.findIndex(x => !x.used) : -1);
 $('exVia').onclick = exportVia;
