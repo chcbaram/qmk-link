@@ -8,7 +8,10 @@
 
 
 /*
- * 이 명령 때문에 PC 쪽이 다시 열거될 것인가.
+ * 이 명령 때문에 PC 쪽이 다시 열거될 것인가 — **언젠가** 그렇다는 뜻이다.
+ *
+ * ★ 곧바로 끊긴다는 뜻이 아니다 (버전 7 부터).
+ *   우리 도구가 말을 거는 동안은 계속 미뤄지고, 조용해진 뒤에 끊긴다.
  *
  * ★ 응답을 보내는 지금은 아직 안 끊겼다. ap.c 의 updateProductId() 가
  *   cliLoopIdle() 끝에서 보고 결정한다. 그 판단을 여기서 미리 해 준다 —
@@ -271,6 +274,17 @@ bool linkCmdHandle(uint8_t *p_data, uint8_t length, bool vial_locked)
       memset(&p_data[2], 0, length - 2);
       break;
   }
+
+  /*
+   * ★ 우리 도구가 말을 걸고 있는 동안은 재열거를 미룬다 (usb.c 주석 참고).
+   *
+   *   웹 마법사는 20ms 마다 물어본다. 그동안 끊으면 담고 고치는 내내 연결이
+   *   떨어져서 쓸 수가 없다. 조용해지면 그때 끊긴다 — 사용자가 마법사를
+   *   끝내고 VIA/Vial 로 가는 시점이라 오히려 딱 맞다.
+   */
+#ifdef _USE_HW_USB
+  usbPostponeReenum();
+#endif
 
   usbdHidSendRaw(p_data, length);
   return true;

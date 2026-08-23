@@ -38,8 +38,23 @@ static bool is_init = false;
 //
 //   그래서 요청을 받으면 ARM 만 걸고, 조용해진 뒤에 끊는다.
 //   연달아 바뀌어도 마지막 값 하나로 합쳐지는 부수 효과도 있다.
+//
+// ★ 그리고 우리 도구가 말을 걸고 있는 동안은 계속 뒤로 민다.
+//
+//   웹 마법사는 20ms 마다 우리 명령을 보낸다. 그동안 끊으면 담고 · 고치고 ·
+//   적용하는 내내 연결이 떨어져서 쓸 수가 없다. linkCmdHandle() 이 명령마다
+//   usbPostponeReenum() 을 불러 예약을 되감으므로, 실제로 끊기는 시점은
+//   **사용자가 마법사를 끝낼 때** 하나로 모인다. 그때 VIA/Vial 로 가니 딱 맞다.
+//   VIA/Vial 트래픽은 우리 명령이 아니라서 밀지 않는다.
+//
+// ★ 부팅 때도 붙는 것을 잠깐 미룬다.
+//
+//   키보드를 꽂은 채로 켜면 아직 어느 SLOT 인지 모르는 채로 0x5305 로 떴다가
+//   곧 0x54NN 으로 다시 떴다 — 열거가 두 번이었다. 키보드가 인식될 때까지
+//   (최대 USB_BOOT_HOLD_MS) 붙이지 않으면 처음부터 맞는 PID 로 한 번만 뜬다.
 #define USB_REENUM_ARM_MS   250     /* 요청 -> 실제로 끊기까지 */
 #define USB_REENUM_GAP_MS   100     /* 끊고 -> 다시 붙이기까지 */
+#define USB_BOOT_HOLD_MS    1500    /* 부팅 후 PID 가 정해지기를 기다리는 한계 */
 
 enum
 {
@@ -52,6 +67,9 @@ static uint8_t  reenum_state = REENUM_IDLE;
 static uint32_t reenum_time  = 0;
 static uint16_t reenum_pid   = 0;
 static uint32_t reenum_count = 0;
+
+static bool     boot_hold    = false;
+static uint32_t boot_time    = 0;
 
 
 #ifdef _USE_HW_CLI
@@ -68,6 +86,11 @@ bool usbInit(void)
 
   tud_init(BOARD_TUD_RHPORT);
 
+  /* ★ 아직 붙이지 않는다. PID 가 정해지면 그때 붙는다 (위 주석 참고) */
+  tud_disconnect();
+  boot_hold = true;
+  boot_time = millis();
+
   is_init = true;
 
 #ifdef _USE_HW_CLI
@@ -80,6 +103,20 @@ bool usbInit(void)
 void usbUpdate(void)
 {
   if (is_init != true) return;
+
+  // 부팅 직후 — PID 가 정해지거나 한계 시간이 지나면 붙는다
+  if (boot_hold == true)
+  {
+    if ((millis() - boot_time) >= USB_BOOT_HOLD_MS)
+    {
+      boot_hold = false;
+      tud_connect();
+      logPrintf("[  ] usb 부착 (PID %04X, 대기 만료)\r\n", usbdDescGetProductId());
+    }
+
+    tud_task();
+    return;
+  }
 
   switch(reenum_state)
   {
@@ -118,12 +155,41 @@ void usbSetProductId(uint16_t pid)
     return;
   }
 
+  /*
+   * ★ 아직 안 붙었으면 끊을 것도 없다 — 값만 넣고 바로 붙인다.
+   *
+   *   부팅 때 PID 가 정해지는 순간이 여기다. 값이 그대로면(담아 둔 SLOT 이
+   *   없다) 기다림을 그대로 두고 한계 시간에 붙는다 — 부팅 직후에는 아직
+   *   키보드가 안 올라와서 "그대로" 인 것뿐이라 여기서 붙이면 안 된다.
+   */
+  if (boot_hold == true)
+  {
+    if (usbdDescGetProductId() == pid) return;
+
+    usbdDescSetProductId(pid);
+    boot_hold = false;
+    tud_connect();
+    logPrintf("[  ] usb 부착 (PID %04X)\r\n", pid);
+    return;
+  }
+
   // 이미 그 값이고 예약된 것도 없으면 할 일이 없다.
   if (reenum_state == REENUM_IDLE && usbdDescGetProductId() == pid) return;
 
   reenum_pid   = pid;
   reenum_time  = millis();
   reenum_state = REENUM_ARMED;      /* 예약만 한다. 끊는 것은 usbUpdate() 가 */
+}
+
+void usbPostponeReenum(void)
+{
+  /* 예약된 것만 민다. 이미 끊은 뒤(GAP)라면 되돌릴 수 없다 */
+  if (reenum_state == REENUM_ARMED) reenum_time = millis();
+}
+
+bool usbIsReenumPending(void)
+{
+  return (reenum_state != REENUM_IDLE);
 }
 
 uint16_t usbGetProductId(void)
@@ -184,9 +250,10 @@ void cliCmd(cli_args_t *args)
               usbdHidIsReady(HID_ITF_EXTRA),
               usbdHidIsReady(HID_ITF_RAW));
     cliPrintf("host led  : 0x%02X\n", usbdHidGetLed());
-    cliPrintf("PID       : %04X  (재열거 %d 회)%s\n",
+    cliPrintf("PID       : %04X  (재열거 %d 회)%s%s\n",
               usbGetProductId(), (int)reenum_count,
-              reenum_state != REENUM_IDLE ? "  ★ 바꾸는 중" : "");
+              reenum_state == REENUM_ARMED ? "  ★ 예약됨" : "",
+              boot_hold ? "  ★ 부착 대기" : "");
     ret = true;
   }
 

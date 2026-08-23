@@ -35,7 +35,7 @@ const CMD_BOARD_INFO  = 0x0A;   // 버전 5 — 펌웨어 버전
 //   펌웨어를 안 굽고 웹만 새로 고치면(또는 그 반대면) 새 기능이 조용히 안 돈다.
 //   실제로 "키보드 이름이 왜 안 뜨지" 로 한참 헤맸다. 화면이 답하게 한다.
 //   ★ link_cmd.h 의 LINK_CMD_VERSION 을 올리면 여기도 올린다.
-const CMD_VERSION_NEED = 6;
+const CMD_VERSION_NEED = 7;
 const SEL_AUTO        = 0xFF;
 const REPORT_LEN  = 32;
 
@@ -59,6 +59,7 @@ let slots = null;            // [{used, name}] — 연결했을 때만 채워진
 let hostVid = 0, hostPid = 0;// USB-A 에 꽂힌 키보드. SLOT 머리말에 적는다
 let hostName = '';           // 그 키보드가 스스로 말하는 이름 (USB product string)
 let cmdVer = 0;              // 펌웨어의 명령 버전
+let reenumPending = false;   // 보드가 재열거를 예약해 뒀다 (끊을 때 일어난다)
 let fwVer = '';              // 펌웨어 버전 문자열
 let activeSlot = -1;         // 보드가 지금 쓰고 있는 SLOT (-1 = 없음)
 let selSlot    = -1;         // 사용자가 고정해 둔 SLOT (-1 = 자동)
@@ -130,6 +131,7 @@ async function attach(dev) {
   // ★ 읽자마자 넣는다. 아래 어디서든 이 값을 본다 —
   //   나중에 넣었더니 showDev() 가 v0 를 그려서 "오래됐다" 고 잘못 알렸다.
   cmdVer = ver;
+  reenumPending = false;
 
   let kbds = [];
   hostVid = 0; hostPid = 0;
@@ -440,9 +442,9 @@ function updateSaveNote() {
   if (target < 0) { note.innerHTML = '<b>★ 빈 SLOT 이 없다.</b> 위에서 하나 지운다.'; return; }
 
   note.innerHTML =
-    `<code>${hex4(hostVid)}:${hex4(hostPid)}</code> 의 배열로 <b>SLOT ${target}</b> 에 담는다. `
-    + `담고 나면 보드가 PID 를 <code>0x${hex4(PID_BASE + target)}</code> 로 보고하고 `
-    + '스스로 다시 열거한다 — 그래서 연결이 한 번 끊긴다.'
+    `<code>${hex4(hostVid)}:${hex4(hostPid)}</code> 의 배열로 <b>SLOT ${target}</b> 에 담는다.`
+    + '<br>담는 동안 연결은 끊기지 않는다. 적용되는 SLOT 이 바뀌면 <b>[연결 끊기]</b> 를 '
+    + `누르는 순간 보드가 <code>0x${hex4(PID_BASE + target)}</code> 로 다시 뜬다.`
     + '<br>같은 키보드의 변형본을 따로 두려면 위 <b>2</b> 의 [SLOT 추가] 를 쓴다.';
 }
 
@@ -495,7 +497,10 @@ async function disconnect() {
   $('exVial').style.display = 'none';
   $('fwNote').textContent = '보드를 연결하면 펌웨어에 맞는 내보내기가 나온다.';
   $('pressed').textContent = '(없음)';
-  log('연결을 끊었다. 다시 배우려면 [보드 연결].');
+  log('연결을 끊었다.'
+      + (reenumPending ? ' 보드가 새 PID 로 다시 뜬다 — VIA / Vial 이 새 배열을 읽는다.' : '')
+      + ' 다시 배우려면 [보드 연결].');
+  reenumPending = false;
 }
 
 document.addEventListener('visibilitychange', () => {
@@ -930,22 +935,30 @@ async function saveSlot(slot) {
 /*
  * 슬롯을 건드린 뒤 뒷정리.
  *
- * ★ 끊길지 말지는 보드가 알려 준다 (link_cmd.h 의 [3]).
+ * ★ 여기서 연결을 놓지 않는다.
  *
- *   PID 가 안 바뀌면 재열거도 없다. 그때까지 연결을 놓아 버리면 같은 SLOT 을
- *   여러 번 고쳐 담는 동안 매번 끊긴다. 규칙을 여기 한 벌 더 적으면 반드시
- *   보드 쪽과 갈라지므로 응답을 그대로 믿는다.
+ *   보드는 PID 가 바뀔 때만 재열거하고, 그것도 **우리가 말을 거는 동안은
+ *   계속 미룬다** (link_cmd.c 의 usbPostponeReenum). 그래서 담고 · 고치고 ·
+ *   적용하는 내내 연결이 유지된다. 실제로 끊기는 것은 [연결 끊기] 를 누르거나
+ *   탭을 옮겨 조용해진 뒤다.
+ *
+ *   pending 은 "언젠가 재열거된다" 는 표시일 뿐이라 안내에만 쓴다.
+ *   장치가 정말 사라진 경우는 catch 에서 받는다.
  */
-async function finishSlotOp(msg, reenum) {
-  if (reenum) { afterSlotWrite(msg); return; }
-
+async function finishSlotOp(msg, pending) {
   try {
     const info = await send(CMD_INFO);
     await loadSlots(info[2] >= 3 ? info[28] : 0xFF, info[2] >= 3 ? info[31] : 0xFF);
-  } catch { refreshUi(); }
+  } catch {
+    afterSlotWrite(msg);              // 정말 끊긴 경우 — 다시 붙여 본다
+    return;
+  }
 
   busy = false;
-  log(msg);
+  reenumPending = pending || reenumPending;
+  log(msg + (reenumPending
+    ? ' PID 가 바뀌므로 [연결 끊기] 를 누르면 보드가 새 이름으로 다시 뜬다.' : ''));
+  refreshUi();
 }
 
 // 빈 SLOT 자리를 잡는다. 아직 플래시는 안 건드린다 — 담을 때 쓴다.

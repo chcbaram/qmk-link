@@ -57,6 +57,10 @@
 //     0x06 SLOT_COMMIT req [2]슬롯   rsp [3]재열거 예정(1/0)  ← 버전 6
 //     0x07 SLOT_ERASE  req [2]슬롯   rsp [3]재열거 예정(1/0)  ← 버전 6
 //
+//   ★ [3] = 1 은 "**언젠가** 재열거된다" 는 뜻이다 (버전 7).
+//     곧바로 끊긴다는 뜻이 아니다 — 우리 도구가 말을 거는 동안은 계속
+//     미뤄지고, 조용해진 뒤에 끊긴다. 그래서 마법사는 연결을 놓지 않는다.
+//
 //   ★ [3] 이 왜 필요한가 — 끊길지 말지는 **보드만 안다.**
 //
 //     PID 는 "지금 고른 SLOT" 에서 나온다. 담아도 고른 SLOT 이 그대로면
@@ -112,7 +116,7 @@
 #define LINK_RC_FAIL          1
 #define LINK_RC_RANGE         2
 
-#define LINK_CMD_VERSION      6
+#define LINK_CMD_VERSION      7
 
 #define LINK_TREE_VIA         0
 #define LINK_TREE_VIAL        1
