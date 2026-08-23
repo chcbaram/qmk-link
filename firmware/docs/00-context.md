@@ -34,7 +34,8 @@ PC 에는 **VIA / Vial 로 편집 가능한 키보드**로 보이게 한다.
 | **완료** | **06 VIA** — flash EEPROM, raw HID, dynamic keymap, 커스텀 메뉴. 전부 실기 확인 |
 | **완료** | **07 VIAL** — vial 트리. 장치가 정의를 내주는 것까지 확인 |
 | **완료** | **08 마감** — 미디어키 · 키보드 여러 대 · suspend 소등 · VID/PID · README |
-| **다음** | **09 키보드 프로파일** — 검토 끝났다 → [09-keyboard-profile.md](09-keyboard-profile.md) |
+| **완료** | **09-1 학습 마법사** — `web/`, `gh-pages` 배포. 펌웨어는 명령 하나만 더했다 |
+| **다음** | **09-2 온디바이스 저장** — 레이아웃을 보드에 담고 VID/PID 로 자동 전환 |
 
 실측: via FLASH 111,256 B / vial 129,432 B, RAM 152~155 KB / 512 KB (copy_to_ram).
 `0483:5305 QMK-LINK` 로 열거된다 — HID(keyboard / extra / raw) + CDC 복합 장치.
