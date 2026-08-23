@@ -207,6 +207,45 @@ upstream `vial.c` 가 `tap_dance_count()` / `tap_dance_get()` 을 이 매크로 
 `qmk_settings.c` 가 `set_autoshift_timeout()`(`process_auto_shift.c`) 을 부른다.
 Auto Shift 는 기본값이 꺼짐이라(`QS.auto_shift = 0`) 켜도 동작이 바뀌지 않는다.
 
+### ★ Vial 의 매트릭스 테스터는 우리 매트릭스에서 못 쓴다
+
+**16 x 16 이라 구조적으로 불가능하다.** unlock 문제가 아니다.
+
+```c
+/* vial-qmk 의 quantum/via.c */
+case id_switch_matrix_state: {
+#ifdef VIAL_ENABLE
+    if (!vial_unlocked) goto skip;                    /* 관문 ① */
+#endif
+#if ((MATRIX_COLS / 8 + 1) * MATRIX_ROWS <= 28)       /* 관문 ② */
+    ...실제 매트릭스 읽기...
+#endif    /* #else 가 없다 — 조건에 안 맞으면 통째로 사라진다 */
+```
+
+우리 값은 `(16/8 + 1) x 16 = 48 > 28` 이라 **코드가 컴파일에서 빠지고 0만 돌아간다.**
+
+더 근본적으로 **vial-qmk 판에는 offset 페이징이 없다.** 16행 x 2바이트 = 32 B 를
+헤더와 함께 32바이트 리포트 하나에 담을 수 없다. 저 제한이 있는 이유가 그것이다.
+
+upstream QMK 판은 다르다 — 그래서 **via 빌드에서는 VIA 의 Test Matrix 가 동작한다**:
+
+```c
+/* qmk_firmware 의 quantum/via.c */
+uint8_t offset = command_data[1];
+uint8_t rows   = 28 / ((MATRIX_COLS + 7) / 8);   /* 14행씩 두 번에 나눠 보낸다 */
+```
+
+| 빌드 | 앱의 매트릭스 테스터 |
+|---|---|
+| via | ✅ 동작 (`VIA_INSECURE` + offset 페이징) |
+| vial | ❌ 구조적으로 불가 |
+| 둘 다 | CLI `qmk matrix` 는 항상 된다 |
+
+**09단계에 영향이 있다.** 학습 마법사가 `id_switch_matrix_state` 를 쓰려던 계획인데
+vial 빌드에서는 안 된다. **우리 커스텀 명령(`0xA0`~)으로 페이징해서 내주는 것**이
+답이다 — 양쪽 끝을 다 우리가 만드므로 남의 형식과 싸울 이유가 없다
+→ [09-keyboard-profile.md](09-keyboard-profile.md)
+
 ### 이름으로 구분한다
 
 ```
@@ -250,4 +289,5 @@ build-vial/src/qmk-link-vial.uf2  USB 제품 이름 "QMK-LINK VIAL"
 | **구버전 Vial 데스크톱 앱** | 웹 Vial 은 되는데 로컬 0.7.5(Python 3.6.8 / Qt 5.9.3)는 장치를 못 잡는다. 펌웨어 쪽 근거는 다 확인했다 — 프로토콜 6은 도입 이래 바뀐 적이 없고(이력에 커밋 1개), `vial.json` 은 vial-qmk 예제 57개 중 28개와 키 구성이 완전히 같다. **다른 Vial 키보드를 그 앱에 꽂아 보면 앱 문제인지 갈린다** |
 | ~~Vial 의 QMK Settings~~ ✅ | 켰다. 15항목 |
 | 패스스루 | vial 트리에는 커스텀 메뉴가 없어 UI 가 없다. CLI 로만 조작한다 |
+| 매트릭스 테스터 | vial 빌드에서는 구조적으로 불가 (위 참고). CLI `qmk matrix` 를 쓴다 |
 | 두 트리의 `port/` 중복 | 실제로 갈린 것은 `config.h`·`eeprom.c` 두 줄뿐이다. 공유를 검토할 만하다 (지금은 중복을 감수) |
