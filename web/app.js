@@ -320,19 +320,30 @@ function renderSlots() {
     for (const r of g.rows) {
       const on  = (r.i === applied);
       const row = document.createElement('div');
+
       row.className = 'slot-row' + (on ? ' on' : '');
+      row.innerHTML = '<span class="dot"><i></i></span>'
+        + `<b>SLOT ${r.i}</b>`
+        + `<span class="nm">${esc(r.name) || '(이름 없음)'}</span>`
+        + `<span class="note">${r.len} B · PID ${hex4(PID_BASE + r.i)}</span>`
+        + `<span class="note" style="color:#1e5c30">${on ? '적용 중' : ''}</span>`;
 
-      const txt = document.createElement('span');
-      txt.innerHTML = '<span class="dot"><i></i></span>'
-        + `<b>SLOT ${r.i}</b>  ${esc(r.name) || '(이름 없음)'}`
-        + `  <span class="note">${r.len} B · PID ${hex4(PID_BASE + r.i)}</span>`
-        + (on ? '  <span class="note" style="color:#1e5c30">적용 중'
-                + (selSlot === r.i ? ' · 고정' : '') + '</span>' : '');
-      row.appendChild(txt);
+      const acts = document.createElement('span');
+      acts.className = 'acts';
 
-      if (here && !on) row.appendChild(btn('적용', () => applySlot(r.i)));
-      row.appendChild(btn('편집', () => loadSlotForEdit(r.i)));
-      row.appendChild(btn('지우기', () => eraseSlot(r.i)));
+      /*
+       * ★ [적용] 은 적용 중인 줄에도 둔다 — 눌리지 않는 회색으로.
+       *   줄마다 버튼 수가 달라지면 나머지 버튼 자리가 어긋나서, 누르려던
+       *   [편집] 자리에 [지우기] 가 와 있게 된다.
+       */
+      const ap = btn('적용', () => applySlot(r.i));
+      ap.disabled = (!here || on);
+      if (on) ap.title = '이미 적용 중이다';
+      acts.appendChild(ap);
+      acts.appendChild(btn('편집', () => loadSlotForEdit(r.i)));
+      acts.appendChild(btn('지우기', () => eraseSlot(r.i)));
+
+      row.appendChild(acts);
       div.appendChild(row);
     }
 
@@ -351,9 +362,13 @@ function renderSlots() {
 
       row.className = 'slot-row';
       row.innerHTML = '<span class="dot"><i></i></span>'
-        + `<b>SLOT ${editSlot}</b> <span class="note">새로 만드는 중 — `
-        + `아래 <b>3</b> 에서 배열을 넣고 키를 배운다</span>`;
-      row.appendChild(btn('그만두기', () => { editSlot = -1; refreshUi(); }));
+        + `<b>SLOT ${editSlot}</b>`
+        + '<span class="note wide">새로 만드는 중 — 아래 <b>3</b> 에서 배열을 넣고 키를 배운다</span>';
+
+      const acts = document.createElement('span');
+      acts.className = 'acts';
+      acts.appendChild(btn('그만두기', () => { editSlot = -1; refreshUi(); }));
+      row.appendChild(acts);
       div.appendChild(row);
     }
 
@@ -361,7 +376,14 @@ function renderSlots() {
       const free = slots ? slots.findIndex(x => !x.used) : -1;
       const foot = document.createElement('div');
 
-      foot.className = 'slot-row';
+      /*
+       * ★ [자동으로] 는 없앴다.
+       *
+       *   "고정을 풀면 번호가 가장 낮은 것이 쓰인다" 는 우리 내부 규칙이지
+       *   사용자가 알아야 할 것이 아니다. 같은 결과는 그 SLOT 의 [적용] 로
+       *   낼 수 있고, 고른 SLOT 을 지우면 보드가 알아서 되돌아간다.
+       */
+      foot.className = 'slot-foot';
       if (free < 0) {
         const n = document.createElement('span');
         n.className = 'note';
@@ -369,9 +391,8 @@ function renderSlots() {
         foot.appendChild(n);
       }
       else if (editSlot !== free || slots[editSlot].used) {
-        foot.appendChild(btn('새 SLOT 추가', () => startNewSlot()));
+        foot.appendChild(btn('SLOT 추가', () => startNewSlot()));
       }
-      if (g.rows.length > 1 && selSlot >= 0) foot.appendChild(btn('자동으로', () => applySlot(SEL_AUTO)));
       if (foot.childNodes.length) div.appendChild(foot);
     }
     box.appendChild(div);
@@ -422,7 +443,7 @@ function updateSaveNote() {
     `<code>${hex4(hostVid)}:${hex4(hostPid)}</code> 의 배열로 <b>SLOT ${target}</b> 에 담는다. `
     + `담고 나면 보드가 PID 를 <code>0x${hex4(PID_BASE + target)}</code> 로 보고하고 `
     + '스스로 다시 열거한다 — 그래서 연결이 한 번 끊긴다.'
-    + '<br>같은 키보드의 변형본을 따로 두려면 위 <b>2</b> 의 [새 SLOT 추가] 를 쓴다.';
+    + '<br>같은 키보드의 변형본을 따로 두려면 위 <b>2</b> 의 [SLOT 추가] 를 쓴다.';
 }
 
 // 연결 상태 한 줄. 펌웨어가 무엇인지 늘 같이 적는다.
