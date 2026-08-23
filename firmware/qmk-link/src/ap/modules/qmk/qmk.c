@@ -20,6 +20,10 @@
 #ifdef RAW_ENABLE
 #include "raw_hid.h"
 #endif
+#include "link_cmd.h"
+#ifdef VIAL_ENABLE
+#include "vial.h"
+#endif
 #include "flash.h"
 #include "keyboard.h"
 #include "matrix.h"
@@ -114,6 +118,21 @@ void qmkUpdate(void)
 
     while (usbdHidGetRaw(raw_data) == true)
     {
+      /*
+       * ★ 우리 명령을 먼저 걷어낸다 (link_cmd.h 주석 참고).
+       *
+       *   upstream 훅(via_command_kb / raw_hid_receive_kb)은 한쪽 트리에만
+       *   있어서 반대편에서 죽은 코드가 된다. 여기서 가로채면 둘 다 된다.
+       *
+       *   vial 빌드에서는 Vial 의 잠금 정책을 따른다 — 잠겨 있으면 눌린 키를
+       *   알려주지 않는다.
+       */
+#ifdef VIAL_ENABLE
+      if (linkCmdHandle(raw_data, HID_RAW_REPORT_LEN, vial_unlocked != 0)) continue;
+#else
+      if (linkCmdHandle(raw_data, HID_RAW_REPORT_LEN, true)) continue;
+#endif
+
       raw_hid_receive(raw_data, HID_RAW_REPORT_LEN);
     }
   }
