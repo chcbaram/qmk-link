@@ -196,6 +196,15 @@ bool linkCmdHandle(uint8_t *p_data, uint8_t length, bool vial_locked)
       break;
     }
 
+    case LINK_CMD_BOARD_INFO:
+    {
+      memset(&p_data[2], 0, length - 2);
+      p_data[2] = LINK_RC_OK;
+      p_data[3] = LINK_CMD_VERSION;
+      strncpy((char *)&p_data[4], _DEF_FIRMWATRE_VERSION, length - 5);
+      break;
+    }
+
     case LINK_CMD_HOST_INFO:
     {
       /* 꽂힌 키보드가 스스로 말하는 이름. vid/pid 만으로는 사람이 못 알아본다 */

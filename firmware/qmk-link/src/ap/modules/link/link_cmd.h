@@ -58,6 +58,12 @@
 //     0x07 SLOT_ERASE  req [2]슬롯
 //     0x08 SEL_SET     req [2]슬롯 (0xFF = 자동)   ← 버전 3
 //                      지금 꽂힌 키보드가 쓸 SLOT 을 고정한다. 바로 반영된다
+//     0x0A BOARD_INFO  rsp [2]결과 [3]명령버전 [4..31] 펌웨어 버전  ← 버전 5
+//
+//   ★ 왜 따로 두나 — "지금 보드에 뭐가 올라가 있나" 를 화면이 답하게 하려고.
+//     펌웨어를 안 굽고 웹만 새로 고치면(또는 그 반대면) 기능이 조용히 안 돈다.
+//     웹이 [3] 을 보고 "펌웨어가 오래됐다" 고 말해 준다.
+//
 //     0x09 HOST_INFO   req [2]번째                   ← 버전 4
 //                      rsp [2]결과 [3]붙어있음 [4..5]vid [6..7]pid
 //                          [8..31] 키보드가 말하는 이름 (USB product string, NUL 끝)
@@ -92,12 +98,13 @@
 #define LINK_CMD_SLOT_ERASE   0x07
 #define LINK_CMD_SEL_SET      0x08
 #define LINK_CMD_HOST_INFO    0x09
+#define LINK_CMD_BOARD_INFO   0x0A
 
 #define LINK_RC_OK            0
 #define LINK_RC_FAIL          1
 #define LINK_RC_RANGE         2
 
-#define LINK_CMD_VERSION      4
+#define LINK_CMD_VERSION      5
 
 #define LINK_TREE_VIA         0
 #define LINK_TREE_VIAL        1

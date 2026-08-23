@@ -28,6 +28,14 @@ const CMD_SLOT_COMMIT = 0x06;
 const CMD_SLOT_ERASE  = 0x07;
 const CMD_SEL_SET     = 0x08;
 const CMD_HOST_INFO   = 0x09;   // 버전 4 — 키보드가 말하는 이름
+const CMD_BOARD_INFO  = 0x0A;   // 버전 5 — 펌웨어 버전
+
+// ★ 이 페이지가 기대하는 펌웨어 명령 버전.
+//
+//   펌웨어를 안 굽고 웹만 새로 고치면(또는 그 반대면) 새 기능이 조용히 안 돈다.
+//   실제로 "키보드 이름이 왜 안 뜨지" 로 한참 헤맸다. 화면이 답하게 한다.
+//   ★ link_cmd.h 의 LINK_CMD_VERSION 을 올리면 여기도 올린다.
+const CMD_VERSION_NEED = 5;
 const SEL_AUTO        = 0xFF;
 const REPORT_LEN  = 32;
 
@@ -51,6 +59,7 @@ let slots = null;            // [{used, name}] — 연결했을 때만 채워진
 let hostVid = 0, hostPid = 0;// USB-A 에 꽂힌 키보드. SLOT 머리말에 적는다
 let hostName = '';           // 그 키보드가 스스로 말하는 이름 (USB product string)
 let cmdVer = 0;              // 펌웨어의 명령 버전
+let fwVer = '';              // 펌웨어 버전 문자열
 let activeSlot = -1;         // 보드가 지금 쓰고 있는 SLOT (-1 = 없음)
 let selSlot    = -1;         // 사용자가 고정해 둔 SLOT (-1 = 자동)
 let editSlot   = -1;         // 지금 열어서 고치고 있는 SLOT (-1 = 새로 만드는 중)
@@ -129,12 +138,11 @@ async function attach(dev) {
   }
 
   firmware = (tree === TREE_VIAL) ? 'vial' : 'via';
-  $('dev').textContent =
-    `${firmware.toUpperCase()} 펌웨어 — 매트릭스 ${rows}x${cols}, 꽂힌 키보드 ${n}대`
-    + (kbds.length ? ` (${kbds.join(', ')})` : '');
-  $('dev').className = 'ok';
+  showDev(`매트릭스 ${rows}x${cols}, 꽂힌 키보드 ${n}대`
+          + (kbds.length ? ` (${kbds.join(', ')})` : ''));
 
   cmdVer = ver;
+  await readBoardInfo();
   await readHostName();
 
   applyFirmware(locked !== 0);
@@ -157,7 +165,7 @@ async function attach(dev) {
 //   다음 폴링(checkHost)에서 채워진다.
 async function readHostName() {
   hostName = '';
-  if (cmdVer < 4) return;                 // 구형 펌웨어에는 이 명령이 없다
+  if (cmdVer < 4) return;                 // 이 명령이 생긴 버전
 
   try {
     const r = await send(CMD_HOST_INFO, 0);
@@ -284,8 +292,8 @@ function renderSlots() {
     //   시간을 버린 "조용히 아무것도 안 함" 이다.
     let why = '';
     if (here && !label) {
-      why = cmdVer < 4
-        ? '이름 없음 — 펌웨어가 알려주지 않는다 (다시 구우면 뜬다)'
+      why = cmdVer < CMD_VERSION_NEED
+        ? '이름 없음 — 펌웨어가 오래됐다 (다시 구우면 뜬다)'
         : '이름 없음 — 이 키보드가 USB 이름을 주지 않는다';
     }
 
@@ -393,6 +401,30 @@ function updateSaveNote() {
         : '');
 }
 
+// 연결 상태 한 줄. 펌웨어가 무엇인지 늘 같이 적는다.
+function showDev(tail) {
+  const old = cmdVer < CMD_VERSION_NEED;
+
+  $('dev').textContent =
+    `${(firmware || '').toUpperCase()} 펌웨어`
+    + (fwVer ? ` ${fwVer}` : '')
+    + ` (명령 v${cmdVer})`
+    + (old ? ` ★ 오래됐다 — v${CMD_VERSION_NEED} 가 필요하다. 다시 구우면 된다` : '')
+    + (tail ? ` — ${tail}` : '');
+  $('dev').className = old ? 'bad' : 'ok';
+}
+
+async function readBoardInfo() {
+  fwVer = '';
+  if (cmdVer < 5) return;                 // 그 전 펌웨어에는 이 명령이 없다
+
+  try {
+    const r = await send(CMD_BOARD_INFO);
+    if (r[2] !== 0) return;
+    fwVer = new TextDecoder().decode(r.slice(4, 32)).split('\0')[0].trim();
+  } catch { /* 없으면 없는 대로 */ }
+}
+
 function hex4(v) { return v.toString(16).toUpperCase().padStart(4, '0'); }
 
 // 키보드가 보낸 문자열을 그대로 innerHTML 에 넣지 않는다
@@ -409,6 +441,7 @@ async function disconnect() {
   $('dev').textContent = '연결 끊김 — VIA / Vial 을 써도 된다';
   $('dev').className = '';
   firmware = null;
+  cmdVer = 0; fwVer = '';
   slots = null;
   hostVid = 0; hostPid = 0; hostName = '';
   activeSlot = -1; selSlot = -1;
@@ -508,10 +541,7 @@ async function checkHost() {
   if (swapped) {
     editSlot = -1;                        // 다른 키보드다. 고치던 맥락을 버린다
     await readHostName();
-    const fw = (firmware || '').toUpperCase();
-    $('dev').textContent = vid
-      ? `${fw} 펌웨어 — 꽂힌 키보드 ${hex4(vid)}:${hex4(pid)}`
-      : `${fw} 펌웨어 — USB-A 에 키보드 없음`;
+    showDev(vid ? `꽂힌 키보드 ${hex4(vid)}:${hex4(pid)}` : 'USB-A 에 키보드 없음');
     log(vid ? `키보드가 바뀌었다 — ${hex4(vid)}:${hex4(pid)}` : 'USB-A 쪽 키보드가 빠졌다.');
   }
 
