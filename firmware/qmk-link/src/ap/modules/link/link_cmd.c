@@ -159,6 +159,9 @@ bool linkCmdHandle(uint8_t *p_data, uint8_t length, bool vial_locked)
     {
       bool ok = kbdStoreStageCommit(p_data[2]);
 
+      /* 담자마자 반영되게 — 안 그러면 키보드를 뽑았다 꽂아야 한다 */
+      if (ok == true) kbdStoreReselect();
+
       memset(&p_data[2], 0, length - 2);
       p_data[2] = ok ? LINK_RC_OK : LINK_RC_FAIL;
       break;
@@ -167,6 +170,8 @@ bool linkCmdHandle(uint8_t *p_data, uint8_t length, bool vial_locked)
     case LINK_CMD_SLOT_ERASE:
     {
       bool ok = kbdStoreErase(p_data[2]);
+
+      if (ok == true) kbdStoreReselect();
 
       memset(&p_data[2], 0, length - 2);
       p_data[2] = ok ? LINK_RC_OK : LINK_RC_FAIL;

@@ -23,6 +23,7 @@
 #include "link_cmd.h"
 #ifdef VIAL_ENABLE
 #include "vial.h"
+bool vialServeDefinition(uint8_t *p_data, uint8_t length);   /* port/vial_port.c */
 #endif
 #include "flash.h"
 #include "keyboard.h"
@@ -128,6 +129,9 @@ void qmkUpdate(void)
        *   답한다 (link_cmd.h 주석 참고).
        */
 #ifdef VIAL_ENABLE
+      /* 저장된 레이아웃이 있으면 Vial 정의를 그것으로 내준다 */
+      if (vialServeDefinition(raw_data, HID_RAW_REPORT_LEN)) continue;
+
       if (linkCmdHandle(raw_data, HID_RAW_REPORT_LEN, vial_unlocked == 0)) continue;
 #else
       if (linkCmdHandle(raw_data, HID_RAW_REPORT_LEN, false)) continue;

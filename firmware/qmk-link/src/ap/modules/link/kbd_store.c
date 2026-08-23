@@ -27,6 +27,10 @@ static uint8_t slot_buf[SLOT_SIZE];
 static bool      is_init    = false;
 static kbd_hdr_t stage_hdr;
 static bool      stage_open = false;
+static int       active_slot = -1;
+static uint16_t  cur_vid = 0;
+static uint16_t  cur_pid = 0;
+static uint32_t  cur_hash = 0;
 
 
 
@@ -128,6 +132,46 @@ bool kbdStoreErase(uint8_t slot)
   if (slot >= KBD_SLOT_MAX) return false;
 
   return flashErase(SLOT_ADDR(slot), SLOT_SIZE);
+}
+
+void kbdStoreSelect(uint16_t vid, uint16_t pid, uint32_t hash)
+{
+  int slot;
+
+  cur_vid  = vid;
+  cur_pid  = pid;
+  cur_hash = hash;
+
+  slot = (vid == 0 && pid == 0) ? -1 : kbdStoreFind(vid, pid, hash);
+
+  if (slot == active_slot) return;
+
+  active_slot = slot;
+
+  if (slot >= 0)
+  {
+    kbd_hdr_t hdr;
+
+    if (kbdStoreGetHeader(slot, &hdr) == true)
+    {
+      logPrintf("[  ] kbd 레이아웃 [%d] %04X:%04X %s\r\n", slot, hdr.vid, hdr.pid, hdr.name);
+    }
+  }
+  else
+  {
+    logPrintf("[  ] kbd 저장된 레이아웃 없음 — 기본 배열\r\n");
+  }
+}
+
+int kbdStoreGetActive(void)
+{
+  return active_slot;
+}
+
+void kbdStoreReselect(void)
+{
+  active_slot = -1;                       /* 강제로 다시 찾게 한다 */
+  kbdStoreSelect(cur_vid, cur_pid, cur_hash);
 }
 
 void kbdStoreStageBegin(const kbd_hdr_t *p_hdr)

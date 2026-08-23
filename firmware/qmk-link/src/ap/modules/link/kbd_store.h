@@ -72,6 +72,18 @@ uint8_t  kbdStoreUsedCount(void);
 uint32_t kbdStoreHash(const uint8_t *p_data, uint16_t length);
 
 
+// ── 지금 꽂힌 키보드에 맞는 칸 ──
+//
+// 소스 키보드가 바뀌면 ap.c 가 kbdStoreSelect() 를 부른다.
+// Vial 정의 서빙과 PID 전환이 이 값을 본다.
+void     kbdStoreSelect(uint16_t vid, uint16_t pid, uint32_t hash);
+int      kbdStoreGetActive(void);        /* -1 = 맞는 칸이 없다 (기본 배열을 쓴다) */
+
+// 저장소가 바뀌었을 때 같은 키보드로 다시 고른다.
+// 담자마자 반영되게 — 안 그러면 키보드를 뽑았다 꽂아야 한다.
+void     kbdStoreReselect(void);
+
+
 #ifdef __cplusplus
  }
 #endif

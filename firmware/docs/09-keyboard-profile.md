@@ -308,9 +308,26 @@ QMK 의 **레이아웃 좌표** 와 그 레이아웃을 쓰는 **키보드의 �
 - [x] 커스텀 raw HID 명령 `0x02`~`0x07`
 - [x] 업로드 도구 `tools/kbd_upload.py` (put / get / list / erase)
 - [ ] 키보드 식별에 product string 해시 넣기 (자리는 있다)
-- [ ] Vial `vial_get_size` / `vial_get_def` 를 플래시에서 서빙
+- [x] Vial `vial_get_size` / `vial_get_def` 를 플래시에서 서빙
 - [ ] PID 전환 (`0x5400` + 슬롯)
 - [ ] 웹페이지에서 업로드 (아래 LZMA 문제)
+
+#### ★ Vial 정의 서빙 — 실기 확인
+
+| | Vial 이 받아가는 정의 |
+|---|---|
+| 저장된 레이아웃 있음 | `QMK-LINK (HHKB Lite 2)` · 63키 · 400 B |
+| 칸을 지우면 | `QMK-LINK VIAL` · 153키 · 556 B (컴파일 기본값) |
+
+`vial_get_size` / `vial_get_def` 는 `vial.c` 안에 박혀 있어 훅이 없다.
+**우리가 이미 raw HID 큐를 직접 비우고 있으므로 거기서 먼저 걷어낸다** —
+`link_cmd` 와 같은 방식이고 upstream 을 고치지 않는다 (`port/vial_port.c`).
+
+저장된 칸이 없으면 아무것도 하지 않는다. 그러면 upstream 이 컴파일에 박힌
+기본 배열을 준다 — **설정 안 해도 늘 동작하는 바닥이 유지된다.**
+
+★ 담자마자 반영되게 `kbdStoreReselect()` 를 붙였다. 안 그러면 슬롯 선택이
+키보드 연결이 바뀔 때만 돌아서 뽑았다 꽂아야 했다.
 
 #### ★ 왜 업로드가 파이썬인가 — LZMA
 

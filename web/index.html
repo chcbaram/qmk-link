@@ -4,33 +4,35 @@
 <meta charset="utf-8">
 <title>qmk-link 배열 마법사</title>
 <style>
-  :root { color-scheme: dark; }
+  :root { color-scheme: light; }
   body { font: 14px/1.6 -apple-system, "Apple SD Gothic Neo", sans-serif;
-         background:#1c1c1e; color:#e8e8ea; margin:0; padding:24px; }
+         background:#f6f6f8; color:#1c1c1e; margin:0; padding:24px; }
   h1 { font-size:18px; margin:0 0 4px; }
-  .sub { color:#9a9aa0; margin:0 0 20px; }
+  .sub { color:#5f5f68; margin:0 0 20px; }
   section { margin-bottom:18px; }
-  button { font:inherit; background:#3a3a3f; color:#e8e8ea; border:1px solid #55555c;
+  a { color:#0a62c2; }
+  button { font:inherit; background:#fff; color:#1c1c1e; border:1px solid #c4c4cc;
            border-radius:6px; padding:6px 14px; cursor:pointer; }
-  button:hover { background:#48484f; }
-  input, textarea { font:13px/1.5 ui-monospace, monospace; background:#26262a; color:#e8e8ea;
-                    border:1px solid #45454c; border-radius:6px; padding:8px; }
+  button:hover { background:#eceef1; }
+  input, textarea, select { font:13px/1.5 ui-monospace, monospace; background:#fff; color:#1c1c1e;
+                            border:1px solid #c4c4cc; border-radius:6px; padding:8px; }
   textarea { width:100%; height:90px; box-sizing:border-box; }
-  #dev { padding:8px 12px; border-radius:6px; background:#2a2a2e; display:inline-block; }
-  #dev.ok  { background:#1e3a24; }
-  #dev.bad { background:#3a1e1e; }
+  #dev { padding:8px 12px; border-radius:6px; background:#e9e9ee; display:inline-block; }
+  #dev.ok  { background:#dff0e2; }
+  #dev.bad { background:#fadcdc; }
   #board { position:relative; margin:14px 0; }
-  .key { position:absolute; box-sizing:border-box; background:#303036; border:1px solid #4a4a52;
+  .key { position:absolute; box-sizing:border-box; background:#fff; border:1px solid #c4c4cc;
          border-radius:5px; font-size:11px; display:flex; align-items:center; justify-content:center;
-         overflow:hidden; cursor:pointer; text-align:center; }
-  .key.done { background:#26402c; border-color:#3d6b47; }
-  .key.cur  { background:#7a5a1e; border-color:#d8a83a; box-shadow:0 0 0 2px #d8a83a; }
-  #pressed { font:13px ui-monospace, monospace; background:#26262a; padding:8px 12px;
-             border-radius:6px; min-height:20px; }
-  #log { color:#d8c07a; min-height:22px; }
+         overflow:hidden; cursor:pointer; text-align:center; color:#3a3a42;
+         box-shadow:0 1px 0 #d6d6dc; }
+  .key.done { background:#dff0e2; border-color:#8dc39a; color:#1e5c30; }
+  .key.cur  { background:#ffe9a8; border-color:#d8a83a; box-shadow:0 0 0 2px #d8a83a; color:#5a4310; }
+  #pressed { font:13px ui-monospace, monospace; background:#fff; border:1px solid #e2e2e8;
+             padding:8px 12px; border-radius:6px; min-height:20px; }
+  #log { color:#8a6d18; min-height:22px; }
   .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .note { color:#9a9aa0; font-size:13px; }
-  code { background:#2a2a2e; padding:1px 5px; border-radius:4px; }
+  .note { color:#5f5f68; font-size:13px; }
+  code { background:#eceef1; padding:1px 5px; border-radius:4px; }
 </style>
 </head>
 <body>
@@ -38,7 +40,7 @@
 <h1>qmk-link 배열 마법사</h1>
 <p class="sub">KLE 로 그린 배열의 각 자리에 <b>실제로 그 키가 보내는 HID usage</b> 를 채운다.
 브라우저 키 이벤트가 아니라 보드에서 직접 읽으므로 F13~F24 나 한/영 같은 키도 그대로 잡힌다.</p>
-<p class="sub" style="color:#d8a83a">★ VIA / Vial 을 쓰기 전에 <b>[연결 끊기]</b> 를 누른다.
+<p class="sub" style="color:#a06c00">★ VIA / Vial 을 쓰기 전에 <b>[연결 끊기]</b> 를 누른다.
 같은 raw HID 를 쓰기 때문에, 이 페이지가 물고 있으면 저쪽이 장치를 못 알아본다.
 (탭을 옮기면 자동으로 멈추지만, 확실하게 하려면 끊는다)</p>
 
@@ -93,7 +95,7 @@
     <button id="exVial" style="display:none">layout-vial.json</button>
     <button id="exKle">layout-kle.json</button>
   </div>
-  <div class="note" id="fwNote" style="margin-top:6px; color:#7ab8d8">보드를 연결하면 펌웨어에 맞는 내보내기가 나온다.</div>
+  <div class="note" id="fwNote" style="margin-top:6px; color:#0a62c2">보드를 연결하면 펌웨어에 맞는 내보내기가 나온다.</div>
   <div class="note" style="margin-top:6px">
     <code>layout-kle.json</code> 은 배열 원본이다. 다시 손보거나 저장소에
     커밋할 때 쓴다 (<code>gen_keymap.py</code> 의 입력).

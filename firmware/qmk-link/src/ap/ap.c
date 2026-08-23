@@ -90,6 +90,7 @@ void updateKeyboard(void)
   //     떼면 안 된다.
   {
     static bool connect_pre[CFG_TUH_HID] = {false, };
+    bool        is_changed = false;
 
     for (int i=0; i<CFG_TUH_HID; i++)
     {
@@ -101,7 +102,35 @@ void updateKeyboard(void)
       {
         connect_pre[i] = info.is_connect;
         if (info.is_connect == false) linkClearInstance(i);
+
+        is_changed = true;
       }
+    }
+
+    // ★ 꽂힌 키보드가 바뀌면 그 키보드의 레이아웃 칸을 고른다.
+    //
+    //   Vial 정의 서빙(port/vial_port.c)이 이 값을 본다.
+    //   저장된 것이 없으면 -1 이 되고, 그러면 컴파일에 박힌 기본 배열을 쓴다.
+    //
+    //   키보드 인터페이스를 고른다 — 같은 장치의 컨슈머 인터페이스도 같은
+    //   vid/pid 라 어느 쪽을 잡아도 값은 같지만, 없을 때 0 을 넘겨야 한다.
+    if (is_changed == true)
+    {
+      usbh_hid_info_t info;
+      uint16_t        vid = 0;
+      uint16_t        pid = 0;
+
+      for (int i=0; i<CFG_TUH_HID; i++)
+      {
+        if (usbhHidGetInfo(i, &info) != true) continue;
+        if (info.is_connect != true) continue;
+
+        vid = info.vid;
+        pid = info.pid;
+        if (info.itf_protocol == HID_ITF_PROTOCOL_KEYBOARD) break;
+      }
+
+      kbdStoreSelect(vid, pid, 0);
     }
   }
 
