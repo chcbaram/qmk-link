@@ -21,6 +21,7 @@ CMakeUserPresets.json
 # 빌드 산출물
 build/
 build-*/
+release/
 
 # OS
 .DS_Store
