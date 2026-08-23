@@ -354,6 +354,13 @@ static void cliKey(cli_args_t *args)
     dumpReport("last ok  ", &kbd_last_ok);
     dumpReport("last 버림", &kbd_last_drop);
 
+    {
+      uint32_t t, o;
+
+      usbhHidGetProductStat(&t, &o);
+      cliPrintf("이름 요청  : %d 회 시도 / %d 회 받음\n", (int)t, (int)o);
+    }
+
     cliPrintf("HID 인스턴스\n");
     for (int i=0; i<CFG_TUH_HID; i++)
     {

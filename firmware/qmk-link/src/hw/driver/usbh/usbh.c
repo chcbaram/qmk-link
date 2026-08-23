@@ -119,6 +119,10 @@ void usbhCore1Main(void)
   while(1)
   {
     tuh_task();
+
+    // 이름 요청 재시도. 컨트롤 전송이라 열거 중에는 거절당한다 (usbh_hid.c 주석)
+    usbhHidTask();
+
     task_count++;
   }
 }

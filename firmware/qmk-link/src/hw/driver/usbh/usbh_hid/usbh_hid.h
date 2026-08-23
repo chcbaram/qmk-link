@@ -61,6 +61,10 @@ uint32_t usbhHidGetDropCount(void);
 // 아직 못 받았거나 없으면 false. 최대 USBH_PRODUCT_MAX-1 글자.
 bool usbhHidGetProduct(uint8_t dev_addr, char *p_str, uint8_t length);
 
+// core1 의 tuh_task() 뒤에서 부른다. 이름 요청을 재시도한다.
+void usbhHidTask(void);
+void usbhHidGetProductStat(uint32_t *p_try, uint32_t *p_ok);
+
 
 #endif
 
