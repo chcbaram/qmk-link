@@ -5,7 +5,7 @@ KLE 레이아웃 하나를 단일 진실 원본으로 삼아 VIA 정의 JSON 을
     keyboards/<모델>/layout-kle.json   <- 손으로 편집하는 건 이것 하나
     keyboards/<모델>/menus.json        <- 커스텀 메뉴 (손으로 씀)
        ├──▶ keyboards/<모델>/layout-via.json   VIA 앱에 넣는 정의
-       ├──▶ keyboards/<모델>/vial.json         Vial 정의 (사람이 읽는 원본)
+       ├──▶ keyboards/<모델>/layout-vial.json  Vial 정의 (사람이 읽는 원본)
        └──▶ keyboards/<모델>/vial_generated_keyboard_definition.h
                                                 Vial 이 장치에서 내주는 압축본
 
@@ -318,7 +318,7 @@ def main():
 
     # ── Vial ────────────────────────────────────────────────
     vial = build_vial(via)
-    vial_path = d / "vial.json"
+    vial_path = d / "layout-vial.json"
     vial_path.write_text(json.dumps(vial, indent=2, ensure_ascii=False) + "\n")
 
     hdr, raw_len, blob_len = gen_vial_header(vial)

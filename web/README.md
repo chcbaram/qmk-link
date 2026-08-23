@@ -1,7 +1,7 @@
 # qmk-link 배열 마법사
 
 KLE 로 그린 배열의 각 자리에 **그 키가 실제로 보내는 HID usage** 를 채워
-`layout-via.json` / `vial.json` / `layout-kle.json` 을 만든다.
+`layout-via.json` / `layout-vial.json` / `layout-kle.json` 을 만든다.
 
 ## 왜 브라우저 키 이벤트를 안 쓰나
 

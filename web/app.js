@@ -24,14 +24,22 @@ let firmware = null;         // 'via' | 'vial'
 //   내려받는 정의가 다르다 — VIA 는 layout-via.json 을 Design 탭에 넣고,
 //   Vial 은 장치가 정의를 직접 내주므로 그 파일이 지금은 쓸모가 없다.
 //   (보드에 담는 것은 09단계 2단계에서 한다)
+const DEFAULT_NAMES = ['QMK-LINK VIA', 'QMK-LINK VIAL'];
+
 function applyFirmware(vialLocked) {
   const isVial = firmware === 'vial';
+
+  // 이름 칸이 아직 기본값이면 펌웨어에 맞춰 준다.
+  // 프리셋을 골랐거나 손으로 고쳤으면 건드리지 않는다.
+  if (DEFAULT_NAMES.includes($('name').value.trim())) {
+    $('name').value = 'QMK-LINK ' + (isVial ? 'VIAL' : 'VIA');
+  }
 
   $('exVia').style.display  = isVial ? 'none' : '';
   $('exVial').style.display = isVial ? '' : 'none';
 
   $('fwNote').textContent = isVial
-    ? 'Vial 펌웨어다. Vial 은 정의를 장치에서 읽어가므로 vial.json 을 앱에 넣을 일이 없다 — '
+    ? 'Vial 펌웨어다. Vial 은 정의를 장치에서 읽어가므로 layout-vial.json 을 앱에 넣을 일이 없다 — '
       + '지금은 저장소 워크플로용으로만 받는다.'
       + (vialLocked ? '  (Vial 잠금 상태 — 매크로 편집 등은 좌우 Shift 5초로 풀어야 한다. 키 읽기는 잠겨도 된다)' : '')
     : 'VIA 펌웨어다. layout-via.json 을 VIA 의 Design 탭에 넣는다.';
@@ -325,8 +333,8 @@ function exportVia() {
   });
 }
 function exportVial() {
-  download(slug() + 'vial.json', {
-    name: $('name').value ? $('name').value.replace(' VIA', ' VIAL') : 'QMK-LINK VIAL',
+  download(slug() + 'layout-vial.json', {
+    name: $('name').value || 'QMK-LINK VIAL',
     vendorId: '0x0483', productId: '0x5305', lighting: 'none',
     matrix: { rows: 16, cols: 16 },
     layouts: { keymap: buildLayout() },

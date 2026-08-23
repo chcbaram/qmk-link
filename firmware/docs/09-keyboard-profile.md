@@ -253,7 +253,7 @@ VIA 전체를 끌고 다닐 이유가 없다.
 - [x] WebHID 로 raw HID(`0xFF60`) 열기 · 폴링
 - [x] KLE 붙여넣기 / **파일 열기** / **프리셋 7종**
 - [x] "이 자리를 누르세요" 마법사 + 이름으로 직접 넣기(못 누르는 키용)
-- [x] `layout-via.json` / `vial.json` / `layout-kle.json` 내려받기
+- [x] `layout-via.json` / `layout-vial.json` / `layout-kle.json` 내려받기
 - [x] `gh-pages` 배포
 
 `web/` 에 있다. → [web/README.md](../../web/README.md)

@@ -63,7 +63,7 @@ if (tud_suspended() == true) return LED_ST_SUSPEND;   /* 최우선 */
 |---|---|
 | `src/hw/hw_def.h` | `HW_USB_VID` / `HW_USB_PID` |
 | `keyboards/qmk-link/layout-via.json` | 생성물 (`gen_keymap.py`) |
-| `keyboards/qmk-link/vial.json` | 생성물 |
+| `keyboards/qmk-link/layout-vial.json` | 생성물 |
 | `firm-sdk/tools/flash.py` | `FW_VID` / `FW_PID` |
 
 다른 baram 키보드와 겹치지 않는 값이다 (직전 최신이 wish-he `0x5304`).

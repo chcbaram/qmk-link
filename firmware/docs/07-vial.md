@@ -151,14 +151,14 @@ Vial 이 unlock 조합 확인에 쓴다. upstream 은 `quantum/matrix_common.c` 
 
 ```
 layout-kle.json ──┬──▶ layout-via.json                        VIA 앱
-                  ├──▶ vial.json                              사람이 읽는 원본
+                  ├──▶ layout-vial.json                       사람이 읽는 원본
                   └──▶ vial_generated_keyboard_definition.h   장치가 내주는 압축본
 ```
 
 vial-qmk 의 `util/vial_generate_definition.py` 와 같은 일을 한다 (json 최소화 + LZMA).
 표준 라이브러리뿐이라 25줄이다. **두 벌을 손으로 관리하면 반드시 어긋난다.**
 
-vial.json 이 VIA 정의와 다른 점은 두 가지뿐이다 — `lighting` 이 필수이고(`none`),
+layout-vial.json 이 VIA 정의와 다른 점은 두 가지뿐이다 — `lighting` 이 필수이고(`none`),
 `menus` 를 넣지 않는다(Vial 은 설정 UI 를 자기가 갖고 있다).
 
 **★ Vial 은 이 정의를 장치에서 읽어간다.** 실측 552 B (json 1486 B → LZMA).
@@ -340,7 +340,7 @@ build-vial/src/qmk-link-vial.uf2  USB 제품 이름 "QMK-LINK VIAL"
 - [x] `CMakeLists.txt` 가 `KEY_PROTOCOL` 로 원본을 고른다
 - [x] `ap/modules/qmk/vial/` 트리 (via 에서 복사 + 세 군데 수정)
 - [x] via 트리에도 `config.h` 신설 (`*_PER_KEY` 를 공용에서 옮김)
-- [x] `gen_keymap.py` 가 `vial.json` + 정의 헤더까지 생성
+- [x] `gen_keymap.py` 가 `layout-vial.json` + 정의 헤더까지 생성
 - [x] `matrix_is_on()`
 - [x] `eepromGetBase()` — 공용 코드에서 주소 하드코딩 제거
 - [x] 산출물 · USB 이름 분리
