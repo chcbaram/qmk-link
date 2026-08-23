@@ -4,6 +4,15 @@
     "여기 적으면 VIA 가 UI 를 스스로 그리고, 펌웨어는 port/via_port.c 에서",
     "채널 ID 별로 값만 주고받는다. VIA 웹앱을 포크할 필요가 없다.",
     "",
+    "★ 계층이 세 겹이어야 한다 — 메뉴 > 그룹 > 컨트롤.",
+    "",
+    "  menus[i].content[] 에 컨트롤을 바로 넣으면 VIA 가 정의를 거부한다.",
+    "  스키마가 그 자리를 '그룹'({label, content:[객체...]}) 으로만 받기 때문이다.",
+    "  컨트롤을 두면 이렇게 나온다 —",
+    "    /menus/0/content/0: must NOT have additional properties   (type · options)",
+    "    /menus/0/content/0/content/0: must be object              (content 가 [id,ch,val])",
+    "  tools/gen_keymap.py 가 이 계층을 검사한다.",
+    "",
     "★ 여기 있는 것들은 원래 QMK 의 '빌드 옵션' 이다.",
     "  config.h 에 박아 두면 바꿀 때마다 다시 구워야 한다. 이 보드는 꽂는 키보드가",
     "  매번 달라서 그게 특히 불편하다. Vial 이 하는 것처럼 런타임 값으로 뺐다.",
@@ -16,46 +25,77 @@
     "  1~5 는 VIA 가 조명용으로 예약해 뒀다 (backlight / rgblight / rgb_matrix ...).",
     "  지금은 조명을 안 켜서 충돌이 없지만, 나중에 켤 때 옮기지 않으려고 비켜 둔다."
   ],
-
   "menus": [
     {
-      "label": "Tap-Hold",
+      "label": "QMK",
       "content": [
         {
-          "label": "Tapping Term (default 200ms)",
-          "type": "range",
-          "options": [50, 500],
-          "content": ["id_link_tapping_term", 14, 1]
+          "label": "Tap-Hold",
+          "content": [
+            {
+              "label": "Tapping Term (default 200ms)",
+              "type": "range",
+              "options": [
+                50,
+                500
+              ],
+              "content": [
+                "id_link_tapping_term",
+                14,
+                1
+              ]
+            },
+            {
+              "label": "Hold On Other Key Press",
+              "type": "toggle",
+              "content": [
+                "id_link_hold_okp",
+                14,
+                2
+              ]
+            },
+            {
+              "label": "Permissive Hold",
+              "type": "toggle",
+              "content": [
+                "id_link_permissive_hold",
+                14,
+                3
+              ]
+            },
+            {
+              "label": "Retro Tapping",
+              "type": "toggle",
+              "content": [
+                "id_link_retro_tapping",
+                14,
+                4
+              ]
+            }
+          ]
         },
         {
-          "label": "Hold On Other Key Press",
-          "type": "toggle",
-          "content": ["id_link_hold_okp", 14, 2]
-        },
-        {
-          "label": "Permissive Hold",
-          "type": "toggle",
-          "content": ["id_link_permissive_hold", 14, 3]
-        },
-        {
-          "label": "Retro Tapping",
-          "type": "toggle",
-          "content": ["id_link_retro_tapping", 14, 4]
-        }
-      ]
-    },
-    {
-      "label": "Link",
-      "content": [
-        {
-          "label": "NKRO",
-          "type": "toggle",
-          "content": ["id_link_nkro", 15, 1]
-        },
-        {
-          "label": "Passthrough (bypass QMK)",
-          "type": "toggle",
-          "content": ["id_link_passthrough", 15, 2]
+          "label": "Link",
+          "content": [
+            {
+              "label": "NKRO",
+              "type": "toggle",
+              "content": [
+                "id_link_nkro",
+                15,
+                1
+              ]
+            },
+            {
+              "label": "Passthrough (bypass QMK)",
+              "type": "toggle",
+              "content": [
+                "id_link_passthrough",
+                15,
+                2
+              ]
+            }
+          ]
         }
       ]
     }

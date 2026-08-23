@@ -100,6 +100,69 @@ def load(path):
         sys.exit("%s : JSON 오류 %s" % (path.name, e))
 
 
+# VIA 스키마가 받는 컨트롤 타입
+CONTROL_TYPES = {"toggle", "range", "dropdown", "color", "keycode"}
+
+
+def check_menus(menus):
+    """
+    ★ 계층이 세 겹이어야 한다 — 메뉴 > 그룹 > 컨트롤.
+
+    menus[i].content[] 에 컨트롤을 바로 넣으면 VIA 가 정의를 통째로 거부한다.
+    스키마가 그 자리를 '그룹'({label, content:[객체...]}) 으로만 받기 때문이다.
+    실제로 겪은 오류 —
+
+        /menus/0/content/0: must NOT have additional properties   (type · options)
+        /menus/0/content/0/content/0: must be object              (content 가 [id,ch,val])
+
+    VIA 에 넣어 봐야 알 수 있는 종류의 실수라 여기서 막는다.
+    """
+    err = []
+
+    def is_control(x):
+        return isinstance(x, dict) and "type" in x
+
+    for i, menu in enumerate(menus):
+        at = "menus/%d" % i
+        if not isinstance(menu, dict) or "content" not in menu:
+            err.append("%s : {label, content} 여야 한다" % at)
+            continue
+
+        for j, group in enumerate(menu["content"]):
+            gat = "%s/content/%d" % (at, j)
+
+            if is_control(group):
+                err.append("%s '%s' : 컨트롤이 그룹 자리에 있다. "
+                           "메뉴 > 그룹 > 컨트롤 로 한 겹 감싸라"
+                           % (gat, group.get("label", "?")))
+                continue
+            if not isinstance(group, dict) or "content" not in group:
+                err.append("%s : 그룹은 {label, content} 여야 한다" % gat)
+                continue
+
+            for k, ctl in enumerate(group["content"]):
+                cat = "%s/content/%d" % (gat, k)
+                if not is_control(ctl):
+                    err.append("%s : 컨트롤에 type 이 없다" % cat)
+                    continue
+                if ctl["type"] not in CONTROL_TYPES:
+                    err.append("%s : 모르는 type '%s' (%s)"
+                               % (cat, ctl["type"], " ".join(sorted(CONTROL_TYPES))))
+                c = ctl.get("content")
+                if not (isinstance(c, list) and len(c) == 3
+                        and isinstance(c[0], str)
+                        and isinstance(c[1], int) and isinstance(c[2], int)):
+                    err.append("%s : content 는 [\"id\", 채널, 값ID] 여야 한다" % cat)
+                elif c[1] < 6:
+                    err.append("%s : 채널 %d 는 VIA 가 조명용으로 예약했다 (14 부터 써라)"
+                               % (cat, c[1]))
+
+    if err:
+        for e in err:
+            print("  " + e, file=sys.stderr)
+        sys.exit("menus.json 을 고쳐라")
+
+
 def build(kle_doc, menus_doc, name):
     """KLE 범례(키 이름)를 주소로 바꾼 VIA 정의를 만든다."""
     out_rows = []
@@ -141,6 +204,7 @@ def build(kle_doc, menus_doc, name):
         "layouts": {"keymap": out_rows},
     }
     if menus_doc and menus_doc.get("menus"):
+        check_menus(menus_doc["menus"])
         via["menus"] = menus_doc["menus"]
 
     return via, seen
@@ -188,7 +252,8 @@ def main():
     out.write_text(text)
     print("%s  (%d 키)" % (out.relative_to(ROOT), len(seen)))
     if menus:
-        print("  커스텀 메뉴 %d 개 포함" % len(menus["menus"]))
+        n = sum(len(g["content"]) for m in menus["menus"] for g in m["content"])
+        print("  커스텀 메뉴 %d 개 / 컨트롤 %d 개 포함" % (len(menus["menus"]), n))
 
 
 if __name__ == "__main__":

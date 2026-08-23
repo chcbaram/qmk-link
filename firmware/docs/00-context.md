@@ -247,6 +247,7 @@ void cliLoopIdle(void)
 | **`flash.h` 는 wish-he 인터페이스 그대로** | 주소는 **플래시 오프셋**이다. rp2040 계열 `flash.c` 는 반대로 XIP 절대주소를 받으므로 그쪽 코드를 베껴 올 때 주의. 영역 가드는 rp2040_fw 의 `flash_tbl` 을 참고하되 "겹치면 통과" 가 아니라 "완전히 들어가야 통과" 로 좁혔다 |
 | **키보드 정의는 `keyboards/qmk-link/`** | wish-he 관례. **`layout-kle.json` 하나만 손으로 편집**하고 `tools/gen_keymap.py` 가 `layout-via.json` 을 만든다. KLE 범례는 주소가 아니라 **키 이름**이다 — 주소를 손으로 적으면 반드시 어긋난다 |
 | **VIA 배열은 풀사이즈 + 서랍** | 매트릭스 좌표가 HID usage 라 **그림은 물리 PCB 가 아니다.** TKL/65%/60% 는 풀사이즈의 부분집합이라 그대로 덮이고, ISO Enter 도 ANSI Enter 도 `0x28` 이라 **레이아웃 옵션이 필요 없다.** ANSI 에 없는 usage(F13~F24 / ISO·JIS / 편집·미디어)는 아래에 서랍으로 붙인다. **그림에 없는 키도 동작한다** — 못 고칠 뿐이다 |
+| **VIA 커스텀 메뉴는 메뉴 > 그룹 > 컨트롤 3단** | `menus[i].content[]` 에 컨트롤을 바로 넣으면 VIA 가 정의를 통째로 거부한다(`must NOT have additional properties`). 앱에 넣어 봐야 아는 실수라 `gen_keymap.py` 가 검사한다 |
 | **빌드 옵션을 VIA 커스텀 메뉴로 뺀다** | 꽂는 키보드가 매번 달라서 탭텀·탭홀드를 다시 구워 바꾸는 게 특히 불편하다. Vial 의 QMK settings 와 같은 효과를 얻으면서 **웹앱을 포크하지 않는다.** ★ `*_PER_KEY` 매크로가 없으면 QMK 가 `get_*()` 를 아예 부르지 않는다 |
 | **`led.h` 이름 충돌** | `common/hw/include/led.h`(baram)와 `quantum/led.h`(QMK)가 같은 이름이다. include 경로 순서로는 못 푼다. QMK 소스에만 `-include quantum/led.h` 를 강제한다 (`qmk/via/CMakeLists.txt`) |
 | **허브 지원은 필수다** | `CFG_TUH_HUB=1`. HHKB Lite 2 처럼 허브 내장 키보드가 흔하다. 끄면 연결은 감지되는데 열거가 끝나지 않는다 |

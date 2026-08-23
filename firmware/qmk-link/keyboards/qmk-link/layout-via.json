@@ -288,69 +288,74 @@
   },
   "menus": [
     {
-      "label": "Tap-Hold",
+      "label": "QMK",
       "content": [
         {
-          "label": "Tapping Term (default 200ms)",
-          "type": "range",
-          "options": [
-            50,
-            500
-          ],
+          "label": "Tap-Hold",
           "content": [
-            "id_link_tapping_term",
-            14,
-            1
+            {
+              "label": "Tapping Term (default 200ms)",
+              "type": "range",
+              "options": [
+                50,
+                500
+              ],
+              "content": [
+                "id_link_tapping_term",
+                14,
+                1
+              ]
+            },
+            {
+              "label": "Hold On Other Key Press",
+              "type": "toggle",
+              "content": [
+                "id_link_hold_okp",
+                14,
+                2
+              ]
+            },
+            {
+              "label": "Permissive Hold",
+              "type": "toggle",
+              "content": [
+                "id_link_permissive_hold",
+                14,
+                3
+              ]
+            },
+            {
+              "label": "Retro Tapping",
+              "type": "toggle",
+              "content": [
+                "id_link_retro_tapping",
+                14,
+                4
+              ]
+            }
           ]
         },
         {
-          "label": "Hold On Other Key Press",
-          "type": "toggle",
+          "label": "Link",
           "content": [
-            "id_link_hold_okp",
-            14,
-            2
-          ]
-        },
-        {
-          "label": "Permissive Hold",
-          "type": "toggle",
-          "content": [
-            "id_link_permissive_hold",
-            14,
-            3
-          ]
-        },
-        {
-          "label": "Retro Tapping",
-          "type": "toggle",
-          "content": [
-            "id_link_retro_tapping",
-            14,
-            4
-          ]
-        }
-      ]
-    },
-    {
-      "label": "Link",
-      "content": [
-        {
-          "label": "NKRO",
-          "type": "toggle",
-          "content": [
-            "id_link_nkro",
-            15,
-            1
-          ]
-        },
-        {
-          "label": "Passthrough (bypass QMK)",
-          "type": "toggle",
-          "content": [
-            "id_link_passthrough",
-            15,
-            2
+            {
+              "label": "NKRO",
+              "type": "toggle",
+              "content": [
+                "id_link_nkro",
+                15,
+                1
+              ]
+            },
+            {
+              "label": "Passthrough (bypass QMK)",
+              "type": "toggle",
+              "content": [
+                "id_link_passthrough",
+                15,
+                2
+              ]
+            }
           ]
         }
       ]

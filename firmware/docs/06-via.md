@@ -211,6 +211,21 @@ Vial 의 QMK settings 와 같은 효과를 VIA 에서 얻는다 — **웹앱을 
 **★ 탭텀은 두 바이트, 큰 자리가 먼저다.** 앱은 슬라이더 최댓값이 255 를 넘으면
 자동으로 2바이트로 보낸다.
 
+**★ 계층이 세 겹이어야 한다 — 메뉴 > 그룹 > 컨트롤.**
+
+`menus[i].content[]` 에 컨트롤을 바로 넣으면 VIA 가 정의를 **통째로 거부한다.**
+스키마가 그 자리를 그룹(`{label, content:[객체...]}`)으로만 받기 때문이다.
+처음에 두 겹으로 썼다가 앱에서 이렇게 나왔다:
+
+```
+/menus/0/content/0: must NOT have additional properties      <- type · options
+/menus/0/content/0/content/0: must be object                 <- content 가 [id, ch, val]
+```
+
+wish-he 도 `QMK > Key Handling > 컨트롤` 3단이다. VIA 에 넣어 봐야 알 수 있는
+종류의 실수라 `tools/gen_keymap.py` 가 계층을 검사한다 (타입 · content 모양 ·
+예약 채널까지).
+
 **★ 채널 ID 는 14 부터.** 1~5 는 VIA 가 조명용으로 예약해 뒀다.
 
 **★ 라벨은 영어로 쓴다.** 웹앱이 이 문자열을 그대로 i18n 키로 쓴다.
@@ -271,7 +286,7 @@ VIA 까지 실기에서 확인됐으므로 `apInit()` 에서 자동으로 올린
 
 | 항목 | 내용 |
 |---|---|
-| VIA 웹앱 실물 확인 | 프로토콜은 hidapi 로 전부 확인했지만 `layout-via.json` 을 앱의 Design 탭에 넣어 그림이 제대로 나오는지는 미확인 |
+| VIA 웹앱 실물 확인 | 메뉴 계층 오류는 앱에서 잡아 고쳤다. 배열 그림이 제대로 나오는지는 아직 확인 중 |
 | 미디어키 | 원본 키보드가 consumer 페이지로 보내는 키는 아직 안 받는다. `updateKeyboard()` 가 `HID_ITF_PROTOCOL_KEYBOARD` 만 본다 → 08단계 |
 | 매크로 버퍼 | `DYNAMIC_KEYMAP_MACRO_COUNT` 기본값을 그대로 쓴다. 16KB 안에서 남는 만큼이 버퍼다 |
 | 첫 부팅 정지 | 빈 EEPROM 에서 동적 키맵을 처음 채울 때 4섹터를 쓴다. 200ms 간격이라 총 1초쯤 |
