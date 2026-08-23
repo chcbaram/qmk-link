@@ -55,6 +55,11 @@ USB-A 에 꽂은 일반 키보드를 QMK 로 처리해 PC 에는 VIA / Vial 키�
   외부로 나가는 `apInit()` / `apMain()` 만 접두어를 갖는다
 - **`ap.c` 에는 진입점만 둔다** — `apInit` · `apMain` · `cliLoopIdle`.
   실제 일은 `ap/modules/<이름>/` 로 뺀다
+- **`ap` 레이어의 헤더는 `ap_def.h` 를 include 한다.** `hw_def.h` 가 아니다 —
+  계층이 `hw → ap` 이므로 ap 는 hw 를 통째로 본다 (`ap_def.h` → `hw.h`)
+  - 예외는 `ap/modules/qmk/*/port/platforms/*.h` 다. 그건 upstream 헤더를
+    흉내 내는 shim 이라 QMK 소스가 직접 집는다. 거기서 `hw.h` 를 끌면
+    QMK 번역 단위마다 우리 드라이버가 딸려 들어간다
 - **CLI 콜백은 파일 맨 아래에 둔다.** `cliLoopIdle()` 같은 일반 함수가 그 위다
 - 주석과 문서는 한국어
 

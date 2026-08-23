@@ -5,7 +5,7 @@
  extern "C" {
 #endif
 
-#include "hw_def.h"
+#include "ap_def.h"
 
 
 // USB-A 에 꽂힌 키보드가 보낸 HID 리포트를 "눌린 키 비트맵" 으로 바꾼다.

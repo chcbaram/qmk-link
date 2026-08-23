@@ -5,7 +5,7 @@
  extern "C" {
 #endif
 
-#include "hw_def.h"
+#include "ap_def.h"
 
 
 // 꽂힌 키보드마다 레이아웃 정의를 플래시에 담아 둔다.

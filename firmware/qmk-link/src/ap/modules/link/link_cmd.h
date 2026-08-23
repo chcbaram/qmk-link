@@ -5,7 +5,7 @@
  extern "C" {
 #endif
 
-#include "hw_def.h"
+#include "ap_def.h"
 
 
 // qmk-link 고유의 raw HID 명령.
