@@ -47,7 +47,12 @@
 </section>
 
 <section>
-  <div class="note">① <a href="https://www.keyboard-layout-editor.com" target="_blank">keyboard-layout-editor.com</a>
+  <div class="row" style="margin-bottom:8px">
+    <select id="preset"><option value="">— 프리셋에서 고르기 —</option></select>
+    <button id="loadFile">KLE json 파일 열기</button>
+    <input type="file" id="file" accept=".json,application/json" hidden>
+  </div>
+  <div class="note">또는 <a href="https://www.keyboard-layout-editor.com" target="_blank">keyboard-layout-editor.com</a>
     에서 배열을 그리고 <b>Raw data</b> 를 그대로 붙여넣는다. 범례는 아무거나 좋다.</div>
   <textarea id="kle" placeholder='["Esc","1","2","3"],
 ["Tab","Q","W","E"]'></textarea>

@@ -1,4 +1,5 @@
 import { USAGE, NAME_OF } from './usage-table.js';
+import { PRESETS } from './presets.js';
 
 // ── qmk-link raw HID 명령 (firmware/.../link_cmd.h 와 같아야 한다) ──
 const VID = 0x0483, PID = 0x5305;
@@ -114,6 +115,41 @@ function parseKle(text) {
   }
   return out;
 }
+
+// ── 프리셋 · 파일 ──────────────────────────────────────
+function fillPresets() {
+  const sel = $('preset');
+  PRESETS.forEach((p, i) => {
+    const o = document.createElement('option');
+    o.value = String(i); o.textContent = p.name;
+    sel.appendChild(o);
+  });
+  sel.onchange = () => {
+    const p = PRESETS[Number(sel.value)];
+    if (!p) return;
+    $('kle').value = JSON.stringify(p.layout, null, 0).slice(1, -1).replace(/\],\[/g, '],\n[');
+    loadKle();
+    log(`${p.name} 을 넣었다. [마법사 시작] 을 누른다.`);
+  };
+}
+
+function openFile() { $('file').click(); }
+
+$('file') && ($('file').onchange = async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const text = await f.text();
+  // KLE raw · 우리 layout-kle.json · VIA/Vial 정의 셋 다 받는다
+  let body = text;
+  try {
+    const j = JSON.parse(text);
+    if (j.layout) body = JSON.stringify(j.layout);                       // layout-kle.json
+    else if (j.layouts && j.layouts.keymap) body = JSON.stringify(j.layouts.keymap);  // via / vial
+  } catch { /* KLE raw 는 그대로 둔다 */ }
+  $('kle').value = body;
+  loadKle();
+  log(`${f.name} 을 읽었다.`);
+});
 
 function loadKle() {
   try {
@@ -239,6 +275,8 @@ function exportKle() {
   download('layout-kle.json', { _comment: ['웹 마법사가 만들었다. gen_keymap.py 의 입력이다.'], layout: rows });
 }
 
+fillPresets();
+$('loadFile').onclick = openFile;
 $('connect').onclick = connect;
 $('load').onclick = loadKle;
 $('start').onclick = startWizard;
