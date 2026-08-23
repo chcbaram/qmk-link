@@ -12,6 +12,19 @@ web/presets.js 를 만든다.
   순서대로 zip 하면 좌표 <-> 이름이 맞는다. (행 단위로 줄바꿈된 것과 무관하다 —
   HHKB Lite 2 는 4번째 줄이 12개인데 그 행의 자리는 13개다. 순서로 zip 해야 맞다)
 
+★ 좌표와 키맵은 **같은 매크로**에서 와야 한다.
+
+  처음에 layouts/default/<이름>/info.json 의 좌표에다 "그 레이아웃을 쓴다고
+  적힌 키보드"의 기본 키맵을 붙였는데, 그 키보드의 LAYOUT 은 다른 매크로였다.
+  키가 하나 더 많아서 **범례가 두 번째 행부터 한 칸씩 밀렸다** — 1.5U Tab 자리가
+  비고 TAB 이 옆칸으로 갔다. 눈으로 봐야 알아채는 종류의 오류다.
+
+  그래서 지금은
+    · keyboard.json 에 LAYOUT_<이름> 이 있고
+    · 그 키보드의 기본 키맵이 **그 매크로를 그대로 부르며**
+    · 토큰 수 == 자리 수
+  인 것만 고른다. 셋 다 맞아야 짝이 성립한다.
+
 사용법
     python3 web/tools/gen_presets.py > web/presets.js
 
@@ -61,11 +74,13 @@ def norm(tok):
     return KC.get(m.group(1)) if m else None
 
 
-def keymap_tokens(path):
-    """첫 LAYOUT(...) 의 인자를 순서대로 뽑는다. 중첩 괄호를 센다."""
+def keymap_tokens(path, macro="LAYOUT"):
+    """<macro>(...) 의 인자를 순서대로 뽑는다. 중첩 괄호를 센다."""
     s = path.read_text()
-    i = s.index("LAYOUT")
-    i = s.index("(", i)
+    m = re.search(re.escape(macro) + r"\s*\(", s)
+    if not m:
+        raise ValueError("%s 를 못 찾았다: %s" % (macro, path))
+    i = m.end() - 1
     depth = 0
     for j in range(i, len(s)):
         if s[j] == "(":
@@ -127,50 +142,91 @@ def to_kle(layout, names):
     return rows
 
 
-def build(label, layout_path, keymap_path, layout_key=None):
+def build(label, layout_path, macro, keymap_path):
     d = json.loads((QMK / layout_path).read_text())
-    key = layout_key or list(d["layouts"].keys())[0]
-    L = d["layouts"][key]["layout"]
+    L = d["layouts"][macro]["layout"]
+    toks = keymap_tokens(QMK / keymap_path, macro)
 
-    names = [norm(t) for t in keymap_tokens(QMK / keymap_path)][:len(L)]
-    names += [None] * (len(L) - len(names))
+    # ★ 여기서 안 맞으면 범례가 밀린다. 조용히 넘어가지 않는다.
+    if len(toks) != len(L):
+        raise ValueError("%s : 자리 %d 개인데 키맵 토큰이 %d 개다"
+                         % (label, len(L), len(toks)))
 
-    return {"name": label, "keys": len(L), "layout": to_kle(L, names)}
+    return {"name": "%s (%d)" % (label, len(L)), "keys": len(L),
+            "layout": to_kle(L, [norm(t) for t in toks])}
 
 
-ITEMS = [
-    # (표시 이름, 좌표 json, 범례를 가져올 기본 키맵)
-    ("HHKB Lite 2 (64)",
-     "keyboards/hhkb_lite_2/keyboard.json",
+def find_pairs(names):
+    """
+    커뮤니티 레이아웃 이름마다 (좌표, 키맵) 짝을 찾는다.
+
+    조건 셋을 다 만족해야 한다 — 매크로 이름이 같고, 기본 키맵이 그 매크로를
+    부르고, 토큰 수가 자리 수와 같다. 하나라도 어긋나면 범례가 밀린다.
+    """
+    found = {}
+
+    for kb in (QMK / "keyboards").rglob("*.json"):
+        if kb.name not in ("keyboard.json", "info.json"):
+            continue
+        try:
+            d = json.loads(kb.read_text())
+        except Exception:                            # noqa: BLE001
+            continue
+
+        for name in (d.get("community_layouts") or []):
+            if name not in names or name in found:
+                continue
+
+            macro = "LAYOUT_" + name
+            lay = (d.get("layouts") or {}).get(macro)
+            km = kb.parent / "keymaps" / "default" / "keymap.c"
+            if not lay or not km.exists():
+                continue
+
+            try:
+                toks = keymap_tokens(km, macro)
+            except Exception:                        # noqa: BLE001
+                continue
+            if len(toks) != len(lay["layout"]):      # ★ 이 검사가 밀림을 막는다
+                continue
+
+            found[name] = (kb.relative_to(QMK), macro, km.relative_to(QMK))
+
+    return found
+
+
+# (표시 이름, 커뮤니티 레이아웃 이름)
+COMMUNITY = [
+    ("60% ANSI",      "60_ansi"),
+    ("60% HHKB",      "60_hhkb"),
+    ("65% ANSI",      "65_ansi"),
+    ("75% ANSI",      "75_ansi"),
+    ("TKL ANSI",      "tkl_ansi"),
+    ("풀사이즈 ANSI", "fullsize_ansi"),
+]
+
+# 커뮤니티 레이아웃이 아닌 것 — 키보드 자기 정의를 그대로 쓴다
+OWN = [
+    ("HHKB Lite 2",
+     "keyboards/hhkb_lite_2/keyboard.json", "LAYOUT",
      "keyboards/hhkb_lite_2/keymaps/default/keymap.c"),
-    ("60% ANSI (61)",
-     "layouts/default/60_ansi/info.json",
-     "keyboards/iriskeyboards/keymaps/default/keymap.c"),
-    ("60% HHKB (60)",
-     "layouts/default/60_hhkb/info.json",
-     "keyboards/panc60/keymaps/default/keymap.c"),
-    ("65% ANSI (68)",
-     "layouts/default/65_ansi/info.json",
-     "keyboards/zj68/keymaps/default/keymap.c"),
-    ("75% ANSI (84)",
-     "layouts/default/75_ansi/info.json",
-     "keyboards/jolofsor/denial75/keymaps/default/keymap.c"),
-    ("TKL ANSI (87)",
-     "layouts/default/tkl_ansi/info.json",
-     "keyboards/poker87c/keymaps/default/keymap.c"),
-    ("풀사이즈 ANSI (104)",
-     "layouts/default/fullsize_ansi/info.json",
-     "keyboards/gh80_3000/keymaps/default/keymap.c"),
 ]
 
 
 def main():
     out = []
-    for item in ITEMS:
-        try:
-            out.append(build(*item))
-        except Exception as e:                       # noqa: BLE001
-            print("// 실패 %s : %s" % (item[0], e), file=sys.stderr)
+
+    for label, path, macro, km in OWN:
+        out.append(build(label, path, macro, km))
+
+    pairs = find_pairs({n for _, n in COMMUNITY})
+    for label, name in COMMUNITY:
+        if name not in pairs:
+            print("// 짝을 못 찾음 : %s" % name, file=sys.stderr)
+            continue
+        kb, macro, km = pairs[name]
+        out.append(build(label, kb, macro, km))
+        print("//   %-14s <- %s  (%s)" % (name, kb, km), file=sys.stderr)
 
     print("// 생성물 — web/tools/gen_presets.py 가 만든다. 손으로 고치지 않는다.")
     print("//")

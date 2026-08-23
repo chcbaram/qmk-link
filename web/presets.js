@@ -147,7 +147,7 @@ export const PRESETS = [
   "keys": 61,
   "layout": [
    [
-    "ESC",
+    "GRV",
     "1",
     "2",
     "3",
@@ -169,7 +169,6 @@ export const PRESETS = [
     {
      "w": 1.5
     },
-    "",
     "TAB",
     "Q",
     "W",
@@ -182,16 +181,16 @@ export const PRESETS = [
     "O",
     "P",
     "LBRC",
+    "RBRC",
     {
      "w": 1.5
     },
-    "RBRC"
+    "BSLS"
    ],
    [
     {
      "w": 1.75
     },
-    "BSLS",
     "CAPS",
     "A",
     "S",
@@ -203,18 +202,17 @@ export const PRESETS = [
     "K",
     "L",
     "SCLN",
+    "QUOT",
     {
      "w": 2.25
     },
-    "QUOT"
+    "ENT"
    ],
    [
     {
      "w": 2.25
     },
-    "ENT",
     "LSFT",
-    "BSLS",
     "Z",
     "X",
     "C",
@@ -223,26 +221,16 @@ export const PRESETS = [
     "N",
     "M",
     "COMM",
+    "DOT",
+    "SLSH",
     {
      "w": 2.75
     },
-    "DOT"
+    "RSFT"
    ],
    [
     {
      "w": 1.25
-    },
-    "SLSH",
-    {
-     "w": 1.25
-    },
-    "RSFT",
-    {
-     "w": 1.25
-    },
-    "",
-    {
-     "w": 6.25
     },
     "LCTL",
     {
@@ -254,13 +242,25 @@ export const PRESETS = [
     },
     "LALT",
     {
-     "w": 1.25
+     "w": 6.25
     },
     "SPC",
     {
      "w": 1.25
     },
-    "RALT"
+    "RALT",
+    {
+     "w": 1.25
+    },
+    "RGUI",
+    {
+     "w": 1.25
+    },
+    "",
+    {
+     "w": 1.25
+    },
+    "RCTL"
    ]
   ]
  },
@@ -391,14 +391,13 @@ export const PRESETS = [
     {
      "w": 2
     },
-    "",
-    "BSPC"
+    "BSPC",
+    "GRV"
    ],
    [
     {
      "w": 1.5
     },
-    "DEL",
     "TAB",
     "Q",
     "W",
@@ -411,17 +410,17 @@ export const PRESETS = [
     "O",
     "P",
     "LBRC",
+    "RBRC",
     {
      "w": 1.5
     },
-    "RBRC",
-    "BSLS"
+    "BSLS",
+    "DEL"
    ],
    [
     {
      "w": 1.75
     },
-    "PGUP",
     "CAPS",
     "A",
     "S",
@@ -433,19 +432,18 @@ export const PRESETS = [
     "K",
     "L",
     "SCLN",
+    "QUOT",
     {
      "w": 2.25
     },
-    "QUOT",
-    "ENT"
+    "ENT",
+    "PGUP"
    ],
    [
     {
      "w": 2.25
     },
-    "PGDN",
     "LSFT",
-    "",
     "Z",
     "X",
     "C",
@@ -454,36 +452,38 @@ export const PRESETS = [
     "N",
     "M",
     "COMM",
+    "DOT",
+    "SLSH",
     {
      "w": 1.75
     },
-    "DOT",
-    "SLSH",
-    "RSFT"
+    "RSFT",
+    "UP",
+    "PGDN"
    ],
    [
     {
      "w": 1.25
     },
-    "UP",
-    {
-     "w": 1.25
-    },
-    "",
-    {
-     "w": 1.25
-    },
     "LCTL",
+    {
+     "w": 1.25
+    },
+    "LGUI",
+    {
+     "w": 1.25
+    },
+    "LALT",
     {
      "w": 6.25
     },
-    "LGUI",
-    "LALT",
     "SPC",
     "RALT",
-    "APP",
+    "",
     "RCTL",
-    "LEFT"
+    "LEFT",
+    "DOWN",
+    "RGHT"
    ]
   ]
  },
@@ -493,6 +493,9 @@ export const PRESETS = [
   "layout": [
    [
     "ESC",
+    {
+     "x": 0.25
+    },
     "F1",
     "F2",
     "F3",
@@ -505,11 +508,17 @@ export const PRESETS = [
     "F10",
     "F11",
     "F12",
+    {
+     "x": 0.25
+    },
     "PSCR",
     "INS",
     "DEL"
    ],
    [
+    {
+     "y": 0.25
+    },
     "GRV",
     "1",
     "2",
@@ -527,6 +536,9 @@ export const PRESETS = [
      "w": 2
     },
     "BSPC",
+    {
+     "x": 0.5
+    },
     "HOME"
    ],
    [
@@ -550,6 +562,9 @@ export const PRESETS = [
      "w": 1.5
     },
     "BSLS",
+    {
+     "x": 0.5
+    },
     "PGUP"
    ],
    [
@@ -572,6 +587,9 @@ export const PRESETS = [
      "w": 2.25
     },
     "ENT",
+    {
+     "x": 0.5
+    },
     "PGDN"
    ],
    [
@@ -592,8 +610,24 @@ export const PRESETS = [
     {
      "w": 1.75
     },
-    "RSFT",
-    "UP",
+    "RSFT"
+   ],
+   [
+    {
+     "y": -0.75
+    },
+    {
+     "x": 14.25
+    },
+    "UP"
+   ],
+   [
+    {
+     "y": -1.25
+    },
+    {
+     "x": 15.5
+    },
     "END"
    ],
    [
@@ -615,7 +649,15 @@ export const PRESETS = [
     "SPC",
     "RALT",
     "",
-    "RCTL",
+    "RCTL"
+   ],
+   [
+    {
+     "y": -0.75
+    },
+    {
+     "x": 13.25
+    },
     "LEFT",
     "DOWN",
     "RGHT"
@@ -658,7 +700,7 @@ export const PRESETS = [
    ],
    [
     {
-     "y": 0.25
+     "y": 0.5
     },
     "GRV",
     "1",
@@ -676,19 +718,18 @@ export const PRESETS = [
     {
      "w": 2
     },
-    "",
+    "BSPC",
     {
      "x": 0.25
     },
-    "BSPC",
     "INS",
-    "HOME"
+    "HOME",
+    "PGUP"
    ],
    [
     {
      "w": 1.5
     },
-    "PGUP",
     "TAB",
     "Q",
     "W",
@@ -701,22 +742,22 @@ export const PRESETS = [
     "O",
     "P",
     "LBRC",
+    "RBRC",
     {
      "w": 1.5
     },
-    "RBRC",
+    "BSLS",
     {
      "x": 0.25
     },
-    "BSLS",
     "DEL",
-    "END"
+    "END",
+    "PGDN"
    ],
    [
     {
      "w": 1.75
     },
-    "PGDN",
     "CAPS",
     "A",
     "S",
@@ -728,18 +769,17 @@ export const PRESETS = [
     "K",
     "L",
     "SCLN",
+    "QUOT",
     {
      "w": 2.25
     },
-    "QUOT"
+    "ENT"
    ],
    [
     {
      "w": 2.25
     },
-    "ENT",
     "LSFT",
-    "",
     "Z",
     "X",
     "C",
@@ -748,30 +788,20 @@ export const PRESETS = [
     "N",
     "M",
     "COMM",
+    "DOT",
+    "SLSH",
     {
      "w": 2.75
     },
-    "DOT",
+    "RSFT",
     {
      "x": 1.25
     },
-    "SLSH"
+    "UP"
    ],
    [
     {
      "w": 1.25
-    },
-    "RSFT",
-    {
-     "w": 1.25
-    },
-    "",
-    {
-     "w": 1.25
-    },
-    "UP",
-    {
-     "w": 6.25
     },
     "LCTL",
     {
@@ -783,7 +813,7 @@ export const PRESETS = [
     },
     "LALT",
     {
-     "w": 1.25
+     "w": 6.25
     },
     "SPC",
     {
@@ -791,11 +821,23 @@ export const PRESETS = [
     },
     "RALT",
     {
-     "x": 0.25
+     "w": 1.25
     },
     "RGUI",
+    {
+     "w": 1.25
+    },
     "",
-    "RCTL"
+    {
+     "w": 1.25
+    },
+    "RCTL",
+    {
+     "x": 0.25
+    },
+    "LEFT",
+    "DOWN",
+    "RGHT"
    ]
   ]
  },
@@ -837,10 +879,6 @@ export const PRESETS = [
     {
      "y": 0.25
     },
-    "",
-    "",
-    "",
-    "MUTE",
     "GRV",
     "1",
     "2",
@@ -850,33 +888,32 @@ export const PRESETS = [
     "6",
     "7",
     "8",
-    {
-     "w": 2
-    },
     "9",
-    {
-     "x": 0.25
-    },
     "0",
     "MINS",
     "EQL",
     {
-     "x": 0.25
+     "w": 2
     },
     "BSPC",
-    "BSPC",
+    {
+     "x": 0.25
+    },
     "INS",
-    "HOME"
+    "HOME",
+    "PGUP",
+    {
+     "x": 0.25
+    },
+    "NUM",
+    "PSLS",
+    "PAST",
+    "PMNS"
    ],
    [
     {
      "w": 1.5
     },
-    "PGUP",
-    "NUM",
-    "PSLS",
-    "PAST",
-    "PMNS",
     "TAB",
     "Q",
     "W",
@@ -885,36 +922,36 @@ export const PRESETS = [
     "T",
     "Y",
     "U",
-    {
-     "w": 1.5
-    },
     "I",
-    {
-     "x": 0.25
-    },
     "O",
     "P",
     "LBRC",
+    "RBRC",
+    {
+     "w": 1.5
+    },
+    "BSLS",
     {
      "x": 0.25
     },
-    "RBRC",
-    "BSLS",
     "DEL",
+    "END",
+    "PGDN",
+    {
+     "x": 0.25
+    },
+    "P7",
+    "P8",
+    "P9",
     {
      "h": 2
     },
-    "END"
+    "PPLS"
    ],
    [
     {
      "w": 1.75
     },
-    "PGDN",
-    "P7",
-    "P8",
-    "P9",
-    "PPLS",
     "CAPS",
     "A",
     "S",
@@ -922,98 +959,103 @@ export const PRESETS = [
     "F",
     "G",
     "H",
+    "J",
+    "K",
+    "L",
+    "SCLN",
+    "QUOT",
     {
      "w": 2.25
     },
-    "J",
+    "ENT",
     {
      "x": 3.5
     },
-    "K",
-    "L",
-    "SCLN"
+    "P4",
+    "P5",
+    "P6"
    ],
    [
     {
      "w": 2.25
     },
-    "QUOT",
-    "ENT",
-    "P4",
-    "P5",
-    "P6",
-    "PPLS",
     "LSFT",
-    "NUBS",
     "Z",
     "X",
     "C",
-    {
-     "w": 2.75
-    },
     "V",
-    {
-     "x": 1.25
-    },
     "B",
-    {
-     "x": 1.25
-    },
     "N",
     "M",
     "COMM",
+    "DOT",
+    "SLSH",
+    {
+     "w": 2.75
+    },
+    "RSFT",
+    {
+     "x": 1.25
+    },
+    "UP",
+    {
+     "x": 1.25
+    },
+    "P1",
+    "P2",
+    "P3",
     {
      "h": 2
     },
-    "DOT"
+    "PENT"
    ],
    [
     {
      "w": 1.25
     },
-    "SLSH",
+    "LCTL",
     {
      "w": 1.25
     },
-    "RSFT",
+    "LGUI",
     {
      "w": 1.25
     },
-    "RSFT",
+    "LALT",
     {
      "w": 6.25
     },
-    "UP",
+    "SPC",
     {
      "w": 1.25
     },
-    "P1",
+    "RALT",
     {
      "w": 1.25
     },
-    "P2",
+    "RGUI",
     {
      "w": 1.25
     },
-    "P3",
+    "",
     {
      "w": 1.25
     },
-    "PENT",
+    "RCTL",
     {
      "x": 0.25
     },
-    "LCTL",
-    "LGUI",
-    "LALT",
+    "LEFT",
+    "DOWN",
+    "RGHT",
     {
      "x": 0.25
     },
     {
      "w": 2
     },
-    "SPC",
-    "SPC"
+    "P0",
+    "PDOT"
    ]
   ]
  }
