@@ -52,6 +52,17 @@
   .slot-row button { padding:2px 8px; font-size:12px; }
   .badge { background:#ffe9a8; border:1px solid #d8a83a; color:#5a4310;
            border-radius:5px; padding:3px 8px; font-size:12px; }
+
+  /* 차례를 눈으로 따라가게 한다 — 번호는 대표 단계에만 붙인다 */
+  .step-head { display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+               margin-bottom:8px; }
+  .step-head .num { flex:0 0 auto; width:22px; height:22px; border-radius:50%;
+                    background:#0a62c2; color:#fff; font-size:13px; font-weight:600;
+                    display:flex; align-items:center; justify-content:center; }
+  .step-head b { font-size:14px; }
+  .step-body { padding-left:30px; border-left:1px solid #e2e2e8; margin-left:10px; }
+  section.step { margin-bottom:14px; }
+  section.sub  { margin-left:40px; }
 </style>
 </head>
 <body>
@@ -64,11 +75,15 @@
 (탭을 옮기면 자동으로 멈추지만, 확실하게 하려면 끊는다)</p>
 
 <!-- ① 보드 연결 ─────────────────────────────────────── -->
-<section>
-  <div class="row">
-    <button id="connect">보드 연결</button>
-    <button id="disconnect">연결 끊기</button>
-    <span id="dev">연결 안 됨</span>
+<section class="step">
+  <div class="step-head"><span class="num">1</span><b>보드를 연결한다</b>
+    <span class="note">USB-A 쪽에도 배우려는 키보드를 꽂아 둔다</span></div>
+  <div class="step-body">
+    <div class="row">
+      <button id="connect">보드 연결</button>
+      <button id="disconnect">연결 끊기</button>
+      <span id="dev">연결 안 됨</span>
+    </div>
   </div>
 </section>
 
@@ -79,18 +94,23 @@
     거기서 [열기] 로 고치러 내려가게 한다. 예전에는 저장이 맨 아래에만 있어서
     담아 둔 것을 다시 꺼낼 길이 아예 없었다.
 -->
-<section>
-  <div class="row" style="margin-bottom:6px">
-    <b>보드에 담긴 레이아웃</b>
-    <span class="note" id="slotSummary"></span>
+<section class="step">
+  <div class="step-head"><span class="num">2</span><b>담긴 것을 본다</b>
+    <span class="note" id="slotSummary"></span></div>
+  <div class="step-body">
+    <div id="slotTree" class="tree">보드를 연결하면 여기 보인다.</div>
+    <div class="note" style="margin-top:6px">
+      이미 있으면 <b>[편집]</b>, 없으면 아래 <b>3</b> 으로.
+    </div>
   </div>
-  <div id="slotTree" class="tree">보드를 연결하면 여기 보인다.</div>
 </section>
 
 <!-- ③ 배열 넣기 + 마법사 ──────────────────────────────── -->
-<section>
+<section class="step">
+  <div class="step-head"><span class="num">3</span><b>배열을 넣고 키를 배운다</b>
+    <span id="editBadge" class="badge" style="display:none"></span></div>
+  <div class="step-body">
   <div class="row" style="margin-bottom:8px">
-    <span id="editBadge" class="badge" style="display:none"></span>
     <select id="preset"><option value="">— 프리셋에서 고르기 —</option></select>
     <button id="loadFile">KLE json 파일 열기</button>
     <input type="file" id="file" accept=".json,application/json" hidden>
@@ -109,18 +129,19 @@
   <!-- ★ 상태 줄은 배열 바로 위다. 예전에는 페이지 맨 아래라
        "마법사 시작을 누른다" 가 정작 손이 가 있는 곳에서 멀리 보였다. -->
   <div id="log" style="margin-top:8px">보드를 연결한다.</div>
+  </div>
 </section>
 
-<section>
+<section class="sub">
   <div id="board"></div>
 </section>
 
-<section>
+<section class="sub">
   <div class="note">지금 눌린 키</div>
   <div id="pressed">(없음)</div>
 </section>
 
-<section>
+<section class="sub">
   <div class="note">못 누르는 키(Fn 조합 등)는 자리를 클릭하고 이름으로 직접 넣는다 —
     <code>LNG1</code> <code>INT3</code> <code>F13</code> <code>MUTE</code> …</div>
   <div class="row" style="margin-top:6px">
@@ -130,19 +151,22 @@
 </section>
 
 <!-- ④ 보드에 담기 ────────────────────────────────────── -->
-<section>
-  <div class="row">
-    <input id="name" placeholder="키보드 이름" size="20" value="QMK-LINK VIA">
-    <button id="save">보드에 담기</button>
-    <button id="saveNew" style="display:none">새 SLOT 에 담기</button>
+<section class="step">
+  <div class="step-head"><span class="num">4</span><b>보드에 담는다</b></div>
+  <div class="step-body">
+    <div class="row">
+      <input id="name" placeholder="키보드 이름" size="20" value="QMK-LINK VIA">
+      <button id="save">보드에 담기</button>
+      <button id="saveNew" style="display:none">새 SLOT 에 담기</button>
+    </div>
+    <div class="note" id="saveNote" style="margin-top:6px"></div>
   </div>
-  <div class="note" id="saveNote" style="margin-top:6px"></div>
 </section>
 
 <!-- ⑤ 파일로 내보내기 ────────────────────────────────── -->
-<section>
+<section class="sub">
   <div class="row">
-    <span class="note">파일로 내보내기</span>
+    <span class="note">파일로 내보내기 (선택)</span>
     <button id="exVia" style="display:none">layout-via.json</button>
     <button id="exVial" style="display:none">layout-vial.json</button>
     <button id="exKle">layout-kle.json</button>
