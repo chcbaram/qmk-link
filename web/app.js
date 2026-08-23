@@ -1,5 +1,6 @@
 import { USAGE, NAME_OF } from './usage-table.js';
 import { PRESETS } from './presets.js';
+import { xzStore } from './xz.js';
 
 // ── qmk-link raw HID 명령 (firmware/.../link_cmd.h 와 같아야 한다) ──
 const VID = 0x0483;
@@ -19,8 +20,15 @@ const TREE_VIA    = 0;
 const TREE_VIAL   = 1;
 const CMD_INFO    = 0x00;
 const CMD_PRESSED = 0x01;
-const CMD_SLOT_INFO = 0x02;
+const CMD_SLOT_INFO   = 0x02;
+const CMD_SLOT_BEGIN  = 0x04;
+const CMD_SLOT_DATA   = 0x05;
+const CMD_SLOT_COMMIT = 0x06;
+const CMD_SLOT_ERASE  = 0x07;
 const REPORT_LEN  = 32;
+
+// 한 SLOT 에 들어가는 데이터 (8KB - 머리말 48B). kbd_store.c 와 같아야 한다.
+const SLOT_DATA_MAX = 8192 - 48;
 
 // 저장된 레이아웃 칸마다 보드가 다르게 보고할 PID. 0x5400 + 칸.
 // firmware/qmk-link/src/ap/modules/link/link_cmd.h 의 LINK_PID_BASE 와 같아야 한다.
@@ -36,6 +44,8 @@ let prevPressed = new Set(); // 직전에 눌려 있던 usage
 let paused = false;          // 탭이 가려지면 멈춘다
 let firmware = null;         // 'via' | 'vial'
 let slots = null;            // [{used, name}] — 연결했을 때만 채워진다
+let hostVid = 0, hostPid = 0;// USB-A 에 꽂힌 키보드. SLOT 머리말에 적는다
+let busy = false;            // 담기/지우기 중 — 폴링을 멈춘다
 
 // ★ 펌웨어에 따라 쓸 수 없는 것이 있다.
 //
@@ -74,25 +84,39 @@ async function connect() {
   });
   if (!list.length) { log('장치를 고르지 않았다'); return; }
 
-  device = list[0];
+  await attach(list[0]);
+}
+
+// 고른 장치를 붙이고 INFO 를 읽는다.
+// PID 가 바뀌어 재열거된 뒤 다시 붙일 때도 이쪽으로 온다 (afterSlotWrite).
+async function attach(dev) {
+  device = dev;
   if (!device.opened) await device.open();
 
-  device.addEventListener('inputreport', (e) => {
-    if (!pending) return;
-    const r = new Uint8Array(e.data.buffer);
-    if (r[0] !== pending.want[0] || r[1] !== pending.want[1]) return;   // 남의 응답
-    const done = pending.resolve; pending = null;
-    done(r);
-  });
+  // 같은 장치에 두 번 붙지 않게 한다 (재열거 뒤 다시 들어온다)
+  if (!device._wired) {
+    device._wired = true;
+    device.addEventListener('inputreport', (e) => {
+      if (!pending) return;
+      const r = new Uint8Array(e.data.buffer);
+      if (r[0] !== pending.want[0] || r[1] !== pending.want[1]) return;   // 남의 응답
+      const done = pending.resolve; pending = null;
+      done(r);
+    });
+  }
 
   const info = await send(CMD_INFO);
   const ver = info[2], tree = info[3], locked = info[4];
   const rows = info[5], cols = info[6], n = info[7];
 
   let kbds = [];
+  hostVid = 0; hostPid = 0;
   for (let i = 0; i < n; i++) {
     const o = 8 + i * 4;
-    kbds.push(hex4(info[o] | (info[o+1] << 8)) + ':' + hex4(info[o+2] | (info[o+3] << 8)));
+    const vid = info[o] | (info[o+1] << 8);
+    const pid = info[o+2] | (info[o+3] << 8);
+    if (i === 0) { hostVid = vid; hostPid = pid; }
+    kbds.push(hex4(vid) + ':' + hex4(pid));
   }
 
   firmware = (tree === TREE_VIAL) ? 'vial' : 'via';
@@ -175,18 +199,22 @@ function slotChanged() {
   const note = $('slotNote');
 
   if (v < 0) {
-    note.innerHTML = '보드에 담지 않는다. <code>productId</code> 는 <code>0x5305</code> 그대로다 — '
-      + '맞는 레이아웃이 없을 때 보드가 보고하는 값이다.';
+    note.innerHTML = '보드에 담지 않는다. 내려받는 파일의 <code>productId</code> 는 '
+      + '<code>0x5305</code> — 맞는 레이아웃이 없을 때 보드가 보고하는 값이다.';
     return;
   }
 
-  const file = slug() + 'layout-vial.json';
-  const name = ($('name').value || '').trim();
-  note.innerHTML = `<code>productId</code> 를 <code>0x${hex4(PID_BASE + v)}</code> 로 적는다. `
-    + '보드에 담아야 그 PID 로 보고한다:'
-    + `<br><code>python3 tools/kbd_upload.py put ${v} ${file} --name "${name}"</code>`
-    + '<br>담는 파일은 두 펌웨어 모두 <code>layout-vial.json</code> 이다 — '
-    + 'VIA 펌웨어는 내용을 안 쓰고 이 SLOT 의 vid/pid 만 본다 (그게 PID 전환의 열쇠다).';
+  const who = (hostVid || hostPid)
+    ? `지금 꽂힌 키보드(<code>${hex4(hostVid)}:${hex4(hostPid)}</code>)`
+    : '<b>USB-A 쪽 키보드</b>';
+
+  note.innerHTML =
+    `[이 SLOT 에 담기] 를 누르면 ${who} 의 배열로 보드에 저장하고, `
+    + `보드는 그때부터 PID 를 <code>0x${hex4(PID_BASE + v)}</code> 로 보고한다.`
+    + '<br>내려받는 JSON 의 <code>productId</code> 도 같은 값이 된다 — VIA 는 그것으로 정의를 고른다.'
+    + '<br>담고 나면 보드가 스스로 다시 열거된다. 그래서 연결이 한 번 끊긴다.'
+    + (!(hostVid || hostPid) && device
+        ? '<br><b>★ 지금은 USB-A 에 키보드가 없어서 담을 수 없다.</b>' : '');
 }
 
 function hex4(v) { return v.toString(16).toUpperCase().padStart(4, '0'); }
@@ -217,7 +245,10 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-function send(sub, ...args) {
+function send(sub, ...args) { return sendReport(sub, args, 1000); }
+
+// 플래시를 굽는 명령(COMMIT · ERASE)은 오래 걸린다. 그때만 넉넉히 준다.
+function sendReport(sub, args, timeout) {
   const buf = new Uint8Array(REPORT_LEN);
   buf[0] = CMD_PREFIX; buf[1] = sub;
   args.forEach((v, i) => buf[2 + i] = v);
@@ -231,7 +262,7 @@ function send(sub, ...args) {
     device.sendReport(0, buf).catch(reject);
     setTimeout(() => {
       if (pending && pending.resolve === resolve) { pending = null; reject(new Error('응답 없음')); }
-    }, 1000);
+    }, timeout);
   });
 }
 
@@ -243,7 +274,7 @@ async function poll() {
     //   VIA / Vial 도 같은 raw HID 를 쓴다. 우리가 계속 물어보고 있으면
     //   저쪽이 보낸 질문의 답을 우리가 가로채고, VIA 는 "VIA 키보드처럼
     //   응답하지 않는다" 고 판단한다. 탭을 옮기는 순간 조용해져야 한다.
-    if (paused) { await sleep(200); continue; }
+    if (paused || busy) { await sleep(200); continue; }
 
     let r;
     try { r = await send(CMD_PRESSED); }
@@ -442,28 +473,147 @@ function slug() {
   return v ? v + '-' : '';
 }
 
+// ── 보드에 담기 · 지우기 ────────────────────────────────
+//
+// ★ 파이썬 없이 여기서 끝난다.
+//
+//   Vial 은 정의를 압축된 채로 읽어가는데 브라우저에 LZMA 인코더가 없다.
+//   그래서 예전에는 tools/kbd_upload.py 가 필요했다. 지금은 **압축을 안 한
+//   .xz** 를 만들어 보낸다 (xz.js 주석 참고) — 규격에 맞으므로 받는 쪽은
+//   그대로 푼다. 1.5KB 쯤 되는데 한 SLOT 이 8KB 라 넉넉하다.
+
+// 이름을 23바이트 UTF-8 로 자른다. 잘린 자리에 반쪽짜리 글자를 남기지 않는다.
+function nameBytes23() {
+  let b = new TextEncoder().encode(($('name').value || '').trim());
+  if (b.length > 22) {
+    b = b.subarray(0, 22);
+    while (b.length && (b[b.length - 1] & 0xC0) === 0x80) b = b.subarray(0, b.length - 1);
+    if (b.length && (b[b.length - 1] & 0x80)) b = b.subarray(0, b.length - 1);
+  }
+  const out = new Uint8Array(23);
+  out.set(b);
+  return [...out];
+}
+
+async function uploadSlot() {
+  const slot = parseInt($('slot').value, 10);
+
+  if (!device) { log('보드를 먼저 연결한다.'); return; }
+  if (slot < 0) { log('담을 SLOT 을 고른다. [담지 않음] 은 저장하지 않는다.'); return; }
+  if (!hostVid && !hostPid) {
+    log('★ USB-A 쪽에 키보드가 없다. 어느 키보드의 배열인지 알아야 담을 수 있다.');
+    return;
+  }
+  if (!keys.length) { log('먼저 배열을 읽는다.'); return; }
+
+  const raw  = new TextEncoder().encode(JSON.stringify(buildDef(true)));
+  const blob = xzStore(raw);
+
+  if (blob.length > SLOT_DATA_MAX) {
+    log(`★ 너무 크다 — ${blob.length} B / ${SLOT_DATA_MAX} B`);
+    return;
+  }
+
+  busy = true;
+  await sleep(80);                       // 폴링이 멎기를 기다린다
+  try {
+    log(`SLOT ${slot} 에 담는 중… ${raw.length} B -> ${blob.length} B`);
+
+    let r = await send(CMD_SLOT_BEGIN, slot,
+                       hostVid & 0xFF, hostVid >> 8, hostPid & 0xFF, hostPid >> 8,
+                       blob.length & 0xFF, blob.length >> 8, ...nameBytes23());
+    if (r[2] !== 0) throw new Error('BEGIN 거부 (' + r[2] + ')');
+
+    const step = REPORT_LEN - 4;         // [0][1] 명령 + [2..3] 오프셋
+    for (let off = 0; off < blob.length; off += step) {
+      const chunk = blob.subarray(off, Math.min(off + step, blob.length));
+      r = await send(CMD_SLOT_DATA, off & 0xFF, off >> 8, ...chunk);
+      if (r[2] !== 0) throw new Error(`DATA 거부 (오프셋 ${off})`);
+    }
+
+    // 여기서만 플래시를 굽는다. 8KB 소거 + 기록이라 오래 걸린다.
+    r = await sendReport(CMD_SLOT_COMMIT, [slot], 5000);
+    if (r[2] !== 0) throw new Error('굽기 실패 (' + r[2] + ')');
+
+    slots = null;
+    afterSlotWrite(`SLOT ${slot} 에 담았다 (${blob.length} B).`);
+  } catch (e) {
+    busy = false;
+    log('담기 실패 — ' + e.message);
+  }
+}
+
+async function eraseSlot() {
+  const slot = parseInt($('slot').value, 10);
+
+  if (!device) { log('보드를 먼저 연결한다.'); return; }
+  if (slot < 0) { log('지울 SLOT 을 고른다.'); return; }
+
+  busy = true;
+  await sleep(80);
+  try {
+    const r = await sendReport(CMD_SLOT_ERASE, [slot], 5000);
+    if (r[2] !== 0) throw new Error('결과 ' + r[2]);
+
+    slots = null;
+    afterSlotWrite(`SLOT ${slot} 을 지웠다.`);
+  } catch (e) {
+    busy = false;
+    log('지우기 실패 — ' + e.message);
+  }
+}
+
+// ★ 담거나 지우면 보드가 PID 를 바꾸며 스스로 재열거한다.
+//
+//   그러면 지금 쥐고 있는 WebHID 장치가 죽는다. 브라우저에는 **PID 가 다르면
+//   다른 장치**다. 전에 허락받은 적이 있으면 getDevices() 로 조용히 다시
+//   잡히고, 처음 보는 PID 면 사용자가 [보드 연결] 을 한 번 눌러야 한다.
+//   (브라우저 규칙이라 우회할 방법이 없다)
+async function afterSlotWrite(msg) {
+  log(msg + ' 보드가 다시 열거되는 중…');
+
+  const old = device;
+  device = null;                          // poll 루프를 끝낸다
+  busy = false;
+  await sleep(1200);                      // 끊고(250ms) 붙는(100ms) 시간 + 열거
+  try { if (old && old.opened) await old.close(); } catch { /* 이미 사라졌다 */ }
+
+  const found = (await navigator.hid.getDevices()).find(d =>
+    d.vendorId === VID && PID_LIST.includes(d.productId) &&
+    d.collections.some(c => c.usagePage === 0xFF60));
+
+  if (!found) {
+    $('dev').textContent = '보드가 다시 열거됐다 — [보드 연결] 을 한 번 더 누른다';
+    $('dev').className = '';
+    log(msg + ' PID 가 바뀌어 연결이 끊겼다. [보드 연결] 을 누르면 이어서 쓸 수 있다.');
+    return;
+  }
+
+  await attach(found);
+  log(msg + ' VIA / Vial 이 새 정의를 읽어간다.');
+}
+
 function download(name, obj) {
   const blob = new Blob([JSON.stringify(obj, null, 2) + '\n'], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = name; a.click();
 }
 
-function exportVia() {
-  download(slug() + 'layout-via.json', {
-    name: $('name').value || 'QMK-LINK VIA',
+// ★ 내보내기와 보드에 담기가 같은 것을 써야 한다.
+//   두 군데서 따로 만들면 반드시 어긋난다.
+function buildDef(isVial) {
+  const def = {
+    name: $('name').value || (isVial ? 'QMK-LINK VIAL' : 'QMK-LINK VIA'),
     vendorId: '0x0483', productId: '0x' + hex4(slotPid()),
     matrix: { rows: 16, cols: 16 },
     layouts: { keymap: buildLayout() },
-  });
+  };
+  if (isVial) def.lighting = 'none';
+  return def;
 }
-function exportVial() {
-  download(slug() + 'layout-vial.json', {
-    name: $('name').value || 'QMK-LINK VIAL',
-    vendorId: '0x0483', productId: '0x' + hex4(slotPid()), lighting: 'none',
-    matrix: { rows: 16, cols: 16 },
-    layouts: { keymap: buildLayout() },
-  });
-}
+
+function exportVia()  { download(slug() + 'layout-via.json',  buildDef(false)); }
+function exportVial() { download(slug() + 'layout-vial.json', buildDef(true)); }
 function exportKle() {
   // 저장소 워크플로용 — 범례가 '키 이름' 이라 사람이 읽고 고칠 수 있다
   const rows = buildLayout().map(row => row.map(it =>
@@ -485,6 +635,8 @@ $('start').onclick = startWizard;
 $('skip').onclick = skip;
 $('clear').onclick = clearCur;
 $('assign').onclick = manualAssign;
+$('upload').onclick = uploadSlot;
+$('erase').onclick = eraseSlot;
 $('exVia').onclick = exportVia;
 $('exVial').onclick = exportVial;
 $('exKle').onclick = exportKle;

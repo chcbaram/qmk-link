@@ -28,10 +28,29 @@ static bool is_init = false;
 //   millis() 로 세고 usbUpdate() 가 마저 진행시킨다.
 //
 //   끊긴 동안 CDC 도 같이 죽는다. 로그가 잠깐 끊기는 것은 정상이다.
-#define USB_REENUM_GAP_MS   100
+//
+// ★ 왜 바로 안 끊고 뜸을 들이나
+//
+//   PID 가 바뀌는 계기 중 하나가 "웹/도구가 레이아웃을 담았다" 이고, 그 COMMIT
+//   응답은 아직 **엔드포인트에 실려만 있다.** usbdHidSendRaw() 는 큐에 넣고
+//   바로 돌아온다 — 실제 전송은 호스트가 다음 IN 토큰을 보낼 때다.
+//   그 자리에서 끊으면 도구가 답을 영영 못 받는다.
+//
+//   그래서 요청을 받으면 ARM 만 걸고, 조용해진 뒤에 끊는다.
+//   연달아 바뀌어도 마지막 값 하나로 합쳐지는 부수 효과도 있다.
+#define USB_REENUM_ARM_MS   250     /* 요청 -> 실제로 끊기까지 */
+#define USB_REENUM_GAP_MS   100     /* 끊고 -> 다시 붙이기까지 */
 
+enum
+{
+  REENUM_IDLE = 0,
+  REENUM_ARMED,
+  REENUM_GAP,
+};
+
+static uint8_t  reenum_state = REENUM_IDLE;
 static uint32_t reenum_time  = 0;
-static bool     is_reenum    = false;
+static uint16_t reenum_pid   = 0;
 static uint32_t reenum_count = 0;
 
 
@@ -62,10 +81,29 @@ void usbUpdate(void)
 {
   if (is_init != true) return;
 
-  if (is_reenum == true && (millis() - reenum_time) >= USB_REENUM_GAP_MS)
+  switch(reenum_state)
   {
-    is_reenum = false;
-    tud_connect();
+    case REENUM_ARMED:
+      if ((millis() - reenum_time) < USB_REENUM_ARM_MS) break;
+
+      // 여기서야 descriptor 를 바꾼다. 그 전에 호스트가 물어보면 옛 값이 맞다.
+      usbdDescSetProductId(reenum_pid);
+      logPrintf("[  ] usb PID -> %04X (재열거)\r\n", reenum_pid);
+      tud_disconnect();
+      reenum_time  = millis();
+      reenum_state = REENUM_GAP;
+      reenum_count++;
+      break;
+
+    case REENUM_GAP:
+      if ((millis() - reenum_time) < USB_REENUM_GAP_MS) break;
+
+      tud_connect();
+      reenum_state = REENUM_IDLE;
+      break;
+
+    default:
+      break;
   }
 
   tud_task();
@@ -80,16 +118,12 @@ void usbSetProductId(uint16_t pid)
     return;
   }
 
-  if (usbdDescGetProductId() == pid) return;
+  // 이미 그 값이고 예약된 것도 없으면 할 일이 없다.
+  if (reenum_state == REENUM_IDLE && usbdDescGetProductId() == pid) return;
 
-  usbdDescSetProductId(pid);
-
-  logPrintf("[  ] usb PID -> %04X (재열거)\r\n", pid);
-
-  tud_disconnect();
-  reenum_time = millis();
-  is_reenum   = true;
-  reenum_count++;
+  reenum_pid   = pid;
+  reenum_time  = millis();
+  reenum_state = REENUM_ARMED;      /* 예약만 한다. 끊는 것은 usbUpdate() 가 */
 }
 
 uint16_t usbGetProductId(void)
@@ -150,8 +184,9 @@ void cliCmd(cli_args_t *args)
               usbdHidIsReady(HID_ITF_EXTRA),
               usbdHidIsReady(HID_ITF_RAW));
     cliPrintf("host led  : 0x%02X\n", usbdHidGetLed());
-    cliPrintf("PID       : %04X  (재열거 %d 회)\n",
-              usbGetProductId(), (int)reenum_count);
+    cliPrintf("PID       : %04X  (재열거 %d 회)%s\n",
+              usbGetProductId(), (int)reenum_count,
+              reenum_state != REENUM_IDLE ? "  ★ 바꾸는 중" : "");
     ret = true;
   }
 
