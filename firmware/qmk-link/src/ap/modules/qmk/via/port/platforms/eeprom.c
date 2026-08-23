@@ -104,21 +104,46 @@ static bool eepromFlushOne(void)
     return false;
   }
 
-  /* 소거 직후는 전부 0xFF 다. 값이 있는 페이지만 쓴다. */
-  for (uint32_t i=0; i<EE_SECTOR_SIZE; i+=HW_FLASH_PAGE_SIZE)
+  /*
+   * 소거 직후는 전부 0xFF 다. 값이 있는 페이지만 쓴다.
+   *
+   * ★ 연속된 페이지는 한 번에 묶는다.
+   *
+   *   flashWrite() 한 번이 flash_safe_execute() 한 번이고, 그때마다 core1 을
+   *   세웠다 푸는 비용이 붙는다. 4KB 를 페이지마다 부르면 16회가 되어 실측 49ms,
+   *   묶으면 1회로 41ms 다. 대부분의 섹터는 어차피 한 덩어리다.
+   */
   {
-    bool is_blank = true;
+    uint32_t run_begin = EE_SECTOR_SIZE;   /* 진행 중인 덩어리의 시작. 없으면 SIZE */
 
-    for (uint32_t j=0; j<HW_FLASH_PAGE_SIZE; j++)
+    for (uint32_t i=0; i<=EE_SECTOR_SIZE; i+=HW_FLASH_PAGE_SIZE)
     {
-      if (p_sector[i + j] != 0xFF) { is_blank = false; break; }
-    }
-    if (is_blank == true) continue;
+      bool is_blank = true;
 
-    if (flashWrite(addr + i, &p_sector[i], HW_FLASH_PAGE_SIZE) != true)
-    {
-      logPrintf("[E_] eeprom 기록 실패 0x%06X\r\n", (unsigned)(addr + i));
-      return false;
+      if (i < EE_SECTOR_SIZE)
+      {
+        for (uint32_t j=0; j<HW_FLASH_PAGE_SIZE; j++)
+        {
+          if (p_sector[i + j] != 0xFF) { is_blank = false; break; }
+        }
+      }
+
+      if (is_blank == false)
+      {
+        if (run_begin == EE_SECTOR_SIZE) run_begin = i;
+        continue;
+      }
+
+      /* 빈 페이지를 만났거나 섹터 끝이다 — 여기까지의 덩어리를 쓴다 */
+      if (run_begin != EE_SECTOR_SIZE)
+      {
+        if (flashWrite(addr + run_begin, &p_sector[run_begin], i - run_begin) != true)
+        {
+          logPrintf("[E_] eeprom 기록 실패 0x%06X\r\n", (unsigned)(addr + run_begin));
+          return false;
+        }
+        run_begin = EE_SECTOR_SIZE;
+      }
     }
   }
 

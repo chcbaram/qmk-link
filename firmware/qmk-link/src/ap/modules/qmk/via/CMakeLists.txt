@@ -29,6 +29,13 @@ file(GLOB QMK_SRC_FILES CONFIGURE_DEPENDS
   ${QMK_UPSTREAM_PATH}/tmk_core/protocol/usb_device_state.c
 
   ${QMK_QUANTUM_PATH}/nvm/eeprom/nvm_eeconfig.c
+  ${QMK_QUANTUM_PATH}/nvm/eeprom/nvm_dynamic_keymap.c
+  ${QMK_QUANTUM_PATH}/nvm/eeprom/nvm_via.c
+
+  # VIA — raw HID 프로토콜과 동적 키맵
+  ${QMK_QUANTUM_PATH}/via.c
+  ${QMK_QUANTUM_PATH}/dynamic_keymap.c
+  ${QMK_QUANTUM_PATH}/raw_hid.c
 
   ${QMK_QUANTUM_PATH}/quantum.c
   ${QMK_QUANTUM_PATH}/keyboard.c
@@ -76,8 +83,18 @@ set(QMK_INC_DIR
 )
 
 set(QMK_DEFINES
-  # VIA / Vial 은 06단계에서 켠다 (VIA_ENABLE / RAW_ENABLE / DYNAMIC_KEYMAP_ENABLE)
   QMK_ENABLE
+
+  # VIA
+  #   RAW_ENABLE            raw HID 엔드포인트 (IF2, usage page 0xFF60)
+  #   DYNAMIC_KEYMAP_ENABLE 키맵을 EEPROM 에 두고 런타임에 고친다
+  #   VIA_ENABLE            VIA 프로토콜 (raw_hid_receive 를 via.c 가 구현한다)
+  #
+  # ★ RAW_ENABLE 은 host_driver_t 에 6번째 멤버를 만든다.
+  #   port/driver_usb.c 의 초기화도 같은 #ifdef 로 묶여 있다.
+  RAW_ENABLE
+  DYNAMIC_KEYMAP_ENABLE
+  VIA_ENABLE
   EXTRAKEY_ENABLE
   # MOUSE_ENABLE    : 마우스 리포트 자체 (패스스루 · 마우스키 공통)
   # MOUSEKEY_ENABLE : 키로 마우스를 조작하는 기능

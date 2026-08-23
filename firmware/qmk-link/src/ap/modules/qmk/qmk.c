@@ -17,6 +17,9 @@
 #include "host.h"
 #include "eeprom.h"
 #include "eeconfig.h"
+#ifdef RAW_ENABLE
+#include "raw_hid.h"
+#endif
 #include "flash.h"
 #include "keyboard.h"
 #include "matrix.h"
@@ -87,6 +90,18 @@ void qmkUpdate(void)
   eeprom_task();
 
   if (is_qmk_on != true) return;
+
+#ifdef RAW_ENABLE
+  // ★ VIA 요청 처리는 여기서 한다 — USB 콜백 안이 아니다 (usbd_hid.h 주석 참고).
+  {
+    uint8_t raw_data[HID_RAW_REPORT_LEN];
+
+    while (usbdHidGetRaw(raw_data) == true)
+    {
+      raw_hid_receive(raw_data, HID_RAW_REPORT_LEN);
+    }
+  }
+#endif
 
   // ★ 호스트가 HID 프로토콜을 바꾸면 눌린 키를 비운다.
   //

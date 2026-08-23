@@ -58,6 +58,19 @@ bool usbdHidSendMouse(uint8_t buttons, int8_t x, int8_t y, int8_t wheel, int8_t 
 // 호스트가 보낸 LED 상태 (CapsLock 등). HID_KEYBOARD_LED_* 비트
 uint8_t usbdHidGetLed(void);
 
+//-- raw HID (VIA · Vial)
+//
+// ★ 받는 쪽은 큐를 거친다.
+//
+//   OUT 리포트는 tud_task() 안의 콜백으로 들어온다. 거기서 바로 VIA 를 처리하면
+//   dynamic keymap 기록과 응답 전송이 USB 콜백 안에서 벌어진다. 응답을 보내려면
+//   IN 엔드포인트가 빌 때까지 기다려야 하는데 그 대기가 다시 tud_task() 를 부른다.
+//   큐에 넣어 두고 메인 루프(qmkUpdate)에서 꺼내 처리한다.
+bool usbdHidGetRaw(uint8_t *p_data);          // 32바이트. 없으면 false
+bool usbdHidSendRaw(const uint8_t *p_data, uint16_t len);
+uint32_t usbdHidGetRawRxCount(void);
+uint32_t usbdHidGetRawDropCount(void);
+
 const uint8_t *usbdHidGetReportDesc(uint8_t itf, uint16_t *p_len);
 
 

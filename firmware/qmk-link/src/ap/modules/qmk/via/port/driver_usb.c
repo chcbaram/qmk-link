@@ -62,12 +62,28 @@ static void usb_send_extra(report_extra_t *report)
 #endif
 }
 
+#ifdef RAW_ENABLE
+/*
+ * VIA 의 응답이 이 길로 나간다 (quantum/raw_hid.c -> host_raw_hid_send()).
+ *
+ * ★ host_driver_t 의 6번째 자리는 RAW_ENABLE 일 때만 생긴다.
+ *   정의를 안 켜면 구조체 크기가 달라지므로 아래 초기화도 같이 #ifdef 로 묶는다.
+ */
+static void usb_send_raw_hid(uint8_t *data, uint8_t length)
+{
+  usbdHidSendRaw(data, length);
+}
+#endif
+
 host_driver_t usb_driver = {
   usb_keyboard_leds,
   usb_send_keyboard,
   usb_send_nkro,
   usb_send_mouse,
   usb_send_extra,
+#ifdef RAW_ENABLE
+  usb_send_raw_hid,
+#endif
 };
 
 

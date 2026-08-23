@@ -35,6 +35,13 @@ bool usbdHidIsReady(uint8_t itf)
 static uint8_t kbd_shadow[8];
 static bool    kbd_shadow_valid = false;
 
+// raw HID 수신 큐. 호스트 -> 우리 방향만 큐를 탄다 (usbd_hid.h 주석 참고).
+#define HID_RAW_QUEUE_MAX   8
+static uint8_t           raw_queue[HID_RAW_QUEUE_MAX][HID_RAW_REPORT_LEN];
+static volatile uint32_t raw_rx_count   = 0;
+static volatile uint32_t raw_rd_count   = 0;
+static volatile uint32_t raw_drop_count = 0;
+
 bool usbdHidSendKeyboard(const uint8_t *p_report)
 {
   if (kbd_shadow_valid && memcmp(kbd_shadow, p_report, 8) == 0)
@@ -77,6 +84,46 @@ uint8_t usbdHidGetLed(void)
 {
   return hid_led;
 }
+
+
+bool usbdHidGetRaw(uint8_t *p_data)
+{
+  if (raw_rd_count == raw_rx_count) return false;
+
+  memcpy(p_data, raw_queue[raw_rd_count % HID_RAW_QUEUE_MAX], HID_RAW_REPORT_LEN);
+  raw_rd_count++;
+
+  return true;
+}
+
+bool usbdHidSendRaw(const uint8_t *p_data, uint16_t len)
+{
+  uint8_t  buf[HID_RAW_REPORT_LEN];
+  uint32_t pre_time;
+
+  if (len > HID_RAW_REPORT_LEN) len = HID_RAW_REPORT_LEN;
+
+  memset(buf, 0, sizeof(buf));
+  memcpy(buf, p_data, len);
+
+  /*
+   * ★ 여기서 delay() 를 쓰면 안 된다.
+   *
+   *   bsp.c 의 delay() 는 cliLoopIdle() 을 돌리고, 그 안에 qmkUpdate() 가 있다.
+   *   VIA 처리 중에 다시 VIA 처리로 들어간다. tud_task() 만 직접 돌린다.
+   */
+  pre_time = millis();
+  while (tud_hid_n_ready(HID_ITF_RAW) != true)
+  {
+    if (millis() - pre_time >= 10) return false;   /* 호스트가 안 읽으면 버린다 */
+    tud_task();
+  }
+
+  return tud_hid_n_report(HID_ITF_RAW, 0, buf, HID_RAW_REPORT_LEN);
+}
+
+uint32_t usbdHidGetRawRxCount(void)   { return raw_rx_count; }
+uint32_t usbdHidGetRawDropCount(void) { return raw_drop_count; }
 
 
 //-- TinyUSB 콜백
@@ -167,7 +214,26 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id,
     return;
   }
 
-  // VIA · Vial 은 06단계에서 채운다.
+  // raw HID (VIA · Vial)
+  //
+  // TUD_HID_INOUT_DESCRIPTOR 로 만든 인터럽트 OUT 엔드포인트로 온 것은
+  // report_type 이 0(INVALID)이다. SET_REPORT 제어 전송으로 오면 OUTPUT 이다.
+  // 둘 다 받는다.
+  if (instance == HID_ITF_RAW && bufsize > 0)
+  {
+    if (raw_rx_count - raw_rd_count >= HID_RAW_QUEUE_MAX)
+    {
+      // 넘치면 버린다. 막으면 USB 콜백 안에서 굶는다.
+      raw_drop_count++;
+      return;
+    }
+
+    uint16_t len = (bufsize > HID_RAW_REPORT_LEN) ? HID_RAW_REPORT_LEN : bufsize;
+
+    memset(raw_queue[raw_rx_count % HID_RAW_QUEUE_MAX], 0, HID_RAW_REPORT_LEN);
+    memcpy(raw_queue[raw_rx_count % HID_RAW_QUEUE_MAX], buffer, len);
+    raw_rx_count++;
+  }
 }
 
 #endif
