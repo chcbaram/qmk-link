@@ -158,11 +158,15 @@
 </section>
 
 <section class="sub">
-  <div class="note">못 누르는 키(Fn 조합 등)는 자리를 클릭하고 이름으로 직접 넣는다 —
-    <code>LNG1</code> <code>INT3</code> <code>F13</code> <code>MUTE</code> …</div>
+  <div class="note"><b>못 누르는 키를 직접 넣는다</b> — Fn 조합이라 안 눌리거나,
+    그 키보드에 아예 없는 자리에 쓴다.
+    <br>① 위 배열에서 <b>자리를 클릭</b>하고 ② 이름을 넣는다.
+    칸에 몇 자만 쳐도 목록이 뜬다 (<code>LNG1</code> <code>INT3</code>
+    <code>F13</code> <code>MUTE</code> …).</div>
   <div class="row" style="margin-top:6px">
-    <input id="manual" placeholder="키 이름" size="12">
-    <button id="assign">이 자리에 넣기</button>
+    <input id="manual" placeholder="키 이름" size="12" list="keynames" autocomplete="off">
+    <datalist id="keynames"></datalist>
+    <button id="assign" disabled>이 자리에 넣기</button>
   </div>
 </section>
 

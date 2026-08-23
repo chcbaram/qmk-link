@@ -728,6 +728,10 @@ $('file') && ($('file').onchange = async (e) => {
   const text = await f.text();
   // KLE raw · 우리 layout-kle.json · VIA/Vial 정의 셋 다 받는다
   let body = text;
+
+  // ★ 셀렉트는 "지금 내용이 어디서 왔나" 를 가리킨다.
+  //   파일에서 왔으면 직전에 고른 프리셋 이름이 남아 있으면 안 된다.
+  $('preset').value = '';
   trustCoords = true;
   try {
     const j = JSON.parse(text);
@@ -775,7 +779,10 @@ function render() {
     d.style.height = k.h * U - 4 + 'px';
     d.textContent = k.usage !== null ? (NAME_OF[k.usage] || '0x' + k.usage.toString(16)) : k.label;
     d.title = k.usage !== null ? '0x' + k.usage.toString(16).toUpperCase() : '아직 안 배움';
-    d.onclick = () => { cursor = i; render(); log('이 자리의 키를 누른다. 못 누르는 키면 아래에서 직접 고른다.'); };
+    d.onclick = () => {
+      cursor = i; render(); refreshUi();
+      log('이 자리의 키를 누른다. 못 누르는 키면 아래에서 이름으로 직접 넣는다.');
+    };
     box.appendChild(d);
     maxx = Math.max(maxx, k.x + k.w); maxy = Math.max(maxy, k.y + k.h);
   });
@@ -802,6 +809,7 @@ function next() {
   while (i < keys.length && keys[i].usage !== null) i++;
   cursor = i < keys.length ? i : -1;
   render();
+  refreshUi();
   if (cursor < 0) log('전부 배웠다. 아래에서 내려받는다.');
 }
 
@@ -809,6 +817,7 @@ function startWizard() {
   if (!keys.length) { log('먼저 KLE 를 읽는다.'); return; }
   cursor = keys.findIndex(k => k.usage === null);
   render();
+  refreshUi();
   log(cursor < 0 ? '이미 다 배웠다.' : '강조된 자리의 키를 누른다. 건너뛰려면 [건너뛰기].');
 }
 
@@ -825,11 +834,47 @@ function clearCur() {
                    : `0x${had.toString(16).toUpperCase()} 를 비웠다. 이 자리의 키를 다시 누른다.`);
 }
 
+/*
+ * 자리를 클릭해 고른 뒤 키 이름으로 직접 채운다.
+ *
+ * ★ 왜 필요한가 — 못 누르는 키가 있다.
+ *
+ *   Fn 조합으로만 나오는 키(밝기 · 미디어)는 눌러도 그 usage 가 안 올라오고,
+ *   꽂은 키보드에 아예 없는 자리를 배열에 그려 둘 수도 있다.
+ *
+ * ★ 넣고 나서 말을 해 준다. 예전에는 아무 표시가 없어서 "동작을 안 한다" 로
+ *   보였다 — 실제로는 배열의 그 칸이 초록으로 바뀌고 커서가 다음으로 갔는데,
+ *   눈은 입력칸에 있었다.
+ */
 function manualAssign() {
   const name = $('manual').value.trim().toUpperCase();
-  if (cursor < 0) { log('먼저 자리를 고른다 (키를 클릭).'); return; }
-  if (!(name in USAGE)) { log(`모르는 이름: ${name}`); return; }
-  onKeyDown(USAGE[name]);
+
+  if (cursor < 0 || cursor >= keys.length) { log('먼저 위 배열에서 자리를 클릭한다.'); return; }
+  if (!name) { log('키 이름을 넣는다 — 칸에 몇 자만 쳐도 목록이 뜬다.'); return; }
+  if (!Object.prototype.hasOwnProperty.call(USAGE, name)) {
+    log(`모르는 이름: ${name}`);
+    return;
+  }
+
+  const u = USAGE[name];
+
+  onKeyDown(u);
+  $('manual').value = '';
+  log(`${name} (0x${u.toString(16).toUpperCase().padStart(2, '0')}) 을 넣었다.`
+      + (cursor >= 0 ? ' 다음 자리로 넘어갔다.' : ''));
+}
+
+// 이름 목록을 자동완성에 넣는다. 어떤 이름이 되는지 외우지 않아도 된다.
+function fillKeyNames() {
+  const dl = $('keynames');
+
+  for (const name of Object.keys(USAGE).sort()) {
+    const o = document.createElement('option');
+
+    o.value = name;
+    o.label = '0x' + USAGE[name].toString(16).toUpperCase().padStart(2, '0');
+    dl.appendChild(o);
+  }
 }
 
 // ── 내보내기 ────────────────────────────────────────────
@@ -1158,6 +1203,8 @@ function refreshUi() {
       stored ? `— SLOT ${editSlot} 의 원래 배열로 —` : '— 프리셋에서 고르기 —';
   }
 
+  $('assign').disabled = (cursor < 0 || cursor >= keys.length);
+
   const badge = $('editBadge');
   if (editSlot >= 0) {
     const isNew = (slots && !slots[editSlot].used);
@@ -1201,6 +1248,7 @@ function exportKle() {
 }
 
 fillPresets();
+fillKeyNames();
 refreshUi();
 $('loadFile').onclick = openFile;
 $('connect').onclick = connect;
@@ -1210,6 +1258,7 @@ $('start').onclick = startWizard;
 $('skip').onclick = skip;
 $('clear').onclick = clearCur;
 $('assign').onclick = manualAssign;
+$('manual').onkeydown = (e) => { if (e.key === 'Enter') manualAssign(); };
 $('editBadge').onclick = () => { editSlot = -1; refreshUi(); log('고치던 SLOT 을 놓았다 — 이제 새로 만든다.'); };
 $('save').onclick = () => saveSlot();
 $('exVia').onclick = exportVia;
