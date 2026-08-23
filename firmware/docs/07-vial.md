@@ -274,6 +274,25 @@ vial 빌드에서는 안 된다. **우리 커스텀 명령(`0xA0`~)으로 페이
 답이다 — 양쪽 끝을 다 우리가 만드므로 남의 형식과 싸울 이유가 없다
 → [09-keyboard-profile.md](09-keyboard-profile.md)
 
+### ★ `via_command_kb()` / `via_custom_value_command_kb()` 는 vial 빌드에서 죽은 코드다
+
+**vial-qmk 에는 이 두 훅이 아예 없다.** upstream QMK 전용이다.
+`port/via_port.c` 의 그 함수들은 vial 빌드에서 링커가 통째로 버린다.
+
+이걸 모르면 시간을 버린다 — 거기에 코드를 넣고 빌드해도
+**크기가 한 바이트도 안 변한다.** 실제로 그렇게 한 번 헛짚었다.
+(`arm-none-eabi-nm` 으로 오브젝트에는 `T via_command_kb` 가 있는데
+최종 ELF 에는 심볼이 없는 것으로 확인했다)
+
+다행히 잃는 것은 없다:
+
+| | via | vial |
+|---|---|---|
+| `id_bootloader_jump` | 우리 `via_command_kb()` | **upstream `via.c` 가 직접 처리한다** (436행) |
+| 커스텀 메뉴 | 우리 `via_custom_value_command_kb()` | Vial 의 QMK Settings 가 대신한다 |
+
+vial 빌드에서 못 쓰게 되는 것은 **패스스루 토글**뿐이다 (UI 도 경로도 없다).
+
 ### 이름으로 구분한다
 
 ```
@@ -316,6 +335,6 @@ build-vial/src/qmk-link-vial.uf2  USB 제품 이름 "QMK-LINK VIAL"
 |---|---|
 | **구버전 Vial 데스크톱 앱** | 웹 Vial 은 되는데 로컬 0.7.5(Python 3.6.8 / Qt 5.9.3)는 장치를 못 잡는다. 펌웨어 쪽 근거는 다 확인했다 — 프로토콜 6은 도입 이래 바뀐 적이 없고(이력에 커밋 1개), `vial.json` 은 vial-qmk 예제 57개 중 28개와 키 구성이 완전히 같다. **다른 Vial 키보드를 그 앱에 꽂아 보면 앱 문제인지 갈린다** |
 | ~~Vial 의 QMK Settings~~ ✅ | 켰다. 15항목 |
-| 패스스루 | vial 트리에는 커스텀 메뉴가 없어 UI 가 없다. CLI 로만 조작한다 |
+| 패스스루 | vial 빌드에서는 조작 경로가 없다 — `via_custom_value_command_kb()` 가 안 불린다. 필요하면 CLI 명령을 따로 만든다 |
 | 매트릭스 테스터 | vial 빌드에서는 구조적으로 불가 (위 참고). CLI `qmk matrix` 를 쓴다 |
 | 두 트리의 `port/` 중복 | 실제로 갈린 것은 `config.h`·`eeprom.c` 두 줄뿐이다. 공유를 검토할 만하다 (지금은 중복을 감수) |
