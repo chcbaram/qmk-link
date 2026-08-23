@@ -83,3 +83,20 @@ __attribute__((weak)) void matrix_init_kb(void)  { matrix_init_user(); }
 __attribute__((weak)) void matrix_scan_kb(void)  { matrix_scan_user(); }
 __attribute__((weak)) void matrix_init_user(void) {}
 __attribute__((weak)) void matrix_scan_user(void) {}
+
+
+/*
+ * ★ 이 매트릭스에는 왼손/오른손이 없다.
+ *
+ *   좌표가 HID usage 라 물리적 위치와 무관하다 (0x04 가 왼쪽인지 오른쪽인지는
+ *   꽂은 키보드마다 다르고, 우리는 알 수도 없다).
+ *
+ *   '*' 는 "어느 쪽도 아니다" 라는 뜻이라 chordal hold 가 손 기준으로 막지 않는다.
+ *   upstream 기본 구현은 chordal_hold_layout[][] 표를 읽는데(weak),
+ *   그 표를 256칸 만들어 전부 '*' 로 채우는 것과 같고 더 싸다.
+ */
+char chordal_hold_handedness(keypos_t key)
+{
+  (void)key;
+  return '*';
+}

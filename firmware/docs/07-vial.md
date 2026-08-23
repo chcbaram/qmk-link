@@ -165,6 +165,48 @@ vial.json 이 VIA 정의와 다른 점은 두 가지뿐이다 — `lighting` 이
 09단계에서 키보드마다 다른 정의를 내주려는 근거가 이것이다
 → [09-keyboard-profile.md](09-keyboard-profile.md)
 
+### ★ Vial 앱의 탭은 전부 opt-in 이다
+
+안 켜면 앱에 **Keymap 과 Macros 만 나온다.** 켜면 `vial.h` 가 대응하는
+`VIAL_*_ENABLE` 을 자동으로 정의하고 `dynamic_keymap` 이 EEPROM 자리를 잡는다.
+
+| 정의 | 앱의 탭 | 엔트리 |
+|---|---|---|
+| `QMK_SETTINGS` | QMK Settings | 40 B |
+| `TAP_DANCE_ENABLE` | Tap Dance | 16 × 10 B |
+| `COMBO_ENABLE` | Combos | 16 × 10 B |
+| `KEY_OVERRIDE_ENABLE` | Key Overrides | 8 × 10 B |
+| `REPEAT_KEY_ENABLE` | Alt Repeat Key | 8 × 10 B |
+
+**`QMK_SETTINGS` 는 특히 중요하다** — vial 트리는 탭홀드를 Vial 에 맡기기로 했는데
+(`*_PER_KEY` 를 두지 않는다), 이걸 안 켜면 탭홀드가 컴파일 상수로 굳어 **아무 데서도
+못 바꾼다.** 켜기 전 상태가 정확히 그랬다.
+
+엔트리 개수는 `config.h` 에 명시한다. 안 적으면 `vial.h` 가 EEPROM 크기를 보고
+알아서 정하는데, 우리 16KB 면 큰 값을 골라 매크로 버퍼를 잡아먹는다.
+
+#### 켜면서 걸린 것 넷
+
+**① `qmk_settings.c` 는 `CHORDAL_HOLD` · `FLOW_TAP_TERM` 을 전제한다.**
+`get_chordal_hold_default()` / `is_flow_tap_key()` 를 가드 없이 부르는데,
+그 둘은 `action_tapping.h` 에서 각각 `#ifdef` 안에 있다. 둘 다 켠다
+(QMK Settings 가 UI 로 내주는 항목이므로 켜는 게 맞다).
+
+**② `chordal_hold_handedness()` 를 우리가 준다.**
+upstream 기본 구현은 `chordal_hold_layout[][]` 표를 읽는데(weak) 그 표가 없다.
+**이 매트릭스에는 왼손/오른손이 없다** — 좌표가 usage 라 물리 위치와 무관하다.
+`'*'`(어느 쪽도 아님)를 돌려준다. 256칸 표를 만드는 것과 같고 더 싸다.
+
+**③ `TAPPING_TERM_PER_KEY` 를 vial 에서는 켠다 — via 와 반대다.**
+upstream `vial.c` 가 `tap_dance_count()` / `tap_dance_get()` 을 이 매크로 안에
+넣어 뒀다 (`#endif` 중첩 실수). 안 켜면 `process_tap_dance.c` 가 그 둘을 못 찾는다.
+그래서 `get_tapping_term()` 의 주인이 `vial.c` 가 되고, 우리 `via_port.c` 의 훅은
+`#ifndef VIAL_ENABLE` 로 빠진다.
+
+**④ 잔챙이 소스 둘.** `process_combo.c` 가 `biton()`(`bitwise.c`),
+`qmk_settings.c` 가 `set_autoshift_timeout()`(`process_auto_shift.c`) 을 부른다.
+Auto Shift 는 기본값이 꺼짐이라(`QS.auto_shift = 0`) 켜도 동작이 바뀌지 않는다.
+
 ### 이름으로 구분한다
 
 ```
@@ -198,12 +240,14 @@ build-vial/src/qmk-link-vial.uf2  USB 제품 이름 "QMK-LINK VIAL"
 | 5 | EEPROM 이 Vial 영역 | ✅ `0x1F4000`, VIA 영역은 그대로 |
 | 6 | via 로 되돌려도 동작 | ✅ FLASH 111,256 B |
 | 7 | 산출물 이름 구분 | ✅ `qmk-link-via.uf2` / `qmk-link-vial.uf2` |
+| 8 | Vial 앱 인식 | ✅ 웹 Vial 에서 `QMK-LINK VIAL`, 8레이어 |
+| 9 | 기능 탭 | ✅ tap dance 16 / combo 16 / key override 8 / alt repeat 8 / QMK Settings 15항목 / 매크로 16개(버퍼 11,695 B) |
 
 ## 열린 질문
 
 | 항목 | 내용 |
 |---|---|
-| **Vial 앱 실물** | 프로토콜은 hidapi 로 전부 확인했지만 앱에서 열어 보지는 않았다 |
-| Vial 의 QMK Settings | vial 트리는 탭홀드를 Vial 에 맡기기로 했는데, 그러려면 `QMK_SETTINGS` 를 켜야 한다. 지금은 컴파일 상수(`TAPPING_TERM` 200)로 고정이다 |
+| **구버전 Vial 데스크톱 앱** | 웹 Vial 은 되는데 로컬 0.7.5(Python 3.6.8 / Qt 5.9.3)는 장치를 못 잡는다. 펌웨어 쪽 근거는 다 확인했다 — 프로토콜 6은 도입 이래 바뀐 적이 없고(이력에 커밋 1개), `vial.json` 은 vial-qmk 예제 57개 중 28개와 키 구성이 완전히 같다. **다른 Vial 키보드를 그 앱에 꽂아 보면 앱 문제인지 갈린다** |
+| ~~Vial 의 QMK Settings~~ ✅ | 켰다. 15항목 |
 | 패스스루 | vial 트리에는 커스텀 메뉴가 없어 UI 가 없다. CLI 로만 조작한다 |
 | 두 트리의 `port/` 중복 | 실제로 갈린 것은 `config.h`·`eeprom.c` 두 줄뿐이다. 공유를 검토할 만하다 (지금은 중복을 감수) |

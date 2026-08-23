@@ -44,6 +44,16 @@ file(GLOB QMK_SRC_FILES CONFIGURE_DEPENDS
   # Vial
   ${QMK_QUANTUM_PATH}/vial.c
 
+  # Vial 앱의 탭들. 이걸 안 넣으면 Keymap / Macros 만 나온다.
+  ${QMK_QUANTUM_PATH}/qmk_settings.c                       # QMK Settings 탭
+  ${QMK_QUANTUM_PATH}/process_keycode/process_tap_dance.c  # Tap Dance 탭
+  ${QMK_QUANTUM_PATH}/process_keycode/process_combo.c      # Combos 탭
+  ${QMK_QUANTUM_PATH}/process_keycode/process_key_override.c
+  ${QMK_QUANTUM_PATH}/process_keycode/process_auto_shift.c  # qmk_settings 가 set_autoshift_timeout() 을 부른다
+  ${QMK_QUANTUM_PATH}/bitwise.c                             # process_combo 가 biton() 을 부른다
+  ${QMK_QUANTUM_PATH}/repeat_key.c                          # Alt Repeat Key 탭
+  ${QMK_QUANTUM_PATH}/process_keycode/process_repeat_key.c
+
   ${QMK_QUANTUM_PATH}/quantum.c
   ${QMK_QUANTUM_PATH}/keyboard.c
   ${QMK_QUANTUM_PATH}/action.c
@@ -108,6 +118,20 @@ set(QMK_DEFINES
 
   # Vial 은 VIA 위에 얹힌다. VIA_ENABLE 이 같이 켜져 있어야 한다.
   VIAL_ENABLE
+
+  # ★ Vial 앱의 탭은 전부 opt-in 이다.
+  #
+  #   안 켜면 앱에 Keymap / Macros 만 나온다. 켜면 vial.h 가 대응하는
+  #   VIAL_*_ENABLE 을 자동으로 정의하고 dynamic_keymap 이 EEPROM 자리를 잡는다.
+  #
+  #   ★ QMK_SETTINGS 는 특히 중요하다 — vial 트리는 탭홀드를 Vial 에 맡기기로
+  #     했는데(*_PER_KEY 를 두지 않는다), 이걸 안 켜면 탭홀드가 컴파일 상수로
+  #     굳어 아무 데서도 못 바꾼다.
+  QMK_SETTINGS
+  TAP_DANCE_ENABLE
+  COMBO_ENABLE
+  KEY_OVERRIDE_ENABLE
+  REPEAT_KEY_ENABLE
   EXTRAKEY_ENABLE
   # MOUSE_ENABLE    : 마우스 리포트 자체 (패스스루 · 마우스키 공통)
   # MOUSEKEY_ENABLE : 키로 마우스를 조작하는 기능

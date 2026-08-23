@@ -132,6 +132,13 @@ void via_init_kb(void)
 
 //-- QMK 의 런타임 훅
 //
+// ★ vial 트리에서는 통째로 빠진다.
+//
+//   Vial 은 탭홀드 UI(QMK Settings)를 자기가 갖고 있고, vial.c 가
+//   get_tapping_term() 을 정의한다. 여기서도 정의하면 중복 정의가 된다.
+//
+#ifndef VIAL_ENABLE
+//
 //   *_PER_KEY 를 켰기 때문에 QMK 가 키마다 이 함수들을 부른다.
 //   지금은 키에 상관없이 같은 값을 준다 (키별 설정은 UI 를 만들 자리가 없다).
 //
@@ -187,6 +194,9 @@ bool get_retro_tapping(uint16_t keycode, keyrecord_t *record)
   return cfg.retro_tapping != 0;
 }
 #endif
+
+
+#endif   /* !VIAL_ENABLE */
 
 
 //-- VIA 커스텀 메뉴

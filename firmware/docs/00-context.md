@@ -35,7 +35,7 @@ PC 에는 **VIA / Vial 로 편집 가능한 키보드**로 보이게 한다.
 | **완료** | **07 VIAL** — vial 트리. 장치가 정의를 내주는 것까지 확인 |
 | **다음** | **08 마감** — LED 인디케이터 · suspend/resume · 허브 · 미디어키 |
 
-실측: via FLASH 111,256 B / vial 114,224 B, RAM 152~155 KB / 512 KB (copy_to_ram).
+실측: via FLASH 111,256 B / vial 129,432 B, RAM 152~155 KB / 512 KB (copy_to_ram).
 `0483:5305 QMK-LINK` 로 열거된다 — HID(keyboard / extra / raw) + CDC 복합 장치.
 `clk_sys` 는 CLI 에서 120,000,000 Hz 확인.
 
@@ -49,6 +49,8 @@ PC 에는 **VIA / Vial 로 편집 가능한 키보드**로 보이게 한다.
 - VIA 의 bootloader 버튼 → BOOTSEL
 - VIA 의 Key Tester > Test Matrix — 누른 키의 usage 가 배열에서 반짝인다
 - **Vial 트리** — `-DKEY_PROTOCOL=vial`. 장치가 자기 정의를 내준다 (552 B, LZMA)
+  기능 전부 켜 뒀다 — QMK Settings 15항목 · tap dance 16 · combo 16 ·
+  key override 8 · alt repeat 8 · 매크로 16(버퍼 11.7KB)
 
 **진단은 CLI `key info`** 로 한다. 이 단계의 고장들은 `mounted` / `drop` 으로는
 안 보였다 → [06-via.md](06-via.md#진단-도구--key-info)
