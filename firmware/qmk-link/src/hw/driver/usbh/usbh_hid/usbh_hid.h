@@ -10,6 +10,8 @@
 #ifdef _USE_HW_USBH
 #include "tusb.h"
 
+#define USBH_PRODUCT_MAX    32
+
 
 typedef struct
 {
@@ -54,6 +56,10 @@ bool usbhHidGetReport(usbh_hid_report_t *p_report);
 
 uint32_t usbhHidGetRxCount(void);
 uint32_t usbhHidGetDropCount(void);
+
+// 꽂힌 키보드가 스스로 말하는 이름 (USB product string).
+// 아직 못 받았거나 없으면 false. 최대 USBH_PRODUCT_MAX-1 글자.
+bool usbhHidGetProduct(uint8_t dev_addr, char *p_str, uint8_t length);
 
 
 #endif

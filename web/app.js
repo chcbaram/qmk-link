@@ -27,6 +27,7 @@ const CMD_SLOT_DATA   = 0x05;
 const CMD_SLOT_COMMIT = 0x06;
 const CMD_SLOT_ERASE  = 0x07;
 const CMD_SEL_SET     = 0x08;
+const CMD_HOST_INFO   = 0x09;   // 버전 4 — 키보드가 말하는 이름
 const SEL_AUTO        = 0xFF;
 const REPORT_LEN  = 32;
 
@@ -48,6 +49,8 @@ let paused = false;          // 탭이 가려지면 멈춘다
 let firmware = null;         // 'via' | 'vial'
 let slots = null;            // [{used, name}] — 연결했을 때만 채워진다
 let hostVid = 0, hostPid = 0;// USB-A 에 꽂힌 키보드. SLOT 머리말에 적는다
+let hostName = '';           // 그 키보드가 스스로 말하는 이름 (USB product string)
+let cmdVer = 0;              // 펌웨어의 명령 버전
 let activeSlot = -1;         // 보드가 지금 쓰고 있는 SLOT (-1 = 없음)
 let selSlot    = -1;         // 사용자가 고정해 둔 SLOT (-1 = 자동)
 let editSlot   = -1;         // 지금 열어서 고치고 있는 SLOT (-1 = 새로 만드는 중)
@@ -131,6 +134,9 @@ async function attach(dev) {
     + (kbds.length ? ` (${kbds.join(', ')})` : '');
   $('dev').className = 'ok';
 
+  cmdVer = ver;
+  await readHostName();
+
   applyFirmware(locked !== 0);
 
   // ★ poll() 을 시작하기 **전에** 읽는다.
@@ -142,6 +148,28 @@ async function attach(dev) {
   else log('배열을 넣고 [마법사 시작] 을 누른다.');
 
   poll();
+}
+
+// ★ 키보드가 스스로 말하는 이름을 읽는다 (USB product string).
+//
+//   vid/pid 만으로는 사람이 어느 키보드인지 못 알아본다. 펌웨어가 mount 때
+//   비동기로 받아 두므로 꽂은 직후에는 잠깐 비어 있을 수 있다 — 그때는
+//   다음 폴링(checkHost)에서 채워진다.
+async function readHostName() {
+  hostName = '';
+  if (cmdVer < 4) return;                 // 구형 펌웨어에는 이 명령이 없다
+
+  try {
+    const r = await send(CMD_HOST_INFO, 0);
+    if (r[3] !== 1) return;
+    hostName = new TextDecoder().decode(r.slice(8, 32)).split('\0')[0].trim();
+  } catch { /* 없으면 없는 대로 */ }
+
+  // ★ 이름 칸이 아직 기본값이면 진짜 이름으로 채워 준다.
+  //   손으로 고쳤으면 건드리지 않는다.
+  if (hostName && DEFAULT_NAMES.includes($('name').value.trim())) {
+    $('name').value = hostName;
+  }
 }
 
 // ── 보드의 레이아웃 SLOT ────────────────────────────────
@@ -246,7 +274,11 @@ function renderSlots() {
 
     const head = document.createElement('div');
     head.className = 'kbd-head';
+    // 이름 — 꽂혀 있으면 키보드가 말하는 진짜 이름, 아니면 담아 둔 이름
+    const label = here ? hostName : (g.rows.length ? g.rows[0].name : '');
+
     head.innerHTML = `<code>${hex4(g.vid)}:${hex4(g.pid)}</code>`
+      + (label ? `<span>${esc(label)}</span>` : '')
       + (here ? '<span class="badge">지금 꽂힌 키보드</span>' : '');
     div.appendChild(head);
 
@@ -266,7 +298,7 @@ function renderSlots() {
 
       const txt = document.createElement('span');
       txt.innerHTML = '<span class="dot"><i></i></span>'
-        + `<b>SLOT ${r.i}</b>  ${r.name || '(이름 없음)'}`
+        + `<b>SLOT ${r.i}</b>  ${esc(r.name) || '(이름 없음)'}`
         + `  <span class="note">${r.len} B · PID ${hex4(PID_BASE + r.i)}</span>`
         + (on ? '  <span class="note" style="color:#1e5c30">적용 중'
                 + (selSlot === r.i ? ' · 고정' : '') + '</span>' : '');
@@ -350,6 +382,11 @@ function updateSaveNote() {
 
 function hex4(v) { return v.toString(16).toUpperCase().padStart(4, '0'); }
 
+// 키보드가 보낸 문자열을 그대로 innerHTML 에 넣지 않는다
+function esc(t) {
+  return String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
 async function disconnect() {
   const d = device;
   device = null;                 // poll 루프가 스스로 끝난다
@@ -360,7 +397,7 @@ async function disconnect() {
   $('dev').className = '';
   firmware = null;
   slots = null;
-  hostVid = 0; hostPid = 0;
+  hostVid = 0; hostPid = 0; hostName = '';
   activeSlot = -1; selSlot = -1;
   refreshUi();
   $('exVia').style.display = 'none';
@@ -453,8 +490,11 @@ async function checkHost() {
   const swapped = (vid !== hostVid || pid !== hostPid);
   hostVid = vid; hostPid = pid;
 
+  if (!swapped && !hostName && vid) await readHostName();   // 늦게 도착한 이름
+
   if (swapped) {
     editSlot = -1;                        // 다른 키보드다. 고치던 맥락을 버린다
+    await readHostName();
     const fw = (firmware || '').toUpperCase();
     $('dev').textContent = vid
       ? `${fw} 펌웨어 — 꽂힌 키보드 ${hex4(vid)}:${hex4(pid)}`

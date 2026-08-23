@@ -14,12 +14,83 @@ static volatile uint32_t rx_count   = 0;
 static volatile uint32_t drop_count = 0;
 static bool is_init = false;
 
+/*
+ * 꽂힌 키보드가 스스로 말하는 이름 (USB product string).
+ *
+ * ★ 왜 mount 때 바로 못 읽나
+ *
+ *   문자열은 컨트롤 전송으로 따로 물어봐야 한다. tuh_..._sync() 는 tuh_task()
+ *   가 돌아야 끝나는데, 콜백 자체가 tuh_task() 안에서 불린다 — 거기서 sync 를
+ *   부르면 자기가 끝나기를 자기가 기다린다. 그래서 **비동기**로 요청하고
+ *   완료 콜백에서 채운다. 그 사이 잠깐 이름이 비어 있는 것은 정상이다.
+ *
+ * ★ 주소별로 둔다. 인터페이스(instance)가 아니라 장치(dev_addr) 것이다.
+ *   한 키보드가 인터페이스를 여럿 낼 수 있고 이름은 하나다.
+ */
+static char    product_str[CFG_TUH_DEVICE_MAX + 1][USBH_PRODUCT_MAX];
+static uint8_t product_buf[128];      /* UTF-16 원본. 한 번에 하나만 요청한다 */
+static volatile bool product_busy = false;
+
+static void productDone(tuh_xfer_t *xfer)
+{
+  uint8_t daddr = (uint8_t)xfer->user_data;
+
+  product_busy = false;
+
+  if (xfer->result != XFER_RESULT_SUCCESS) return;
+  if (daddr > CFG_TUH_DEVICE_MAX) return;
+
+  /* [0] 전체 길이 [1] 0x03 [2..] UTF-16LE */
+  {
+    uint8_t  len = product_buf[0];
+    uint8_t  n   = 0;
+
+    if (len < 2 || len > sizeof(product_buf)) return;
+
+    for (uint8_t i = 2; i + 1 < len && n < (USBH_PRODUCT_MAX - 1); i += 2)
+    {
+      uint16_t ch = (uint16_t)product_buf[i] | ((uint16_t)product_buf[i+1] << 8);
+
+      /* ASCII 만 남긴다. 한글 이름은 여기서 물음표가 된다 */
+      product_str[daddr][n++] = (ch >= 0x20 && ch < 0x7F) ? (char)ch : '?';
+    }
+    while (n > 0 && product_str[daddr][n-1] == ' ') n--;   /* 뒤 공백은 흔하다 */
+    product_str[daddr][n] = 0;
+  }
+}
+
+static void productRequest(uint8_t daddr)
+{
+  if (daddr > CFG_TUH_DEVICE_MAX) return;
+  if (product_str[daddr][0] != 0) return;      /* 이미 받았다 */
+  if (product_busy == true) return;            /* 버퍼가 하나다. 다음 mount 때 */
+
+  product_busy = true;
+  if (tuh_descriptor_get_product_string(daddr, 0x0409, product_buf,
+                                        sizeof(product_buf),
+                                        productDone, (uintptr_t)daddr) != true)
+  {
+    product_busy = false;
+  }
+}
+
+bool usbhHidGetProduct(uint8_t dev_addr, char *p_str, uint8_t length)
+{
+  if (dev_addr > CFG_TUH_DEVICE_MAX) return false;
+  if (product_str[dev_addr][0] == 0) return false;
+
+  strncpy(p_str, product_str[dev_addr], length - 1);
+  p_str[length - 1] = 0;
+  return true;
+}
+
 
 
 
 bool usbhHidInit(void)
 {
   memset(hid_info, 0, sizeof(hid_info));
+  memset(product_str, 0, sizeof(product_str));
 
   queue_init(&report_queue, sizeof(usbh_hid_report_t), USBH_HID_QUEUE_MAX);
 
@@ -77,6 +148,9 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
 
   tuh_vid_pid_get(dev_addr, &hid_info[instance].vid, &hid_info[instance].pid);
 
+  /* 이름은 따로 물어봐야 한다. 비동기다 (위 주석 참고) */
+  productRequest(dev_addr);
+
   /*
    * ★ 미디어키를 받으려면 여기서 리포트 디스크립터를 봐야 한다.
    *
@@ -115,11 +189,19 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
 
 void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
-  (void)dev_addr;
-
   if (instance >= CFG_TUH_HID) return;
 
   memset(&hid_info[instance], 0, sizeof(usbh_hid_info_t));
+
+  /* 그 장치의 마지막 인터페이스가 빠질 때만 이름을 지운다.
+     한 키보드가 인터페이스를 여럿 낸다 (키보드 + 컨슈머 등) */
+  if (dev_addr <= CFG_TUH_DEVICE_MAX)
+  {
+    for (int i=0; i<CFG_TUH_HID; i++)
+      if (hid_info[i].is_connect && hid_info[i].dev_addr == dev_addr) return;
+
+    product_str[dev_addr][0] = 0;
+  }
 }
 
 void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance,

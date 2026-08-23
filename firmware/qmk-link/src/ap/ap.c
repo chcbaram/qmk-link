@@ -359,10 +359,14 @@ static void cliKey(cli_args_t *args)
     {
       usbh_hid_info_t info;
 
+      char name[32];
+
       if (usbhHidGetInfo(i, &info) != true) continue;
-      cliPrintf("  [%d] connect %d  addr %d  proto %d  %04X:%04X  %s\n",
+      if (usbhHidGetProduct(info.dev_addr, name, sizeof(name)) != true) name[0] = 0;
+
+      cliPrintf("  [%d] connect %d  addr %d  proto %d  %04X:%04X  %s  %s\n",
                 i, info.is_connect, info.dev_addr, info.itf_protocol,
-                info.vid, info.pid,
+                info.vid, info.pid, name,
                 info.is_consumer ? "consumer(미디어키)" : "");
     }
     ret = true;

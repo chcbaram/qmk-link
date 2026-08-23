@@ -196,6 +196,35 @@ bool linkCmdHandle(uint8_t *p_data, uint8_t length, bool vial_locked)
       break;
     }
 
+    case LINK_CMD_HOST_INFO:
+    {
+      /* 꽂힌 키보드가 스스로 말하는 이름. vid/pid 만으로는 사람이 못 알아본다 */
+      uint8_t want = p_data[2];
+      uint8_t n    = 0;
+
+      memset(&p_data[2], 0, length - 2);
+
+#ifdef _USE_HW_USBH
+      for (int k=0; k<LINK_SOURCE_MAX; k++)
+      {
+        usbh_hid_info_t info;
+
+        if (usbhHidGetInfo(k, &info) != true) continue;
+        if (info.is_connect != true) continue;
+        if (n++ != want) continue;
+
+        p_data[3] = 1;
+        p_data[4] = (uint8_t)(info.vid & 0xFF);
+        p_data[5] = (uint8_t)(info.vid >> 8);
+        p_data[6] = (uint8_t)(info.pid & 0xFF);
+        p_data[7] = (uint8_t)(info.pid >> 8);
+        usbhHidGetProduct(info.dev_addr, (char *)&p_data[8], length - 8);
+        break;
+      }
+#endif
+      break;
+    }
+
     case LINK_CMD_SEL_SET:
     {
       /* 지금 꽂힌 키보드가 쓸 SLOT 을 고정한다 (0xFF = 자동) */

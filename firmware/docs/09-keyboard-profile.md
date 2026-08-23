@@ -102,11 +102,28 @@ KLE 를 올린다  →  한 자리씩 강조  →  그 키를 누른다  →  us
 그 선택을 플래시에 기록한다.
 
 ```
-04FE:0006  HHKB Lite 2          ← 지금 꽂힌 키보드
+04FE:0006  HHKB Professional     ← 지금 꽂힌 키보드
   ● SLOT 0   HHKB 63키   1,548 B  적용 중   [편집] [지우기]
   ○ SLOT 3   HHKB 실험   1,602 B   [적용]   [편집] [지우기]
   [SLOT 1 에 새로 담기]
 ```
+
+#### 키보드 이름 — `0x09 HOST_INFO`
+
+`04FE:0006` 만으로는 사람이 어느 키보드인지 못 알아본다. USB product string 을
+읽어 같이 보여 준다. 이름 칸이 아직 기본값이면 거기도 채워 준다.
+
+★ **mount 콜백에서 `_sync` 를 부르면 안 된다.** 문자열은 컨트롤 전송으로 따로
+물어봐야 하는데 `tuh_..._sync()` 는 `tuh_task()` 가 돌아야 끝난다. 콜백 자체가
+`tuh_task()` 안에서 불리므로 자기가 끝나기를 자기가 기다리게 된다.
+비동기로 요청하고 완료 콜백에서 채운다 — 꽂은 직후 잠깐 비어 있는 것은 정상이고,
+웹은 2초 폴링에서 다시 읽는다.
+
+★ 이름은 INFO 에 못 싣는다. INFO 는 32바이트를 이미 다 쓰고 있고 이름만
+24바이트다. 그래서 명령을 따로 뒀다.
+
+★ 키보드가 보낸 문자열을 `innerHTML` 에 그대로 넣지 않는다 (`esc()`).
+사용자가 넣은 SLOT 이름도 마찬가지다.
 
 #### 선택 표 — 왜 EEPROM 이 아닌가
 
@@ -403,7 +420,9 @@ QMK 의 **레이아웃 좌표** 와 그 레이아웃을 쓰는 **키보드의 �
 - [x] blob 저장소 (`ap/modules/link/kbd_store.c`) + CLI `kbd`
 - [x] 커스텀 raw HID 명령 `0x02`~`0x07`
 - [x] 업로드 도구 `tools/kbd_upload.py` (put / get / list / erase)
-- [ ] 키보드 식별에 product string 해시 넣기 (자리는 있다 — 선택 표에도 hash 자리가 있다)
+- [x] **키보드 이름 표시** — USB product string (`0x09 HOST_INFO`)
+- [ ] 키보드 **식별**에 product string 해시 넣기 (읽는 것은 됐다. 아직 표시만 쓴다 —
+      hash 를 켜면 이미 담아 둔 SLOT 의 hash 가 0 이라 동작을 한 번 검증해야 한다)
 - [x] Vial `vial_get_size` / `vial_get_def` 를 플래시에서 서빙
 - [x] **PID 전환 (`0x5400` + 칸)** — `usb.c` · `ap.c` · `flash.py` · 마법사
 - [x] 마법사에 "보드의 칸" 고르기 — 내보내는 JSON 의 `productId` 를 맞춘다

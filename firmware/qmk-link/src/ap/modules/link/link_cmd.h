@@ -58,6 +58,12 @@
 //     0x07 SLOT_ERASE  req [2]슬롯
 //     0x08 SEL_SET     req [2]슬롯 (0xFF = 자동)   ← 버전 3
 //                      지금 꽂힌 키보드가 쓸 SLOT 을 고정한다. 바로 반영된다
+//     0x09 HOST_INFO   req [2]번째                   ← 버전 4
+//                      rsp [2]결과 [3]붙어있음 [4..5]vid [6..7]pid
+//                          [8..31] 키보드가 말하는 이름 (USB product string, NUL 끝)
+//
+//   ★ 이름은 INFO 에 못 싣는다. INFO 는 32바이트를 이미 다 쓰고 있고
+//     이름만 24바이트다. 따로 물어보게 한다.
 //
 //   ★ 32바이트 리포트라 정의를 한 번에 못 보낸다. Begin -> Data 여러 번 ->
 //     Commit 으로 나눈다. Commit 에서만 플래시를 건드린다 (소거 수명 때문이다).
@@ -85,12 +91,13 @@
 #define LINK_CMD_SLOT_COMMIT  0x06
 #define LINK_CMD_SLOT_ERASE   0x07
 #define LINK_CMD_SEL_SET      0x08
+#define LINK_CMD_HOST_INFO    0x09
 
 #define LINK_RC_OK            0
 #define LINK_RC_FAIL          1
 #define LINK_RC_RANGE         2
 
-#define LINK_CMD_VERSION      3
+#define LINK_CMD_VERSION      4
 
 #define LINK_TREE_VIA         0
 #define LINK_TREE_VIAL        1

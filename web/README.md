@@ -40,6 +40,7 @@ Received invalid protocol version from device
 ```
 ① 보드 연결
 ② 보드에 담긴 레이아웃    ← 키보드 → SLOT 트리. 여기가 출발점이다
+                          키보드 이름은 USB product string 을 읽어 보여 준다
 ③ 배열 넣기 + 마법사
 ④ 배열 그림 / 눌린 키 / 직접 넣기
 ⑤ 보드에 담기
