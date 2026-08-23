@@ -59,7 +59,7 @@ BOOTSEL 진입 경로 (전부 실기 확인):
 | `~/hdd/git/nano-ch32h417/firmware` | `firm-sdk` / `firm-prj` 폴더 관례, CMakeLists 골격, `.vscode/tasks.json` 스타일 |
 | `~/hdd/git/NU87-TinyDK/firmware` | `firm-sdk/README.md` 톤, `tools/*.py` 파이썬 도구 관례(`flash.py`, `list_ports.py`, `sync_sdk.py`) |
 | `~/hdd/git/rp2040_fw` | **보드 헤더를 `src/bsp/board/` 에 두는 관례** |
-| `~/hdd/git/wish-he/firmware/wish-he` | **USB descriptor 인터페이스 배치**. `src/hw/driver/usb/cherryusb/usb_desc.h` 주석에 IF0 함정과 인터페이스 순서 근거가 적혀 있다 |
+| `~/hdd/git/wish-he/firmware/wish-he` | **USB descriptor 인터페이스 배치** (`usb_desc.h` 주석에 IF0 함정)과 **QMK 출력 드라이버 연결** (`src/ap/modules/qmk/port/driver_usb.c` — `host_driver_t`, `keyboard_protocol_get()` 함정, 전송 정책). 05단계 참고 구현 |
 | `~/hdd/git/convex/firmware/convex-qmk` | **마우스 · consumer · system 을 한 인터페이스에 리포트 ID 로 담는 구성**. `src/hw/driver/usb/usb_hid/usbd_hid.c` |
 | `~/hdd/git/baram-kbd-tester` | USB **호스트** 쪽 관례. `src/hw/driver/usbh/` 배치 |
 
