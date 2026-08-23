@@ -23,7 +23,6 @@
 #include "link_cmd.h"
 #ifdef VIAL_ENABLE
 #include "vial.h"
-bool vialServeDefinition(uint8_t *p_data, uint8_t length);   /* port/vial_port.c */
 #endif
 #include "flash.h"
 #include "keyboard.h"
@@ -38,6 +37,11 @@ bool vialServeDefinition(uint8_t *p_data, uint8_t length);   /* port/vial_port.c
 
 
 extern host_driver_t usb_driver;    /* port/driver_usb.c */
+
+#ifdef VIAL_ENABLE
+/* 저장된 레이아웃이 있으면 Vial 정의를 그것으로 내준다 */
+bool vialServeDefinition(uint8_t *p_data, uint8_t length);   /* port/vial_port.c */
+#endif
 
 static void cliCmd(cli_args_t *args);
 

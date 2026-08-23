@@ -6,10 +6,13 @@
 #include "pico/bootrom.h"
 
 
-extern void usbdDescInit(void);
-extern void usbdDescSetProductId(uint16_t pid);
-extern uint16_t usbdDescGetProductId(void);
 #include "usbd_hid.h"
+
+
+/* usbd_desc.c — descriptor 는 sizeof 때문에 한 파일에 몰려 있다 */
+extern void     usbdDescInit(void);
+extern void     usbdDescSetProductId(uint16_t pid);
+extern uint16_t usbdDescGetProductId(void);
 
 static bool is_init = false;
 
