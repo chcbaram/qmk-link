@@ -19,7 +19,13 @@ const TREE_VIA    = 0;
 const TREE_VIAL   = 1;
 const CMD_INFO    = 0x00;
 const CMD_PRESSED = 0x01;
+const CMD_SLOT_INFO = 0x02;
 const REPORT_LEN  = 32;
+
+// 저장된 레이아웃 칸마다 보드가 다르게 보고할 PID. 0x5400 + 칸.
+// firmware/qmk-link/src/ap/modules/link/link_cmd.h 의 LINK_PID_BASE 와 같아야 한다.
+const PID_BASE   = 0x5400;
+const SLOT_MAX   = 16;
 
 let device = null;
 let pending = null;          // 응답을 기다리는 resolve
@@ -29,6 +35,7 @@ let cursor = -1;             // 마법사가 가리키는 키
 let prevPressed = new Set(); // 직전에 눌려 있던 usage
 let paused = false;          // 탭이 가려지면 멈춘다
 let firmware = null;         // 'via' | 'vial'
+let slots = null;            // [{used, name}] — 연결했을 때만 채워진다
 
 // ★ 펌웨어에 따라 쓸 수 없는 것이 있다.
 //
@@ -96,10 +103,90 @@ async function connect() {
 
   applyFirmware(locked !== 0);
 
+  // ★ poll() 을 시작하기 **전에** 읽는다.
+  //   send() 는 응답 대기가 하나뿐이라 폴링과 섞이면 서로 답을 가로챈다.
+  //   버전 3 부터 INFO[28] 이 "지금 고른 SLOT" 이다.
+  await loadSlots(ver >= 3 ? info[28] : 0xFF);
+
   if (n === 0) log('★ USB-A 쪽에 키보드가 안 꽂혀 있다. 꽂아야 키를 배울 수 있다.');
   else log('배열을 넣고 [마법사 시작] 을 누른다.');
 
   poll();
+}
+
+// ── 보드의 레이아웃 SLOT ────────────────────────────────
+//
+// ★ 왜 내보내기 옆에서 SLOT 을 고르게 하나
+//
+//   VIA 는 정의를 VID/PID 로 찾는다. 보드는 꽂힌 키보드가 몇 번 SLOT 에 담겨
+//   있는지에 따라 PID 를 0x5400 + SLOT 으로 보고한다. 그래서 내보내는 JSON 의
+//   productId 가 **담을 SLOT** 과 맞아야 VIA 가 그 정의를 고른다.
+//   어긋나면 VIA 가 "모르는 키보드" 로 본다 — 조용히 틀리는 종류다.
+async function loadSlots(activeSlot) {
+  slots = [];
+  for (let i = 0; i < SLOT_MAX; i++) {
+    let r;
+    try { r = await send(CMD_SLOT_INFO, i); } catch { slots = null; break; }
+    const used = (r[2] === 0 && r[3] !== 0);
+    const name = used
+      ? new TextDecoder().decode(r.slice(10, 32)).split('\0')[0]
+      : '';
+    slots.push({ used, name });
+  }
+  fillSlots(activeSlot);
+}
+
+function fillSlots(activeSlot) {
+  const sel = $('slot');
+  const keep = sel.value;
+
+  sel.innerHTML = '';
+  sel.appendChild(new Option('담지 않음 (PID 5305)', '-1'));
+  for (let i = 0; i < SLOT_MAX; i++) {
+    const s = slots && slots[i];
+    const tag = !slots ? '' : (s.used ? ` — ${s.name || '이름 없음'}` : ' — 비어 있음');
+    sel.appendChild(new Option(`SLOT ${i} (PID ${hex4(PID_BASE + i)})${tag}`, String(i)));
+  }
+
+  // 고르는 순서
+  //   1. 지금 꽂힌 키보드가 이미 쓰고 있는 SLOT (보드가 알려 준다)
+  //   2. 첫 빈 SLOT
+  //   3. 사용자가 직전에 고른 것 — 연결 전 목록을 다시 그릴 때다
+  let want;
+
+  if (activeSlot !== undefined && activeSlot < SLOT_MAX) want = String(activeSlot);
+  else if (slots) {
+    const empty = slots.findIndex((s) => !s.used);
+    want = String(empty < 0 ? 0 : empty);
+  }
+  else want = (keep !== '' ? keep : '-1');
+
+  sel.value = want;
+  slotChanged();
+}
+
+function slotPid() {
+  const v = parseInt($('slot').value, 10);
+  return (v >= 0 && v < SLOT_MAX) ? (PID_BASE + v) : 0x5305;
+}
+
+function slotChanged() {
+  const v = parseInt($('slot').value, 10);
+  const note = $('slotNote');
+
+  if (v < 0) {
+    note.innerHTML = '보드에 담지 않는다. <code>productId</code> 는 <code>0x5305</code> 그대로다 — '
+      + '맞는 레이아웃이 없을 때 보드가 보고하는 값이다.';
+    return;
+  }
+
+  const file = slug() + 'layout-vial.json';
+  const name = ($('name').value || '').trim();
+  note.innerHTML = `<code>productId</code> 를 <code>0x${hex4(PID_BASE + v)}</code> 로 적는다. `
+    + '보드에 담아야 그 PID 로 보고한다:'
+    + `<br><code>python3 tools/kbd_upload.py put ${v} ${file} --name "${name}"</code>`
+    + '<br>담는 파일은 두 펌웨어 모두 <code>layout-vial.json</code> 이다 — '
+    + 'VIA 펌웨어는 내용을 안 쓰고 이 SLOT 의 vid/pid 만 본다 (그게 PID 전환의 열쇠다).';
 }
 
 function hex4(v) { return v.toString(16).toUpperCase().padStart(4, '0'); }
@@ -113,6 +200,8 @@ async function disconnect() {
   $('dev').textContent = '연결 끊김 — VIA / Vial 을 써도 된다';
   $('dev').className = '';
   firmware = null;
+  slots = null;
+  fillSlots();
   $('exVia').style.display = 'none';
   $('exVial').style.display = 'none';
   $('fwNote').textContent = '보드를 연결하면 펌웨어에 맞는 내보내기가 나온다.';
@@ -362,7 +451,7 @@ function download(name, obj) {
 function exportVia() {
   download(slug() + 'layout-via.json', {
     name: $('name').value || 'QMK-LINK VIA',
-    vendorId: '0x0483', productId: '0x5305',
+    vendorId: '0x0483', productId: '0x' + hex4(slotPid()),
     matrix: { rows: 16, cols: 16 },
     layouts: { keymap: buildLayout() },
   });
@@ -370,7 +459,7 @@ function exportVia() {
 function exportVial() {
   download(slug() + 'layout-vial.json', {
     name: $('name').value || 'QMK-LINK VIAL',
-    vendorId: '0x0483', productId: '0x5305', lighting: 'none',
+    vendorId: '0x0483', productId: '0x' + hex4(slotPid()), lighting: 'none',
     matrix: { rows: 16, cols: 16 },
     layouts: { keymap: buildLayout() },
   });
@@ -385,6 +474,9 @@ function exportKle() {
 }
 
 fillPresets();
+fillSlots();
+$('slot').onchange = slotChanged;
+$('name').addEventListener('input', slotChanged);
 $('loadFile').onclick = openFile;
 $('connect').onclick = connect;
 $('disconnect').onclick = disconnect;

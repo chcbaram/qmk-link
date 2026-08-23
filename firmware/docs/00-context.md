@@ -36,14 +36,16 @@ PC 에는 **VIA / Vial 로 편집 가능한 키보드**로 보이게 한다.
 | **완료** | **08 마감** — 미디어키 · 키보드 여러 대 · suspend 소등 · VID/PID · README |
 | **완료** | **09-1 학습 마법사** — `web/`, GitHub Actions 로 Pages 배포 |
 | **완료** | **09-2 온디바이스 저장** — 저장소 · 업로드 도구 · **Vial 정의 서빙** |
-| **다음** | **09-2-4 PID 전환** — VIA 도 정의를 자동으로 고르게 (`0x5400` + 슬롯) |
-| 그다음 | **09-3 키맵 프로파일** — 키보드마다 다른 키맵 |
+| **완료** | **09-2-4 PID 전환** — VIA 도 정의를 자동으로 고른다 (`0x5400` + SLOT) |
+| **다음** | **09-3 키맵 프로파일** — 키보드마다 다른 키맵 |
 
 **릴리스** : [v1.0.0](https://github.com/chcbaram/qmk-link/releases/tag/v1.0.0) — `.uf2` 두 개 첨부.
 **웹 마법사** : <https://chcbaram.github.io/qmk-link/>
 
-실측: via FLASH 115,104 B / vial 133,664 B, RAM 152~172 KB / 512 KB (copy_to_ram).
+실측: via FLASH 115,752 B / vial 134,112 B, RAM 164~184 KB / 512 KB (copy_to_ram).
 `0483:5305 QMK-LINK` 로 열거된다 — HID(keyboard / extra / raw) + CDC 복합 장치.
+★ 09단계부터 **PID 가 고정이 아니다.** 꽂힌 키보드의 레이아웃 SLOT 에 따라
+`0x5400`+SLOT 으로 바뀐다. 담아 둔 것이 없을 때만 `0x5305` 다.
 `clk_sys` 는 CLI 에서 120,000,000 Hz 확인.
 
 **지금 동작하는 것**
@@ -58,6 +60,7 @@ PC 에는 **VIA / Vial 로 편집 가능한 키보드**로 보이게 한다.
 - **미디어키** — Consumer 인터페이스를 파싱해 그대로 흘린다 (QMK 를 거치지 않는다)
 - **키보드 여러 대** — 인스턴스별 비트맵을 OR 로 합친다
 - **레이아웃 저장소** — `0x1D0000` 부터 8KB x 16칸. `tools/kbd_upload.py` 로 담고 꺼낸다
+- **PID 전환** — 꽂힌 키보드의 SLOT 에 따라 `0x5400`+SLOT 으로 재열거한다. VIA 가 정의를 스스로 고른다
 - **★ Vial 정의를 장치가 내준다** — 꽂힌 키보드에 맞는 칸을 찾아 그 정의를 준다.
   저장된 것이 없으면 컴파일에 박힌 풀사이즈 기본값이 나간다
 - **Vial 트리** — `-DKEY_PROTOCOL=vial`. 장치가 자기 정의를 내준다 (552 B, LZMA)
@@ -362,33 +365,39 @@ void apMain(void)
 
 ### 지금 보드에 올라가 있는 것
 
-**vial 펌웨어** + 칸 0 에 HHKB Lite 2 레이아웃(63키). 확인 방법:
+**vial 펌웨어** + SLOT 0 에 HHKB Lite 2 레이아웃(63키). 확인 방법:
 
 ```bash
 cd firmware/qmk-link
 python3 tools/kbd_upload.py list
 ```
 
-### 남은 것 ① PID 전환 — VIA 를 위한 것이다
+### 끝난 것 ① PID 전환 — VIA 를 위한 것이다 ✅
 
-Vial 은 정의를 장치에서 읽어가서 이미 자동이다. **VIA 는 정의를 VID/PID 로 찾으므로**
-우리가 늘 `0483:5305` 하나면 VIA 안에 정의가 한 벌만 남는다 —
-키보드를 바꿀 때마다 JSON 을 다시 넣어야 한다.
-
-슬롯마다 PID 를 다르게 보고하면 VIA 가 알아서 고른다 (`0x5400` + 슬롯).
-
-손댈 곳:
+Vial 은 정의를 장치에서 읽어가서 이미 자동이었다. **VIA 는 정의를 VID/PID 로
+찾으므로** 늘 `0483:5305` 하나면 VIA 안에 정의가 한 벌만 남았다.
+이제 SLOT 마다 PID 를 다르게 보고한다 (`0x5400` + SLOT).
 
 | | |
 |---|---|
-| `hw/driver/usb/usbd_desc.c` | `idProduct` 를 상수가 아니라 런타임 값으로. descriptor 콜백에서 읽게 |
-| `ap/ap.c` | 소스 키보드가 바뀌면 `tud_disconnect()` / `tud_connect()` 로 재열거 |
-| `firm-sdk/tools/flash.py` | PID 매칭을 범위로 (`0x5305`, `0x5400`~`0x540F`) |
-| 마법사 · `kbd_upload.py` | 이미 PID 목록으로 찾는다 — 손댈 것 없다 |
+| `hw/driver/usb/usbd_desc.c` | `desc_device` 를 `const` 에서 뺐다. `usbdDescSetProductId()` |
+| `hw/driver/usb/usb.c` | `usbSetProductId()` — 끊고 100ms 뒤 붙인다. **논블로킹** |
+| `ap/ap.c` | `updateProductId()` — 고른 SLOT 이 바뀌면 부른다. `qmkUpdate()` **다음**이다 |
+| `link_cmd.c/h` | INFO 버전 3 — `[28]` 지금 SLOT, `[29..30]` 지금 PID |
+| `firm-sdk/tools/flash.py` | `FW_PID_LIST` 로 범위 매칭 |
+| `tools/kbd_upload.py` | `list` 에 지금 SLOT/PID 표시. put 뒤 재열거 안내 · close 예외 무시 |
+| 웹 마법사 | **저장 SLOT** 고르는 칸. 내보내는 JSON 의 `productId` 를 맞춰 준다 |
 
-★ 정의의 `productId` 도 슬롯에 맞아야 한다. 마법사가 채워 주게 해야 한다.
+세 가지 함정 (전부 조용히 틀린다):
 
-### 남은 것 ② 키맵 프로파일 (09-3)
+- **PID 는 열거할 때 한 번만 읽힌다.** descriptor 값만 바꾸면 아무 일도 안 일어난다
+- **끊는 사이를 `delay()` 로 세면 안 된다.** `delay()` → `cliLoopIdle()` → 여기로 다시 온다
+- **`qmkUpdate()` 다음에 본다.** 담자마자 SLOT 이 바뀌는데 COMMIT 응답은 그 안에서 나간다
+
+★ VIA 트리에서도 SLOT 에 뭔가를 담아야 PID 가 바뀐다. 담는 파일은 두 트리 모두
+`layout-vial.json` 이고, VIA 트리는 내용을 안 쓰고 **머리말의 vid/pid 만** 본다.
+
+### 남은 것 ① 키맵 프로파일 (09-3)
 
 지금은 **모든 키보드가 키맵 한 벌을 공유한다.** 이쪽이 그림보다 체감이 크다.
 
@@ -402,7 +411,7 @@ Vial 은 정의를 장치에서 읽어가서 이미 자동이다. **VIA 는 정�
 ★ 함정: `dynamic_keymap_reset()` 은 **지금 프로파일 한 벌만** 채운다. 그대로 두면
 나머지가 전부 `KC_NO` 라 옮기는 순간 키보드가 죽는다 (wish-he 가 같은 함정을 겪었다).
 
-### 남은 것 ③ 웹에서 업로드 — LZMA 를 정해야 한다
+### 남은 것 ② 웹에서 업로드 — LZMA 를 정해야 한다
 
 Vial 은 정의를 **LZMA 로 압축된 상태**로 읽어간다. 브라우저에는 LZMA 인코더가
 없다 (`CompressionStream` 은 deflate/gzip 뿐). 그래서 업로드가 파이썬이다.

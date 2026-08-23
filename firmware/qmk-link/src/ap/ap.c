@@ -2,9 +2,14 @@
 #include "led_status.h"
 #include "usbd_hid.h"
 #include "link.h"
+#include "link_cmd.h"
 #include "kbd_store.h"
 #include "qmk/qmk.h"
 
+
+#ifdef _USE_HW_USB
+static void updateProductId(void);
+#endif
 
 #ifdef _USE_HW_USBH
 static bool isKeyDown(const usbh_hid_report_t *p_report);
@@ -58,6 +63,39 @@ void apMain(void)
     cliMain();
   }
 }
+
+
+#ifdef _USE_HW_USB
+
+// 지금 고른 레이아웃 칸에 맞춰 PC 에 보고할 PID 를 맞춘다.
+//
+// ★ VIA 를 위한 것이다.
+//
+//   VIA 는 정의를 VID/PID 로 찾는다. 우리가 늘 0x5305 하나면 VIA 안에 정의가
+//   한 벌만 남아서, 키보드를 바꿔 꽂을 때마다 Design 탭에 JSON 을 다시 넣어야
+//   한다. 칸마다 PID 를 달리 보고하면 VIA 가 알아서 고른다.
+//
+//   Vial 은 정의를 장치에서 읽어가므로 PID 가 필요 없다. 그래도 같이 바꾼다 —
+//   재열거되면서 새 정의를 곧바로 다시 읽어가기 때문이다. 안 그러면 칸을 담고도
+//   Vial 앱을 새로 열어야 배열이 바뀐다.
+//
+// ★ 칸이 없으면 원래 PID 로 돌아온다. 그래야 저장한 게 없을 때 늘 같은
+//   0483:5305 로 보이고, flash.py 나 도구가 헤매지 않는다.
+static void updateProductId(void)
+{
+  static int slot_pre = -2;          /* -1 도 유효한 값이라 -2 로 시작한다 */
+  int        slot     = kbdStoreGetActive();
+  uint16_t   pid;
+
+  if (slot == slot_pre) return;
+  slot_pre = slot;
+
+  pid = (slot >= 0) ? (uint16_t)(LINK_PID_BASE + slot) : (uint16_t)HW_USB_PID;
+
+  usbSetProductId(pid);
+}
+
+#endif
 
 
 #ifdef _USE_HW_USBH
@@ -379,4 +417,13 @@ void cliLoopIdle(void)
 #endif
 
   qmkUpdate();
+
+#ifdef _USE_HW_USB
+  // ★ qmkUpdate() **다음**이다.
+  //
+  //   레이아웃을 담는 우리 raw HID 명령이 거기서 처리되고, 담자마자
+  //   kbdStoreReselect() 로 칸이 바뀐다. 응답은 이미 나간 뒤라 여기서 끊어도
+  //   업로드 도구가 답을 놓치지 않는다.
+  updateProductId();
+#endif
 }

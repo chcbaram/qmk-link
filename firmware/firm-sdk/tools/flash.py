@@ -43,6 +43,13 @@ BOOTROM_PID_RP2350 = 0x000F
 FW_VID = 0x0483
 FW_PID = 0x5305
 
+# ★ PID 는 하나가 아니다.
+#
+#   09단계부터 꽂힌 키보드의 레이아웃 칸에 따라 0x5400 + 칸 을 보고한다
+#   (VIA 가 정의를 VID/PID 로 찾기 때문이다 → firmware/docs/09-keyboard-profile.md).
+#   0x5305 하나만 보고 찾으면 레이아웃을 담아 둔 보드를 못 찾는다.
+FW_PID_LIST = [FW_PID] + list(range(0x5400, 0x5410))
+
 # INFO_UF2.TXT 의 Board-ID 에 이 문자열이 들어가면 우리 대상으로 본다
 BOARD_ID_HINTS = ("RP2350", "RP2040", "RPI-RP2")
 
@@ -156,7 +163,7 @@ def pick_port(explicit=None):
 
     # VID/PID 가 정확히 맞는 것을 먼저 고른다.
     for dev, _, vid, pid in ports:
-        if vid == FW_VID and pid == FW_PID:
+        if vid == FW_VID and pid in FW_PID_LIST:
             return dev
     for dev, _, vid, _ in ports:
         if vid == FW_VID:
@@ -222,7 +229,7 @@ def cmd_list():
         except ImportError:
             print("  (pyserial 없음 — pip3 install pyserial)")
     for dev, desc, vid, pid in ports:
-        mark = " *" if (vid == FW_VID and pid == FW_PID) else "  "
+        mark = " *" if (vid == FW_VID and pid in FW_PID_LIST) else "  "
         ids = f"{vid:04X}:{pid:04X}" if vid else "----:----"
         print(f" {mark} {dev:24s} {ids}  {desc}")
     return 0

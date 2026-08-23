@@ -68,6 +68,11 @@ if (tud_suspended() == true) return LED_ST_SUSPEND;   /* 최우선 */
 
 다른 baram 키보드와 겹치지 않는 값이다 (직전 최신이 wish-he `0x5304`).
 
+★ **09단계에서 PID 가 고정이 아니게 됐다.** 꽂힌 키보드의 레이아웃 SLOT 에 따라
+`0x5400`+SLOT 으로 바꿔 보고한다 (VIA 가 정의를 VID/PID 로 찾기 때문이다).
+`0x5305` 는 담아 둔 것이 없을 때의 값이다. **PID 로 장치를 찾는 코드는 범위로
+봐야 한다** — `flash.py` 의 `FW_PID_LIST` → [09-keyboard-profile.md](09-keyboard-profile.md)
+
 ### 5. 허브 — 이미 켜져 있다
 
 `CFG_TUH_HUB 1`, `CFG_TUH_DEVICE_MAX 4`. 03단계에서 켰다 —

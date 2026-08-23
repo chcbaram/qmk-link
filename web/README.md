@@ -46,7 +46,26 @@ Received invalid protocol version from device
 4. 노란색으로 강조된 자리의 키를 누른다. 자동으로 다음 자리로 넘어간다
 5. 못 누르는 키는 자리를 클릭하고 이름으로 직접 넣는다
 6. 잘못 배웠으면 그 자리를 클릭하고 **[이 자리 비우기]** 로 되돌린다
-7. 다 되면 내려받는다
+7. **저장 SLOT** 을 고르고 내려받는다
+
+## ★ 저장 SLOT 을 왜 고르나 — VIA 가 정의를 VID/PID 로 찾는다
+
+보드는 꽂힌 키보드의 레이아웃이 몇 번 SLOT 에 담겨 있는지에 따라
+PID 를 **`0x5400` + SLOT** 으로 바꿔 보고한다. 담아 둔 것이 없으면 `0x5305` 다.
+
+그래서 내려받는 JSON 의 `productId` 가 **담을 SLOT** 과 맞아야 VIA 가 그 정의를
+고른다. 어긋나면 VIA 가 "모르는 키보드" 로 본다 — 눈에 안 띄는 종류의 오류다.
+셀렉트 박스가 그 값을 채워 주고, 밑에 담는 명령줄까지 적어 준다.
+
+```bash
+python3 tools/kbd_upload.py put 0 hhkb-lite-2-layout-vial.json --name "HHKB Lite 2"
+```
+
+★ 담는 파일은 **두 펌웨어 모두 `layout-vial.json`** 이다.
+VIA 펌웨어는 그 내용을 쓰지 않고 머리말의 vid/pid 만 본다 — 그게 SLOT 을 고르는
+열쇠다. Vial 펌웨어는 그 내용을 그대로 Vial 앱에 내준다.
+
+담고 나면 보드가 스스로 끊었다 붙는다. VIA / Vial 이 곧바로 새 정의를 읽는다.
 
 ## 파일
 

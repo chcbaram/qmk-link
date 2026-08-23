@@ -109,6 +109,12 @@ def do_list(h):
         o = 8 + i * 4
         print("   %04X:%04X" % (r[o] | (r[o+1] << 8), r[o+2] | (r[o+3] << 8)))
 
+    # 버전 3 부터 뒤쪽 고정 자리에 "지금 고른 칸" 과 "지금 보고 중인 PID" 가 있다.
+    if r[2] >= 3:
+        act = r[28]
+        print("지금   : SLOT %s   PC 에 보고 중인 PID 0x%04X"
+              % ("없음" if act == 0xFF else str(act), r[29] | (r[30] << 8)))
+
     print("\n저장된 레이아웃")
     used = 0
     for slot in range(16):
@@ -141,7 +147,7 @@ def do_put(h, slot, path, name, vid, pid):
         pid = pid if pid is not None else r[10] | (r[11] << 8)
 
     nm = (name or "").encode("utf-8")[:22]
-    print("칸 %d  <-  %s" % (slot, path))
+    print("SLOT %d  <-  %s" % (slot, path))
     print("  %d B  ->  LZMA %d B   %04X:%04X  \"%s\""
           % (len(raw), len(blob), vid, pid, nm.decode("utf-8", "replace")))
 
@@ -164,11 +170,17 @@ def do_put(h, slot, path, name, vid, pid):
     r = cmd(h, SLOT_COMMIT, slot)
     print("  굽기 : %s" % RC.get(r[2], r[2]))
 
+    # ★ 굽고 나면 보드가 스스로 USB 를 끊었다 붙인다 (PID 가 0x%04X 로 바뀐다).
+    #   그래서 이 뒤에 명령을 더 보내면 실패한다. put 은 여기서 끝난다.
+    if r[2] == 0:
+        print("  보드가 PID 0x%04X 로 다시 열거된다 — VIA 가 이 SLOT 의 정의를 고른다"
+              % (0x5400 + slot))
+
 
 def do_get(h, slot, out):
     r = cmd(h, SLOT_INFO, slot)
     if r[2] != 0 or r[3] == 0:
-        sys.exit("칸 %d 가 비었다" % slot)
+        sys.exit("SLOT %d 가 비었다" % slot)
 
     n = r[8] | (r[9] << 8)
     blob = b""
@@ -182,7 +194,7 @@ def do_get(h, slot, out):
 
     data = lzma.decompress(blob)
     open(out, "wb").write(data)
-    print("칸 %d  ->  %s   (LZMA %d B -> %d B)" % (slot, out, n, len(data)))
+    print("SLOT %d  ->  %s   (LZMA %d B -> %d B)" % (slot, out, n, len(data)))
 
 
 def main():
@@ -211,9 +223,13 @@ def main():
         elif a.cmd == "get":
             do_get(h, a.slot, a.out)
         elif a.cmd == "erase":
-            print("칸 %d 지우기 : %s" % (a.slot, RC.get(cmd(h, SLOT_ERASE, a.slot)[2], "?")))
+            print("SLOT %d 지우기 : %s" % (a.slot, RC.get(cmd(h, SLOT_ERASE, a.slot)[2], "?")))
     finally:
-        h.close()
+        # put / erase 뒤에는 보드가 PID 를 바꾸며 재열거한다. 그때 닫기가 실패한다.
+        try:
+            h.close()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

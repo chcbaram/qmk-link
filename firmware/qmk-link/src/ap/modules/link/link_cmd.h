@@ -35,7 +35,13 @@
 //     0x00 INFO     [2] 버전  [3] 트리(0=via 1=vial)  [4] 잠금(1=잠김)
 //                   [5] 행  [6] 열  [7] 키보드 수
 //                   [8..]  키보드마다 vid(2) pid(2)  little endian
+//                   [28]   지금 고른 칸 (0xFF = 없음)      ← 버전 3
+//                   [29..30] 지금 보고 중인 PID  little endian
 //     0x01 PRESSED  [2] 개수 N  [3..] 눌린 usage N 개
+//
+//   ★ INFO 의 새 항목을 [8..] 뒤에 이어 붙이지 않고 **뒤쪽 고정 자리**에 둔다.
+//     앞은 키보드 수만큼 길이가 변한다 (최대 8+4*4=24). 고정 자리에 두면
+//     예전 도구가 읽던 [2..7] 이 그대로라 버전이 어긋나도 깨지지 않는다.
 //
 //   ── 레이아웃 저장소 (09단계 2) ──
 //   슬롯 명령은 [2] 가 결과다 (0 = OK).
@@ -80,7 +86,7 @@
 #define LINK_RC_FAIL          1
 #define LINK_RC_RANGE         2
 
-#define LINK_CMD_VERSION      2
+#define LINK_CMD_VERSION      3
 
 #define LINK_TREE_VIA         0
 #define LINK_TREE_VIAL        1

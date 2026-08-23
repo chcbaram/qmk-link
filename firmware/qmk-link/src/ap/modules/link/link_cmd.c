@@ -2,6 +2,7 @@
 #include "link.h"
 #include "kbd_store.h"
 #include "usbd_hid.h"
+#include "usb.h"
 #include "usbh.h"
 #include <string.h>
 
@@ -49,6 +50,18 @@ bool linkCmdHandle(uint8_t *p_data, uint8_t length, bool vial_locked)
       *p_cnt = n;
 
       memset(&p_data[i], 0, length - i);
+
+      /* 뒤쪽 고정 자리 (버전 3) — memset 다음이어야 한다 */
+      if (length >= 31)
+      {
+        int slot = kbdStoreGetActive();
+
+        p_data[28] = (slot >= 0) ? (uint8_t)slot : 0xFF;
+#ifdef _USE_HW_USB
+        p_data[29] = (uint8_t)(usbGetProductId() & 0xFF);
+        p_data[30] = (uint8_t)(usbGetProductId() >> 8);
+#endif
+      }
       break;
     }
 

@@ -148,7 +148,16 @@ static const uint8_t hid_desc_raw[] =
 
 //-- Device Descriptor
 //
-static const tusb_desc_device_t desc_device =
+// ★ idProduct 만 런타임에 바뀐다 (그래서 const 가 아니다).
+//
+//   꽂힌 키보드마다 PID 를 다르게 보고한다 — VIA 가 정의를 VID/PID 로 찾기
+//   때문이다. 늘 0x5305 하나면 VIA 안에 정의가 한 벌만 남아서 키보드를 바꿀
+//   때마다 JSON 을 다시 넣어야 한다. Vial 은 정의를 장치에서 읽어가므로
+//   PID 가 필요 없지만, 바뀌는 김에 재열거되어 새 정의를 바로 읽어간다.
+//
+//   → firmware/docs/09-keyboard-profile.md
+//
+static tusb_desc_device_t desc_device =
 {
   .bLength            = sizeof(tusb_desc_device_t),
   .bDescriptorType    = TUSB_DESC_DEVICE,
@@ -175,6 +184,16 @@ static const tusb_desc_device_t desc_device =
 const uint8_t *tud_descriptor_device_cb(void)
 {
   return (const uint8_t *)&desc_device;
+}
+
+void usbdDescSetProductId(uint16_t pid)
+{
+  desc_device.idProduct = pid;
+}
+
+uint16_t usbdDescGetProductId(void)
+{
+  return desc_device.idProduct;
 }
 
 

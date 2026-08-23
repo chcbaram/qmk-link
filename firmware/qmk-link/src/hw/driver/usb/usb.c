@@ -7,9 +7,32 @@
 
 
 extern void usbdDescInit(void);
+extern void usbdDescSetProductId(uint16_t pid);
+extern uint16_t usbdDescGetProductId(void);
 #include "usbd_hid.h"
 
 static bool is_init = false;
+
+//-- PID 전환 (09단계)
+//
+// ★ 왜 끊었다 붙이나
+//
+//   PID 는 device descriptor 에 있고, 호스트는 그걸 **열거할 때 한 번만** 읽는다.
+//   달아 놓은 채로 값만 바꾸면 아무 일도 일어나지 않는다. D+ 풀업을 내렸다
+//   올려서 호스트가 새 장치로 다시 물어보게 해야 한다.
+//
+// ★ 왜 블록하지 않나
+//
+//   여기서 delay() 를 쓰면 cliLoopIdle() 이 다시 돌고, 그 안에 이 함수를 부르는
+//   경로가 들어 있다 (usbdHidSendRaw 의 주석과 같은 함정이다).
+//   millis() 로 세고 usbUpdate() 가 마저 진행시킨다.
+//
+//   끊긴 동안 CDC 도 같이 죽는다. 로그가 잠깐 끊기는 것은 정상이다.
+#define USB_REENUM_GAP_MS   100
+
+static uint32_t reenum_time  = 0;
+static bool     is_reenum    = false;
+static uint32_t reenum_count = 0;
 
 
 #ifdef _USE_HW_CLI
@@ -39,7 +62,39 @@ void usbUpdate(void)
 {
   if (is_init != true) return;
 
+  if (is_reenum == true && (millis() - reenum_time) >= USB_REENUM_GAP_MS)
+  {
+    is_reenum = false;
+    tud_connect();
+  }
+
   tud_task();
+}
+
+void usbSetProductId(uint16_t pid)
+{
+  if (is_init != true)
+  {
+    // 아직 tud_init() 전이면 그냥 값만 넣는다. 처음 열거부터 이 값으로 나간다.
+    usbdDescSetProductId(pid);
+    return;
+  }
+
+  if (usbdDescGetProductId() == pid) return;
+
+  usbdDescSetProductId(pid);
+
+  logPrintf("[  ] usb PID -> %04X (재열거)\r\n", pid);
+
+  tud_disconnect();
+  reenum_time = millis();
+  is_reenum   = true;
+  reenum_count++;
+}
+
+uint16_t usbGetProductId(void)
+{
+  return usbdDescGetProductId();
 }
 
 bool usbIsOpen(void)
@@ -95,6 +150,8 @@ void cliCmd(cli_args_t *args)
               usbdHidIsReady(HID_ITF_EXTRA),
               usbdHidIsReady(HID_ITF_RAW));
     cliPrintf("host led  : 0x%02X\n", usbdHidGetLed());
+    cliPrintf("PID       : %04X  (재열거 %d 회)\n",
+              usbGetProductId(), (int)reenum_count);
     ret = true;
   }
 
