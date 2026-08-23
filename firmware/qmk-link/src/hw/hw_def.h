@@ -20,6 +20,30 @@
 #define      HW_USB_VID             0x0483
 #define      HW_USB_PID             0x5305
 
+//-- FLASH
+//
+// W25Q16JV = 2MB. 끝 64KB 를 데이터 영역으로 예약한다 (펌웨어는 여기까지 오지 않는다).
+//
+//   0x1F0000  VIA  EEPROM  16KB (4섹터)
+//   0x1F4000  Vial EEPROM  16KB (4섹터)
+//   0x1F8000  (예약)       32KB
+//
+// ★ VIA 와 Vial 을 다른 자리에 두는 이유
+//
+//   같은 보드에 두 펌웨어를 번갈아 구울 수 있다. 한 영역을 공유하면 트리를 바꿔
+//   구운 순간 상대가 남긴 바이트를 자기 레이아웃으로 읽는다. eeconfig 매직이
+//   우연히 맞으면 초기화도 안 되고 엉뚱한 키맵이 나온다. 아예 떼어 놓는다.
+//
+#define _USE_HW_FLASH
+#define      HW_FLASH_SECTOR_SIZE     4096         /* 소거 단위 */
+#define      HW_FLASH_PAGE_SIZE       256          /* 기록 단위 */
+#define      HW_FLASH_SIZE            (2*1024*1024)
+#define      HW_FLASH_USER_BEGIN      0x1F0000UL   /* 이 아래로는 쓰지 않는다 */
+#define      HW_FLASH_E2P_VIA_BEGIN   0x1F0000UL
+#define      HW_FLASH_E2P_VIA_SIZE    0x004000UL
+#define      HW_FLASH_E2P_VIAL_BEGIN  0x1F4000UL
+#define      HW_FLASH_E2P_VIAL_SIZE   0x004000UL
+
 //-- RESET
 //
 #define _USE_HW_RESET
@@ -93,6 +117,7 @@
 //-- CLI 명령 on/off
 //
 #define _USE_CLI_HW_RESET           1
+#define _USE_CLI_HW_FLASH           1
 
 
 #endif

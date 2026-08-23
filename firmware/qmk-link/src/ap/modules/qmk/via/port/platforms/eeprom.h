@@ -1,7 +1,7 @@
 #pragma once
 
 // QMK 의 EEPROM API. upstream platforms/eeprom.h 와 시그니처가 같아야 한다.
-// 구현은 port/platforms/eeprom.c (05단계는 RAM, 06단계에서 flash).
+// 구현은 port/platforms/eeprom.c — RAM 섀도 + 플래시 지연 플러시.
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -24,6 +24,15 @@ void     eeprom_driver_init(void);
 void     eeprom_driver_format(bool erase);
 void     eeprom_driver_erase(void);
 
+// ★ 계속 불려야 한다 — qmk.c 의 qmkUpdate() 가 부른다.
+//   조용해진 dirty 섹터를 하나씩 플래시에 쓴다. 안 부르면 전원 내릴 때 다 날아간다.
+void     eeprom_task(void);
+
 // 리셋 / BOOTSEL 진입 직전에 미저장분을 동기 기록한다.
-// 05단계는 RAM 백엔드라 할 일이 없다. 06단계에서 flash 로 바꾸면 진짜로 써야 한다.
 void     eeprom_flush(void);
+
+// 진단용
+bool     eepromIsInit(void);      // eeprom_driver_init() 전에는 섀도가 비어 있다
+uint32_t eepromGetFlushCount(void);
+uint32_t eepromGetFlushTime(void);
+uint32_t eepromGetDirtyMask(void);

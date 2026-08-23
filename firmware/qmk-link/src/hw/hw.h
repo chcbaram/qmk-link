@@ -8,6 +8,7 @@
 #include "hw_def.h"
 
 #include "reset.h"
+#include "flash.h"
 #include "led.h"
 #include "ws2812.h"
 #include "uart.h"

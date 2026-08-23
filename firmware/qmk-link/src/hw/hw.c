@@ -52,6 +52,10 @@ bool hwInit(void)
   swtimerInit();
 #endif
 
+#ifdef _USE_HW_FLASH
+  flashInit();
+#endif
+
 #ifdef _USE_HW_USBH
   // core1 을 띄운다. 다른 초기화가 끝난 뒤에 한다.
   usbhInit();

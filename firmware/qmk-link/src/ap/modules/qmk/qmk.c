@@ -16,6 +16,8 @@
 #include "link.h"
 #include "host.h"
 #include "eeprom.h"
+#include "eeconfig.h"
+#include "flash.h"
 #include "keyboard.h"
 #include "matrix.h"
 #include "action.h"
@@ -78,6 +80,12 @@ bool qmkIsOn(void)
 
 void qmkUpdate(void)
 {
+  // ★ QMK 가 꺼져 있어도 돌린다.
+  //
+  //   `qmk start` 로 켰다가 끈 뒤에도 미저장 dirty 섹터가 남아 있을 수 있다.
+  //   여기서 빠지면 그대로 날아간다.
+  eeprom_task();
+
   if (is_qmk_on != true) return;
 
   // ★ 호스트가 HID 프로토콜을 바꾸면 눌린 키를 비운다.
@@ -160,10 +168,60 @@ static void cliCmd(cli_args_t *args)
     ret = true;
   }
 
+  /*
+   * EEPROM 은 RAM 섀도 + 지연 플러시다 (port/platforms/eeprom.c).
+   * 여기서 섀도와 플래시를 나란히 보여 준다 — 둘이 같아졌으면 저장이 끝난 것이다.
+   */
+  if (args->argc >= 1 && args->isStr(0, "eeprom"))
+  {
+    uint8_t  shadow[32];
+    uint8_t  onflash[32];
+
+    if (args->argc == 2 && args->isStr(1, "flush"))
+    {
+      uint32_t exe_time = micros();
+      eeprom_flush();
+      cliPrintf("eeprom_flush() : %d us\n", (int)(micros() - exe_time));
+    }
+
+    if (args->argc == 2 && args->isStr(1, "erase"))
+    {
+      eeprom_driver_erase();
+      eeprom_flush();
+      cliPrintf("eeprom 전체 소거\n");
+    }
+
+    cliPrintf("size      : %d B  @ 0x%06X\n",
+              TOTAL_EEPROM_BYTE_COUNT, (unsigned)HW_FLASH_E2P_VIA_BEGIN);
+    cliPrintf("섀도      : %s\n",
+              eepromIsInit() ? "읽어 둠" : "미초기화 (qmk start 전)");
+    cliPrintf("dirty     : 0x%X\n", (unsigned)eepromGetDirtyMask());
+    cliPrintf("flush cnt : %d 회\n", (int)eepromGetFlushCount());
+    cliPrintf("flush time: %d us (마지막 섹터)\n", (int)eepromGetFlushTime());
+    cliPrintf("eeconfig  : %s\n", eeconfig_is_enabled() ? "enabled" : "disabled");
+
+    eeprom_read_block(shadow, (const void *)0, sizeof(shadow));
+    flashRead(HW_FLASH_E2P_VIA_BEGIN, onflash, sizeof(onflash));
+
+    cliPrintf("shadow    : ");
+    for (int i=0; i<32; i++) cliPrintf("%02X ", shadow[i]);
+    cliPrintf("\n");
+    cliPrintf("flash     : ");
+    for (int i=0; i<32; i++) cliPrintf("%02X ", onflash[i]);
+    cliPrintf("\n");
+    if (eepromIsInit() == true)
+    {
+      cliPrintf("일치      : %s\n",
+                memcmp(shadow, onflash, sizeof(shadow)) == 0 ? "예" : "아니오 (아직 미저장)");
+    }
+    ret = true;
+  }
+
   if (ret == false)
   {
     cliPrintf("qmk start\n");
     cliPrintf("qmk info\n");
     cliPrintf("qmk matrix\n");
+    cliPrintf("qmk eeprom [flush|erase]\n");
   }
 }

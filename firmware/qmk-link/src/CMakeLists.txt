@@ -43,6 +43,8 @@ target_include_directories(${PRJ_NAME} PUBLIC
 target_link_libraries(${PRJ_NAME}
   pico_stdlib
   hardware_pio
+  hardware_flash
+  pico_flash
   pico_multicore
   pico_unique_id
   tinyusb_device

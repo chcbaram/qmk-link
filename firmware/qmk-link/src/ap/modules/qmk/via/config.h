@@ -21,9 +21,14 @@
 // 우리 matrix_scan() 은 샘플링이 아니라 마지막 리포트를 읽을 뿐이다.
 #define DEBOUNCE                    0
 
-#define DYNAMIC_KEYMAP_LAYER_COUNT  4
+#define DYNAMIC_KEYMAP_LAYER_COUNT  8
 
-// eeprom (06단계에서 flash 로 흉내낸다)
+// eeprom — 내장 플래시 0x1F0000 부터 16KB (hw_def.h 의 HW_FLASH_E2P_VIA_*)
+//
+//   dynamic keymap  8레이어 x 16 x 16 x 2B = 4096B
+//   나머지는 eeconfig · VIA user data · 매크로 버퍼가 나눠 쓴다
+//
+// Vial 트리는 같은 크기를 0x1F4000 에 따로 갖는다. 섞이면 안 된다.
 #define EECONFIG_USER_DATA_SIZE     64
-#define TOTAL_EEPROM_BYTE_COUNT     4096
+#define TOTAL_EEPROM_BYTE_COUNT     16384
 

@@ -8,6 +8,7 @@
 #include "pio_usb_ll.h"
 #include "host/hcd.h"
 #include "pico/multicore.h"
+#include "pico/flash.h"
 #include "pico/time.h"
 
 
@@ -76,6 +77,15 @@ uint32_t usbhGetTaskCount(void)
 void usbhCore1Main(void)
 {
   pio_usb_configuration_t config = PIO_USB_DEFAULT_CONFIG;
+
+  // ★ core0 이 플래시를 쓰는 동안 이 코어를 세울 수 있게 등록한다.
+  //
+  //   소거·기록 중에는 XIP 가 멈춘다. 이걸 부르지 않으면 core0 의
+  //   flash_safe_execute() 가 "저쪽이 뭘 하는지 모른다" 며 거절한다.
+  //   등록해 두면 SDK 가 이 코어를 RAM 안 루프에 세웠다가 끝나면 풀어 준다.
+  //   그동안 tuh_task() 가 멈추므로 그 시간을 짧게 유지하는 게 중요하다
+  //   (`flash test` 로 잰다).
+  flash_safe_execute_core_init();
 
   config.pin_dp = HW_USBH_DP_PIN;
   config.pinout = HW_USBH_PINOUT;
