@@ -29,12 +29,15 @@ static void cliCmd(cli_args_t *args);
 #endif
 
 static void usbhCore1Main(void);
+static void usbhRecoverHost(void);
 
 
 static volatile bool     is_running  = false;
 static volatile uint32_t task_count  = 0;
 static volatile bool     cfg_ret     = false;
 static volatile bool     init_ret    = false;
+static volatile bool     req_recover = false;
+static volatile uint32_t recover_cnt = 0;
 
 
 
@@ -73,6 +76,29 @@ uint32_t usbhGetTaskCount(void)
   return task_count;
 }
 
+/*
+ * ★ pio_usb_host_stop() / pio_usb_host_restart() 를 쓰지 않는다.
+ *
+ *   Pico-PIO-USB 0.7.2 에서 이 둘은 죽은 코드다. 플래그를 세우고 그것이
+ *   내려가기를 무한 대기하는데, 그 플래그를 내리는 곳이 소스 어디에도 없다.
+ *
+ *     pio_usb_host.c:102   cancel_timer_flag = true;
+ *     pio_usb_host.c:103   while (cancel_timer_flag) { continue; }
+ *
+ *   부르는 순간 그 코어가 멈춘다. 실제로 겪었다.
+ */
+void usbhRequestRecover(void)
+{
+  if (is_running != true) return;
+
+  req_recover = true;
+}
+
+uint32_t usbhGetRecoverCount(void)
+{
+  return recover_cnt;
+}
+
 
 void usbhCore1Main(void)
 {
@@ -101,9 +127,38 @@ void usbhCore1Main(void)
 
   while(1)
   {
+    if (req_recover == true)
+    {
+      req_recover = false;
+      usbhRecoverHost();
+      recover_cnt++;
+    }
+
     tuh_task();
     task_count++;
   }
+}
+
+
+/*
+ * ★ core1 에서만 부른다.
+ *
+ *   "뗐다" 를 알려 usbh 가 언마운트하게 하고, 처리될 때까지 tuh_task 를 돌린 뒤
+ *   "붙었다" 를 알린다. usbh 가 포트 리셋부터 열거를 새로 하는데, 그 포트
+ *   리셋(SE0)이 서스펜드에 빠진 장치를 깨운다.
+ */
+void usbhRecoverHost(void)
+{
+  hcd_event_device_remove(HW_USBH_RHPORT, false);
+
+  // 언마운트가 처리될 때까지 돌린다. tuh_hid_umount_cb 가 여기서 불린다.
+  for (int i=0; i<20; i++)
+  {
+    tuh_task();
+    busy_wait_ms(1);
+  }
+
+  hcd_event_device_attach(HW_USBH_RHPORT, false);
 }
 
 
@@ -129,6 +184,7 @@ void cliCmd(cli_args_t *args)
     cliPrintf("mounted   : %d\n", tuh_mounted(1));
     cliPrintf("connected : %d\n", usbhHidIsConnected());
     cliPrintf("rx / drop : %d / %d\n", usbhHidGetRxCount(), usbhHidGetDropCount());
+    cliPrintf("recover   : %d 회 (플래시 뒤 재열거)\n", usbhGetRecoverCount());
 
     for (int i=0; i<CFG_TUH_HID; i++)
     {

@@ -29,6 +29,45 @@ flash_safe_execute(func, param, timeout_ms);   // core0 쪽 — hw/driver/flash.
 core1 이 `flash_safe_execute_core_init()` 을 불러 두지 않으면 SDK 가 거절한다
 (`PICO_ERROR_NOT_PERMITTED`).
 
+#### ★ 정지 뒤에는 USB 호스트를 다시 열거시켜야 한다
+
+**이것을 빼면 플래시 한 번에 키보드가 죽는다. 리셋 전까지 회복되지 않는다.**
+
+core1 이 멈춘 동안 SOF 가 끊겨 키보드가 서스펜드에 빠지고, 깨어나지 못한 채
+전송이 계속 실패한다. 그런데 TinyUSB 의 `hidh_xfer_cb` 는 **실패를 무시하고**
+길이 0 으로 콜백한다:
+
+```c
+(void) result;   // hid_host.c
+tuh_hid_report_received_cb(daddr, idx, epbuf->epin, (uint16_t) xferred_bytes);  // 0
+```
+
+그래서 `rx` 는 계속 늘고 `mounted 1` · `drop 0` 이라 **겉보기엔 멀쩡한데 내용이 빈
+리포트**다. 길이 0 이라 `link` 로도 안 가고 `isKeyDown()` 도 안 걸려 LED 도 안 깜빡인다.
+
+실측 (`flash test` 3회, VIA·EEPROM 무관):
+
+| | drain | → link | 버림 |
+|---|---:|---:|---:|
+| 리셋 직후 | 11 | 11 | 0 |
+| `flash test` ×3 뒤 | 85 | 15 | **70** |
+| 그 뒤 계속 | 증가 | **15 고정** | 증가 |
+
+**`mounted` / `drop` 은 이 고장을 못 잡는 지표다.** CLI `key info` 가 이걸 보라고 있다.
+
+해결: 플래시 작업 뒤 `usbhRequestRecover()` 로 "뗐다 붙었다" 를 usbh 에 알린다.
+열거가 포트 리셋(SE0)을 내보내고 그게 서스펜드에 빠진 장치를 깨운다.
+논블로킹이라 core0 은 안 막힌다 — core1 이 처리한다.
+
+**★ `pio_usb_host_stop()` / `pio_usb_host_restart()` 를 쓰면 안 된다.**
+Pico-PIO-USB 0.7.2 에서 죽은 코드다. 플래그를 세우고 그것이 내려가기를 무한
+대기하는데 그 플래그를 내리는 곳이 소스 어디에도 없다. 부르는 순간 그 코어가 멈춘다.
+
+```c
+pio_usb_host.c:102   cancel_timer_flag = true;
+pio_usb_host.c:103   while (cancel_timer_flag) { continue; }
+```
+
 **실측** (W25Q16 / clk_sys 120MHz, `flash test` CLI):
 
 | | 시간 | 그 사이 core1 `tuh_task()` |
@@ -38,8 +77,9 @@ core1 이 `flash_safe_execute_core_init()` 을 불러 두지 않으면 SDK 가 �
 | 합계 | **약 41 ms** | — |
 
 평소 `tuh_task()` 는 초당 150만 회쯤 돈다. 즉 **USB 호스트가 통째로 멈추는 시간**이다.
-41ms 를 6번 연속으로 때려도 키보드는 붙어 있었다 (`mounted 1`, `rx 592 / drop 0`, CDC 정상).
-**견딜 만하다** — 이것으로 06단계 진입이 확정됐다.
+처음에는 이 정지를 "견딜 만하다" 고 판단했다 — 6번 연속으로 때려도 `mounted 1` ·
+`drop 0` 이었기 때문이다. **그 지표가 틀렸다** (위 항목 참고). 정지 자체는 피할 수
+없으므로 뒤처리로 해결한다.
 
 그래도 줄일 수 있는 만큼 줄였다:
 
@@ -280,7 +320,7 @@ VIA 까지 실기에서 확인됐으므로 `apInit()` 에서 자동으로 올린
 | 3 | **재부팅 후 유지** | ✅ 0x001D 남음, `flush cnt 0` (다시 쓰지 않음) |
 | 4 | 커스텀 메뉴 | ✅ 6개 항목 get/set, 재부팅 후 유지, 모르는 채널은 `id_unhandled` |
 | 5 | bootloader 버튼 | ✅ 응답 0x0B 후 BOOTSEL 진입 |
-| 6 | flash 쓰기 중 core1 생존 | ✅ 41ms × 6회 연속에도 `mounted 1` / `drop 0` |
+| 6 | flash 쓰기 뒤 키보드 생존 | ✅ `flash test` 6회 + VIA 쓰기 4회에도 `버림 0`, `drain == link` |
 
 ## 열린 질문
 

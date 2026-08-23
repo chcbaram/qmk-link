@@ -85,6 +85,7 @@ static void cliFlash(cli_args_t *args);
 
 static bool flashInRange(uint32_t addr, uint32_t length);
 static bool flashProgram(uint32_t addr, const uint8_t *p_data, uint32_t length);
+static int  flashExecute(void (*func)(void *), void *param);
 
 
 static bool              is_init  = false;
@@ -117,6 +118,32 @@ static void flashDoWrite(void *param)
   flash_range_program(p_req->addr, p_req->p_data, p_req->length);
 }
 
+
+/*
+ * ★ 플래시 작업은 전부 이걸 거친다.
+ *
+ *   flash_safe_execute() 가 core1 을 수십 ms 세운다. 그 사이 PIO USB 의 전송이
+ *   끊기면 엔드포인트가 영구 에러 상태로 빠져 그 뒤로는 길이 0 리포트만 올라온다
+ *   (키가 하나도 안 들어온다. 리셋해야 낫는다 — 실측).
+ *
+ *   끝나고 나면 USB 호스트를 다시 열거시킨다 (usbhRequestRecover).
+ */
+static int flashExecute(void (*func)(void *), void *param)
+{
+  int ret;
+
+  is_busy = true;
+  ret = flash_safe_execute(func, param, FLASH_LOCKOUT_TIMEOUT_MS);
+  is_busy = false;
+
+#ifdef _USE_HW_USBH
+  // ★ 잊으면 안 된다 — 이걸 빼면 플래시 한 번에 키보드가 죽는다.
+  //   요청만 세우고 바로 돌아온다. core1 이 처리한다.
+  usbhRequestRecover();
+#endif
+
+  return ret;
+}
 
 bool flashInit(void)
 {
@@ -180,9 +207,7 @@ bool flashErase(uint32_t addr, uint32_t length)
   req.length = length;
   req.p_data = NULL;
 
-  is_busy = true;
-  ret = flash_safe_execute(flashDoErase, &req, FLASH_LOCKOUT_TIMEOUT_MS);
-  is_busy = false;
+  ret = flashExecute(flashDoErase, &req);
 
   if (ret != PICO_OK)
   {
@@ -204,9 +229,7 @@ bool flashProgram(uint32_t addr, const uint8_t *p_data, uint32_t length)
   req.length = length;
   req.p_data = p_data;
 
-  is_busy = true;
-  ret = flash_safe_execute(flashDoWrite, &req, FLASH_LOCKOUT_TIMEOUT_MS);
-  is_busy = false;
+  ret = flashExecute(flashDoWrite, &req);
 
   if (ret != PICO_OK)
   {
@@ -323,9 +346,7 @@ void cliFlash(cli_args_t *args)
   {
     uint8_t id[2] = {0, };
 
-    is_busy = true;
-    flash_safe_execute(flashDoReadId, id, FLASH_LOCKOUT_TIMEOUT_MS);
-    is_busy = false;
+    flashExecute(flashDoReadId, id);
 
     cliPrintf("dev id     : %02X %02X\n", id[0], id[1]);
     cliPrintf("flash size : %d KB\n", HW_FLASH_SIZE/1024);

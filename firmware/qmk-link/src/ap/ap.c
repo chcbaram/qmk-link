@@ -8,6 +8,9 @@
 #ifdef _USE_HW_USBH
 static bool isKeyDown(const usbh_hid_report_t *p_report);
 static void updateKeyboard(void);
+#ifdef _USE_HW_CLI
+static void cliKey(cli_args_t *args);
+#endif
 #endif
 
 
@@ -19,6 +22,10 @@ void apInit(void)
 
   ledStatusInit();
   qmkCliInit();
+
+#if defined(_USE_HW_CLI) && defined(_USE_HW_USBH)
+  cliAdd("key", cliKey);
+#endif
 
   // ★ 06단계부터 부팅 때 자동으로 올린다.
   //
@@ -56,12 +63,33 @@ void apMain(void)
 // 지금은 QMK 없이 "USB 연장선" 이다.
 //
 // 이 루프가 없으면 core1 이 채운 큐가 가득 차서 계속 버려진다.
+// 진단용 — 큐에서 꺼낸 리포트가 어디로 갔는지 센다.
+// 리포트는 들어오는데(usbh rx) 키가 안 먹는 상황을 가리기 위한 것이다.
+static uint32_t kbd_drain_cnt = 0;   // 큐에서 꺼낸 총 개수
+static uint32_t kbd_pass_cnt  = 0;   // keyboard 프로토콜 + len>=8 (link 로 간 것)
+static uint32_t kbd_drop_cnt  = 0;   // 그 외 — 조용히 버려진 것
+static usbh_hid_report_t kbd_last_ok;
+static usbh_hid_report_t kbd_last_drop;
+
 void updateKeyboard(void)
 {
   usbh_hid_report_t report;
 
   while(usbhHidGetReport(&report) == true)
   {
+    kbd_drain_cnt++;
+
+    if (report.protocol == HID_ITF_PROTOCOL_KEYBOARD && report.len >= 8)
+    {
+      kbd_pass_cnt++;
+      kbd_last_ok = report;
+    }
+    else
+    {
+      kbd_drop_cnt++;
+      kbd_last_drop = report;
+    }
+
     switch(report.protocol)
     {
       case HID_ITF_PROTOCOL_KEYBOARD:
@@ -152,6 +180,75 @@ bool isKeyDown(const usbh_hid_report_t *p_report)
   return is_down;
 }
 
+#endif
+
+
+#if defined(_USE_HW_CLI) && defined(_USE_HW_USBH)
+static void dumpReport(const char *p_name, const usbh_hid_report_t *p_report)
+{
+  cliPrintf("%s : inst %d  proto %d  len %d  ",
+            p_name, p_report->instance, p_report->protocol, p_report->len);
+  for (int i=0; i<p_report->len && i<8; i++) cliPrintf("%02X ", p_report->data[i]);
+  cliPrintf("\n");
+}
+
+static void cliKey(cli_args_t *args)
+{
+  bool ret = false;
+
+  if (args->argc == 0 || (args->argc == 1 && args->isStr(0, "info")))
+  {
+    cliPrintf("usbh rx/drop : %d / %d\n",
+              usbhHidGetRxCount(), usbhHidGetDropCount());
+    cliPrintf("drain        : %d   (큐에서 꺼낸 것)\n", kbd_drain_cnt);
+    cliPrintf("  -> link    : %d   (keyboard proto + len>=8)\n", kbd_pass_cnt);
+    cliPrintf("  -> 버림    : %d   (그 외 — 조용히 사라진다)\n", kbd_drop_cnt);
+    cliPrintf("qmk          : %s%s\n",
+              qmkIsOn() ? "on" : "off",
+              qmkIsPassthrough() ? " (passthrough)" : "");
+    cliPrintf("link set     : %d\n", linkGetSetCount());
+
+    dumpReport("last ok  ", &kbd_last_ok);
+    dumpReport("last 버림", &kbd_last_drop);
+
+    cliPrintf("HID 인스턴스\n");
+    for (int i=0; i<CFG_TUH_HID; i++)
+    {
+      usbh_hid_info_t info;
+
+      if (usbhHidGetInfo(i, &info) != true) continue;
+      cliPrintf("  [%d] connect %d  addr %d  proto %d  %04X:%04X\n",
+                i, info.is_connect, info.dev_addr, info.itf_protocol,
+                info.vid, info.pid);
+    }
+    ret = true;
+  }
+
+  if (args->argc == 1 && args->isStr(0, "watch"))
+  {
+    uint32_t pre_drain = 0;
+    uint32_t pre_pass  = 0;
+
+    cliPrintf("초당 변화량. 아무 키나 누르면 멈춘다\n");
+    while(cliKeepLoop())
+    {
+      cliPrintf("drain +%-5d  link +%-5d  버림 +%-5d\n",
+                kbd_drain_cnt - pre_drain,
+                kbd_pass_cnt - pre_pass,
+                kbd_drop_cnt);
+      pre_drain = kbd_drain_cnt;
+      pre_pass  = kbd_pass_cnt;
+      delay(1000);
+    }
+    ret = true;
+  }
+
+  if (ret == false)
+  {
+    cliPrintf("key info\n");
+    cliPrintf("key watch\n");
+  }
+}
 #endif
 
 

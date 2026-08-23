@@ -242,6 +242,8 @@ void cliLoopIdle(void)
 | **HID 리포트 ID 는 QMK 값** | mouse 2 / system 3 / consumer 4 / NKRO 6. `qmk/port/protocol/report.h` 와 어긋나면 05단계에서 곤란해진다 |
 | **QMK 는 upstream 을 받아 쓴다** | `firm-sdk/upstream.json` 이 리비전 고정(`0.33.13`), `fetch_upstream.py` 가 sparse 로 받는다(9.6MB). **`tmk_core/protocol` 도 원본을 쓴다** — vendoring 하지 않는다 |
 | **QMK 는 부팅 때 자동으로 올린다** (06단계~) | 05단계까지는 `qmk start` 로만 켰다 — 이식 중에 죽으면 USB 가 통째로 안 올라와서다. VIA 까지 확인된 지금은 `apInit()` 에서 올린다. 되살릴 길은 남아 있다 (Key2 더블클릭 → BOOTSEL). 기동에 실패하면 04단계 패스스루로 떨어진다 |
+| **★ 플래시 작업 뒤에는 USB 호스트를 다시 열거시킨다** | `hw/driver/flash.c` 의 `flashExecute()` 가 `usbhRequestRecover()` 를 부른다. **빼면 플래시 한 번에 키보드가 죽고 리셋 전까지 안 낫는다.** core1 정지 중 SOF 가 끊겨 장치가 서스펜드에 빠지는데, TinyUSB 의 `hidh_xfer_cb` 가 전송 실패를 무시하고 길이 0 으로 콜백해서 `mounted`/`drop` 으로는 안 보인다. CLI `key info` 로 본다 → [06-via.md](06-via.md) |
+| **`pio_usb_host_stop()` 을 쓰지 않는다** | Pico-PIO-USB 0.7.2 에서 죽은 코드다. 플래그를 세우고 무한 대기하는데 내리는 곳이 없다. 부르면 그 코어가 멈춘다 |
 | **EEPROM 은 flash + RAM 섀도 + 지연 플러시** | 소거·기록 중 XIP 가 멈추는데 core1 이 PIO USB 를 돈다. `flash_safe_execute()` 로 core1 을 세운다. **실측 소거 30ms + 기록 10ms = 41ms 동안 USB 호스트가 통째로 멈춘다.** 6회 연속에도 키보드가 살아 있어 진입을 확정했다. 지연 플러시가 핵심 — VIA 는 키 하나에 바이트 쓰기가 수백 번 온다 → [06-via.md](06-via.md#1-eeprom-을-flash-로--이-단계의-핵심-리스크였다) |
 | **VIA 와 Vial EEPROM 을 떼어 놓는다** | `0x1F0000` / `0x1F4000`, 각 16KB. 같은 보드에 두 펌웨어를 번갈아 구울 수 있는데 영역을 공유하면 상대가 남긴 바이트를 자기 레이아웃으로 읽는다. 매직이 우연히 맞으면 초기화도 안 되고 엉뚱한 키맵이 나온다 |
 | **`flash.h` 는 wish-he 인터페이스 그대로** | 주소는 **플래시 오프셋**이다. rp2040 계열 `flash.c` 는 반대로 XIP 절대주소를 받으므로 그쪽 코드를 베껴 올 때 주의. 영역 가드는 rp2040_fw 의 `flash_tbl` 을 참고하되 "겹치면 통과" 가 아니라 "완전히 들어가야 통과" 로 좁혔다 |
