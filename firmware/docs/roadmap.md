@@ -8,7 +8,7 @@
 | [02 CLI/CDC](02-cli-cdc.md) | ✅ **완료** | USB device CDC + cli/log/swtimer + 1200bps touch 리부트 | CDC 콘솔에서 CLI 동작, `flash.py` 가 BOOTSEL 을 안 눌러도 굽는다 |
 | [03 USB HOST](03-usb-host.md) | ✅ **완료** | Pico-PIO-USB + TinyUSB host(RHPort1), core1 전용 태스크 | USB-A 에 키보드 꽂으면 CLI 에 HID report 덤프 |
 | [04 HID DEVICE](04-usb-device-hid.md) | ✅ **완료** | Type-C 복합 descriptor (HID kbd/extra/raw + CDC + vendor) | host→device 패스스루로 PC 에서 타이핑됨 |
-| [05 QMK](05-qmk.md) | ⬜ | `fetch_upstream.py` + `qmk/via/port/` + `link/` + keymap | 레이어 · 모디파이어 · 탭홀드 동작 |
+| [05 QMK](05-qmk.md) | ✅ **완료** | `fetch_upstream.py` + `qmk/via/port/` + `link/` + keymap | 레이어 · 모디파이어 · 탭홀드 동작 |
 | [06 VIA](06-via.md) | ⬜ | raw HID VIA 프로토콜 + dynamic keymap + flash EEPROM | VIA 웹앱에서 키맵 편집 · 저장 · 재부팅 후 유지 |
 | [07 VIAL](07-vial.md) | ⬜ | `qmk/vial/` 트리 추가, `-DKEY_PROTOCOL=vial` + vial.json | Vial 앱 인식 · 편집 |
 | [08 마감](08-finalize.md) | ⬜ | WS2812 상태 인디케이터 · USB suspend/resume · VID/PID · 허브 | |

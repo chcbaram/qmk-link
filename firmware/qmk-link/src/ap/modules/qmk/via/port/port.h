@@ -12,8 +12,6 @@
  *       그래서 DEBOUNCE_TYPE 은 none 이다.
  */
 
-#include "via_hid.h"
-#include "via.h"
 #include "eeconfig.h"
 
 

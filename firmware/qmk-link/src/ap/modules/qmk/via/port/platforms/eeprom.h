@@ -1,30 +1,29 @@
-// Copyright 2018-2022 QMK
-// SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
 
+// QMK 의 EEPROM API. upstream platforms/eeprom.h 와 시그니처가 같아야 한다.
+// 구현은 port/platforms/eeprom.c (05단계는 RAM, 06단계에서 flash).
 
-#include "hw_def.h"
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdbool.h>
 
+uint8_t  eeprom_read_byte(const uint8_t *__p);
+uint16_t eeprom_read_word(const uint16_t *__p);
+uint32_t eeprom_read_dword(const uint32_t *__p);
+void     eeprom_read_block(void *__dst, const void *__src, size_t __n);
+void     eeprom_write_byte(uint8_t *__p, uint8_t __value);
+void     eeprom_write_word(uint16_t *__p, uint16_t __value);
+void     eeprom_write_dword(uint32_t *__p, uint32_t __value);
+void     eeprom_write_block(const void *__src, void *__dst, size_t __n);
+void     eeprom_update_byte(uint8_t *__p, uint8_t __value);
+void     eeprom_update_word(uint16_t *__p, uint16_t __value);
+void     eeprom_update_dword(uint32_t *__p, uint32_t __value);
+void     eeprom_update_block(const void *__src, void *__dst, size_t __n);
 
+void     eeprom_driver_init(void);
+void     eeprom_driver_format(bool erase);
+void     eeprom_driver_erase(void);
 
-void     eeprom_init(void);
-void     eeprom_update(void);   /* 논블로킹 1바이트 드레인 (준비됐을 때만) */
-void     eeprom_flush(void);    /* 블로킹: 큐 전체 동기 기록 (리셋/DFU 직전) */
-void     eeprom_task(void);
-void     eeprom_req_clean(void);
-uint8_t  eeprom_read_byte(const uint8_t *addr);
-uint16_t eeprom_read_word(const uint16_t *addr);
-uint32_t eeprom_read_dword(const uint32_t *addr);
-void     eeprom_read_block(void *buf, const void *addr, uint32_t len);
-void     eeprom_write_byte(uint8_t *addr, uint8_t value);
-void     eeprom_write_word(uint16_t *addr, uint16_t value);
-void     eeprom_write_dword(uint32_t *addr, uint32_t value);
-void     eeprom_write_block(const void *buf, void *addr, size_t len);
-void     eeprom_update_byte(uint8_t *addr, uint8_t value);
-void     eeprom_update_word(uint16_t *addr, uint16_t value);
-void     eeprom_update_dword(uint32_t *addr, uint32_t value);
-void     eeprom_update_block(const void *buf, void *addr, size_t len);
-
-/* 진단 — qmk info 가 쓴다. 소거 횟수는 플래시 수명을 보는 눈이다. */
-uint32_t eepromGetFlushCount(void);
-uint32_t eepromGetDirtyMask(void);
+// 리셋 / BOOTSEL 진입 직전에 미저장분을 동기 기록한다.
+// 05단계는 RAM 백엔드라 할 일이 없다. 06단계에서 flash 로 바꾸면 진짜로 써야 한다.
+void     eeprom_flush(void);

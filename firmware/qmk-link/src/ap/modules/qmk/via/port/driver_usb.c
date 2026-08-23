@@ -71,31 +71,15 @@ host_driver_t usb_driver = {
 };
 
 
-/*
- * NKRO 는 별도 인터페이스(IF1)라 부트 프로토콜과 무관하게 늘 보낼 수 있다.
- *
- * 보통 QMK 는 "호스트가 report protocol 을 쓸 때만 NKRO" 로 판단하는데, 그건 키보드
- * 인터페이스 하나로 둘을 겸할 때 이야기다. 우리는 IF0(부트) 과 IF1(NKRO) 이 따로
- * 있으므로 BIOS 는 IF0 을 보고 OS 는 IF1 을 본다.
- *
- * 실제로 NKRO 로 나갈지는 keymap_config.nkro (NK_TOGG 로 토글) 가 정한다.
- */
-uint8_t keyboard_protocol_get(void)
-{
-  /*
-   * 호스트가 SET_PROTOCOL 로 정한 값을 그대로 준다.
-   *
-   * 예전에는 늘 1 을 돌려줬다. 그러면 QMK 가 NKRO 만 보내서 부트 프로토콜만 아는
-   * BIOS·부트로더에서 키가 하나도 안 먹는다 — 실측으로 KBD sent 1 / EXK 6440 이었다.
-   */
-  return usbdHidGetProtocol();
-}
 
-bool host_can_send_nkro(void)
-{
-#ifdef NKRO_ENABLE
-  return usbdHidIsReady(HID_ITF_EXTRA);
-#else
-  return false;
-#endif
-}
+/*
+ * ★ keyboard_protocol / host_can_send_nkro 는 여기서 만들지 않는다.
+ *
+ *   wish-he · hola-mini 가 쓰던 2024-04 판 QMK 는 keyboard_protocol 전역을 썼고,
+ *   그걸 늘 1 로 두면 BIOS 에서 키가 안 먹는 함정이 있었다.
+ *
+ *   QMK 0.33 은 그 자리를 usb_device_state 로 대체했다. host_can_send_nkro() 도
+ *   upstream 의 host.c 가 usb_device_state_get_protocol() 로 판단한다.
+ *   우리가 할 일은 TinyUSB 의 SET_PROTOCOL / 연결 상태를 그쪽에 알려 주는 것뿐이고,
+ *   그건 hw/driver/usb/usbd_hid.c 의 콜백이 한다.
+ */

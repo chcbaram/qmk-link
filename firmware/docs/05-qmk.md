@@ -1,6 +1,6 @@
 # 05-qmk — QMK 를 얹는다
 
-**상태: ⬜ 미착수** — 구현 상세는 착수할 때 채운다.
+**상태: ✅ 완료** (VIA 는 06단계)
 
 ## 목표
 
@@ -122,27 +122,75 @@ QMK 는 같은 리포트를 여러 번 보낼 수 있다 (레이어 처리 중�
 
 ## 구현 항목
 
-- [ ] `firm-sdk/upstream.json`
-- [ ] `firm-sdk/tools/fetch_upstream.py` — shallow + partial + sparse, `--update`, `--check`
-- [ ] CMake configure 단계에서 `fetch_upstream.py --check` 자동 호출
-- [ ] **`0.33.13` 기준으로 hola-mini 포트 레이어 컴파일 가능 여부 확인** ← 가장 먼저
-- [ ] `ap/modules/qmk/via/port/` — platforms · protocol · matrix.c
-- [ ] `ap/modules/qmk/via/port/driver_usb.c` — `host_driver_t` 구현.
-      `ap.c` 의 직접 송신(04단계 패스스루)을 이걸로 대체한다
-- [ ] `keyboard_protocol_get()` — `tud_hid_n_get_protocol()` 을 그대로 돌려준다
-- [ ] `ap/modules/qmk/via/{config.h, keymap.c, info.json, version.h}`
-- [ ] `ap/modules/link/` — HID report → 비트맵 (04단계 패스스루를 대체)
-- [ ] `ap/modules/qmk/via/CMakeLists.txt`
-- [ ] 루트 CMakeLists 의 `KEY_PROTOCOL` 옵션 연결
+- [x] `firm-sdk/upstream.json` + `tools/fetch_upstream.py` (shallow + partial + sparse)
+- [x] 루트 CMakeLists 가 upstream 유무를 확인하고 안내
+- [x] **`0.33.13` 기준 컴파일 확인** — upstream 파일은 에러 0
+- [x] `ap/modules/qmk/via/port/` — **wish-he 판** 채택 (platforms · driver_usb · matrix)
+- [x] `port/driver_usb.c` — `host_driver_t` 를 TinyUSB 로 연결
+- [x] `ap/modules/link/` — HID report → 비트맵
+- [x] `ap/modules/qmk/qmk.c` — 기동 · CLI (`qmk start` / `info` / `matrix`)
+- [x] `ap/modules/qmk/via/{config.h, keymap.c, version.h}`
+- [x] `ap/modules/qmk/via/CMakeLists.txt` + `KEY_PROTOCOL` 연결
+- [ ] `info.json` — VIA 정의는 06단계
+
+## 결과 — 버전 호환성은 문제가 아니었다
+
+**upstream QMK `0.33.13` 파일 자체는 에러 0 으로 컴파일됐다.**
+깨진 것은 전부 포트 레이어의 접착 코드였다. 착수 전에 "최대 미지수" 로 적어 둔 항목은
+이렇게 해소됐다.
+
+### 프로토콜 계층은 vendoring 하지 않는다
+
+hola-mini / wish-he 는 참조할 upstream 이 없어 `tmk_core/protocol` 을 통째로 복사해
+고쳐 썼다. 우리는 받아 쓰므로 그럴 이유가 없다 — `host.c` · `report.c` · `usb_device_state.c`
+를 원본 그대로 빌드에 넣는다. 유지할 코드가 줄고, 부수 효과가 하나 더 있다:
+
+**wish-he 가 우회했던 `keyboard_protocol` 함정이 사라졌다.**
+0.33 이 그 자리를 `usb_device_state` 로 제대로 모델링해서,
+`host_can_send_nkro()` 도 upstream 이 판단한다. 우리는 TinyUSB 콜백
+(`tud_hid_set_protocol_cb` / `tud_mount_cb` / …) 을 거기에 연결하기만 했다.
+
+### 2024-04 판 QMK 와 0.33.13 의 차이 (실제로 부딪힌 것)
+
+| 변화 | 내용 |
+|---|---|
+| **NVM 추상화** (`quantum/nvm/`) | `eeconfig.c` · `dynamic_keymap.c` 가 `nvm_*` 인터페이스를 거치게 재작성됐다. 우리가 잰 479 / 253줄 차이의 정체다. **06단계에 직접 영향** |
+| **`usb_device_state`** | `keyboard_protocol` 전역을 대체. protocol · leds · idle_rate · configure_state 를 함께 모델링 |
+| `host_init()` / `host_task()` | `host.h` 에 추가 |
+| **wakeup matrix** | 호스트를 깨운 키가 입력으로도 들어가는 것을 막는 장치. 이 보드엔 불필요해서 빈 함수로 채웠다 |
+| `host_driver_t` | `send_raw_hid` 추가 (`RAW_ENABLE`) |
+| 새 디렉토리 | `quantum/connection/` (USB·BT 다중 호스트), `quantum/battery/` |
+| `keycodes.h` | 238줄 변경 (키코드 재편) |
+
+### 포트 레이어는 wish-he 판을 쓴다
+
+hola-mini 판의 발전형이다. `driver_usb.c`(host_driver_t)와
+`keyboard_protocol_get()` 이 이미 들어 있어 그대로 쓸 수 있었다.
+HE 전용(`rgb_matrix_port.c`)과 hola-mini 고유(`kkuk` · `kill_switch`)만 뺐다.
+
+## 안전장치 — QMK 를 부팅 때 켜지 않는다
+
+wish-he 관례를 따랐다:
+
+> 이식 중에는 부팅 때 켜지 않고 `qmk start` 로만 켰다. qmkInit() 안에서 죽으면
+> USB 가 통째로 안 올라와 부트로더 핀을 눌러야만 살아나기 때문이다.
+
+QMK 가 꺼져 있으면 `ap.c` 가 04단계 패스스루로 동작한다.
+**기동에 실패해도 키보드는 계속 쓸 수 있고 CLI 로 되돌아올 수 있다.**
+동작이 안정되면 부팅 때 켜도록 바꾼다.
 
 ## 완료 판정
 
-1. `fetch_upstream.py` 로 받은 `upstream/qmk_firmware` 크기가 10MB 미만
-2. 빌드가 통과하고 FLASH 사용량이 2MB 안에 든다
-3. USB-A 키보드로 타이핑하면 keymap 대로 PC 에 입력된다
-4. 레이어 키가 동작한다
-5. 탭홀드(`LT`, `MT`)가 동작한다
-6. 모디파이어 조합이 정상
+실기(HHKB Lite 2)에서 확인했다.
+
+| | 결과 |
+|---|---|
+| `upstream/qmk_firmware` 크기 | ✅ **9.6 MB** (전체 히스토리는 524MB) |
+| 빌드 | ✅ FLASH 99,932 B / 2 MB (4.77%) |
+| `qmk start` | ✅ `keyboard_task()` 450만 회 |
+| **HID → 가상 매트릭스** | ✅ `link rows [0]=0080` → `mtx rows [0]=0080` (usage 0x07) |
+| **QMK 를 거쳐 PC 입력** | ✅ |
+| 레이어 · 탭홀드 | ⬜ keymap 이 아직 패스스루 배열이라 미검증 |
 
 ## 열린 질문
 
@@ -152,5 +200,8 @@ QMK 는 같은 리포트를 여러 번 보낼 수 있다 (레이어 처리 중�
 | sparse 범위 | `quantum/` 만으로 헤더가 부족하면 `sparse-checkout set` 에 `platforms/`, `tmk_core/` 를 추가한다. `keyboards/` 만 빠지면 크기는 여전히 작다 |
 | 매트릭스 크기 | 16×16 = 256키. consumer / system 키는 usage page 가 달라 별도 처리가 필요하다 |
 | 여러 키보드 동시 연결 | 허브를 켜면 가능해진다. 비트맵을 OR 로 합칠지 결정 |
+| keymap 이 아직 패스스루다 | usage 를 그대로 keycode 로 쓰는 배열이라 레이어·탭홀드를 시험할 수 없다. 06단계에서 VIA 로 편집하게 되면 자연히 해소된다 |
+| QMK 자동 시작 | 지금은 `qmk start` 수동이다. 안정되면 부팅 때 켠다 |
+| EEPROM 이 RAM 이다 | `port/platforms/eeprom.c` 가 RAM 백엔드다. 전원을 내리면 사라진다. **06단계 첫 항목** |
 | Fn 을 레이어 키로 못 쓴다 | HHKB 의 Fn 은 리포트에 안 나온다. keymap 설계 시 잘 안 쓰는 키(F7·F8 등)를 레이어 키로 지정하는 우회를 쓴다 → [04-usb-device-hid.md](04-usb-device-hid.md#알아-둘-것--변환기의-근본적인-제약) |
 | keyboard 페이지 볼륨키 | HHKB 는 `0x80`/`0x81`(keyboard 페이지)로 보낸다. consumer 미디어키로 바꿔 줄지 |

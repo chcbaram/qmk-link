@@ -2,6 +2,9 @@
 
 #ifdef _USE_HW_USB
 #include "tusb.h"
+#ifdef QMK_ENABLE
+#include "usb_device_state.h"
+#endif
 
 
 
@@ -59,9 +62,6 @@ bool usbdHidSendExtra(const uint8_t *p_report, uint16_t len)
 
 uint8_t usbdHidGetProtocol(void)
 {
-  // ★ 여기서 늘 1 을 돌려주면 QMK 가 NKRO 만 보내서
-  //   부트 프로토콜만 아는 BIOS · 부트로더에서 키가 하나도 안 먹는다.
-  //   호스트가 SET_PROTOCOL 로 정한 값을 그대로 준다. (wish-he 의 실측 기록)
   return tud_hid_n_get_protocol(HID_ITF_KEYBOARD);
 }
 
@@ -104,6 +104,51 @@ uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id,
   return 0;
 }
 
+// 호스트가 SET_PROTOCOL 로 boot / report 를 고른다.
+//
+// ★ QMK 는 이 값으로 NKRO 를 보낼지 정한다 (host_can_send_nkro()).
+//   틀리면 부트 프로토콜만 아는 BIOS · 부트로더에서 키가 하나도 안 먹는다.
+//   IF0(부트 키보드) 의 값을 QMK 에 그대로 알려 준다.
+void tud_hid_set_protocol_cb(uint8_t instance, uint8_t protocol)
+{
+  if (instance != HID_ITF_KEYBOARD) return;
+
+#ifdef QMK_ENABLE
+  usb_device_state_set_protocol(protocol ? USB_PROTOCOL_REPORT : USB_PROTOCOL_BOOT);
+#else
+  (void)protocol;
+#endif
+}
+
+void tud_mount_cb(void)
+{
+#ifdef QMK_ENABLE
+  usb_device_state_set_configuration(true, 1);
+#endif
+}
+
+void tud_umount_cb(void)
+{
+#ifdef QMK_ENABLE
+  usb_device_state_set_configuration(false, 0);
+#endif
+}
+
+void tud_suspend_cb(bool remote_wakeup_en)
+{
+  (void)remote_wakeup_en;
+#ifdef QMK_ENABLE
+  usb_device_state_set_suspend(true, 1);
+#endif
+}
+
+void tud_resume_cb(void)
+{
+#ifdef QMK_ENABLE
+  usb_device_state_set_resume(true, 1);
+#endif
+}
+
 void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id,
                            hid_report_type_t report_type,
                            uint8_t const *buffer, uint16_t bufsize)
@@ -116,6 +161,9 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id,
       bufsize >= 1)
   {
     hid_led = buffer[0];
+#ifdef QMK_ENABLE
+    usb_device_state_set_leds(hid_led);
+#endif
     return;
   }
 

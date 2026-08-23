@@ -1,6 +1,8 @@
 #include "ap.h"
 #include "led_status.h"
 #include "usbd_hid.h"
+#include "link.h"
+#include "qmk/qmk.h"
 
 
 #ifdef _USE_HW_USBH
@@ -16,6 +18,7 @@ void apInit(void)
   cliOpen(HW_UART_CH_CLI, 115200);
 
   ledStatusInit();
+  qmkCliInit();
 }
 
 void apMain(void)
@@ -26,6 +29,7 @@ void apMain(void)
     updateKeyboard();
 #endif
 
+    qmkUpdate();
     ledStatusUpdate();
 
     usbUpdate();
@@ -53,7 +57,18 @@ void updateKeyboard(void)
       case HID_ITF_PROTOCOL_KEYBOARD:
         if (report.len >= 8)
         {
-          usbdHidSendKeyboard(report.data);
+          if (qmkIsOn() == true)
+          {
+            // QMK 가 올라와 있으면 비트맵만 채운다.
+            // port/matrix.c 가 읽어가고 QMK 가 키맵을 태워 내보낸다.
+            linkSetKeyboardReport(report.data, report.len);
+          }
+          else
+          {
+            // QMK 가 없으면 04단계처럼 그대로 흘린다.
+            // QMK 기동에 실패해도 키보드는 계속 쓸 수 있다.
+            usbdHidSendKeyboard(report.data);
+          }
         }
         if (isKeyDown(&report) == true)
         {
@@ -128,8 +143,20 @@ bool isKeyDown(const usbh_hid_report_t *p_report)
 #endif
 
 
-// cli 가 오래 걸리는 명령을 도는 동안에도 USB 는 살아 있어야 한다.
+// bsp 의 delay() 와 cliKeepLoop() 이 이걸 부른다.
+//
+// ★ 계속 돌아야 하는 것은 전부 여기에 둔다.
+//
+//   오래 도는 CLI 명령(qmk matrix, usbh dump ...) 안에서는 apMain() 의 루프가
+//   진행되지 않는다. 여기에 안 넣으면 그 동안 USB 가 끊기거나 키 입력이 멎는다.
+//   실제로 usbUpdate() 만 넣어 뒀다가 qmk matrix 가 아무것도 못 보여줬다.
 void cliLoopIdle(void)
 {
   usbUpdate();
+
+#ifdef _USE_HW_USBH
+  updateKeyboard();
+#endif
+
+  qmkUpdate();
 }

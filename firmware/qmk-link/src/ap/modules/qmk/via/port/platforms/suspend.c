@@ -75,3 +75,29 @@ void suspend_wakeup_init(void)
   clear_keyboard();
   suspend_wakeup_init_quantum();
 }
+
+/*
+ * wakeup matrix — QMK 0.33 에서 새로 생긴 API.
+ *
+ * 서스펜드에서 깨울 때 쓴 키가 그대로 입력으로도 들어가는 것을 막는 장치다.
+ * 그 키는 "깨우는 데 썼으니 입력은 아니다" 로 걸러진다.
+ *
+ * 이 보드는 그 처리를 하지 않는다. USB 버스 전원으로 늘 켜져 있고,
+ * 입력은 USB-A 에 꽂힌 키보드에서 오므로 우리가 매트릭스를 재우고 깨우지 않는다.
+ * QMK 가 무조건 부르므로 자리만 채운다.
+ *
+ * (wish-he · hola-mini 가 쓰던 2024-04 판 QMK 에는 이 API 가 없었다)
+ */
+bool keypress_is_wakeup_key(uint8_t row, uint8_t col)
+{
+  (void)row;
+  (void)col;
+  return false;
+}
+
+void wakeup_matrix_handle_key_event(uint8_t row, uint8_t col, bool pressed)
+{
+  (void)row;
+  (void)col;
+  (void)pressed;
+}

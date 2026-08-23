@@ -8,6 +8,10 @@ file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS
   hw/*.c
 )
 
+# ap/modules 아래(QMK · link)는 모듈의 CMakeLists 가 정한다.
+# 여기서 같이 긁으면 중복 컴파일되고, QMK 소스에만 주는 컴파일 옵션도 못 받는다.
+list(FILTER SRC_FILES EXCLUDE REGEX "/ap/modules/")
+
 include(ap/modules/qmk/${KEY_PROTOCOL}/CMakeLists.txt)
 
 add_executable(${PRJ_NAME}

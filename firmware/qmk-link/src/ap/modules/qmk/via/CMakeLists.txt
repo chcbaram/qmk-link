@@ -15,13 +15,22 @@ set(QMK_QUANTUM_PATH  ${QMK_UPSTREAM_PATH}/quantum)
 
 file(GLOB QMK_SRC_FILES CONFIGURE_DEPENDS
   ${CMAKE_CURRENT_SOURCE_DIR}/ap/modules/link/*.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/ap/modules/qmk/qmk.c
 
-  ${QMK_PORT_PATH}/port/*.c
+  ${QMK_PORT_PATH}/port/driver_usb.c
+  ${QMK_PORT_PATH}/port/matrix.c
   ${QMK_PORT_PATH}/port/platforms/*.c
-  ${QMK_PORT_PATH}/port/protocol/*.c
+
+  # 프로토콜 계층은 upstream 원본을 쓴다.
+  # hola-mini / wish-he 는 참조할 upstream 이 없어 통째로 vendoring 했지만,
+  # 우리는 받아 쓰므로 그럴 이유가 없다. 유지할 코드가 줄어든다.
+  ${QMK_UPSTREAM_PATH}/tmk_core/protocol/host.c
+  ${QMK_UPSTREAM_PATH}/tmk_core/protocol/report.c
+  ${QMK_UPSTREAM_PATH}/tmk_core/protocol/usb_device_state.c
+
+  ${QMK_QUANTUM_PATH}/nvm/eeprom/nvm_eeconfig.c
 
   ${QMK_QUANTUM_PATH}/quantum.c
-  ${QMK_QUANTUM_PATH}/via.c
   ${QMK_QUANTUM_PATH}/keyboard.c
   ${QMK_QUANTUM_PATH}/action.c
   ${QMK_QUANTUM_PATH}/action_tapping.c
@@ -32,8 +41,11 @@ file(GLOB QMK_SRC_FILES CONFIGURE_DEPENDS
   ${QMK_QUANTUM_PATH}/keymap_common.c
   ${QMK_QUANTUM_PATH}/keymap_introspection.c
   ${QMK_QUANTUM_PATH}/eeconfig.c
-  ${QMK_QUANTUM_PATH}/dynamic_keymap.c
   ${QMK_QUANTUM_PATH}/color.c
+  ${QMK_QUANTUM_PATH}/mousekey.c
+  ${QMK_QUANTUM_PATH}/process_keycode/process_default_layer.c
+  ${QMK_QUANTUM_PATH}/process_keycode/process_oneshot.c
+  ${QMK_QUANTUM_PATH}/process_keycode/process_quantum.c
 
   ${QMK_QUANTUM_PATH}/logging/*.c
   ${QMK_QUANTUM_PATH}/send_string/*.c
@@ -42,6 +54,7 @@ file(GLOB QMK_SRC_FILES CONFIGURE_DEPENDS
 
 set(QMK_INC_DIR
   ${CMAKE_CURRENT_SOURCE_DIR}/ap/modules/link
+  ${CMAKE_CURRENT_SOURCE_DIR}/ap/modules/qmk
 
   # "quantum/led.h" 처럼 디렉토리를 붙여 부를 수 있게 upstream 루트도 넣는다.
   # led.h 이름 충돌 우회에 필요하다 (port/protocol/host.h 주석 참고).
@@ -50,7 +63,9 @@ set(QMK_INC_DIR
   ${QMK_PORT_PATH}
   ${QMK_PORT_PATH}/port
   ${QMK_PORT_PATH}/port/platforms
-  ${QMK_PORT_PATH}/port/protocol
+
+  ${QMK_UPSTREAM_PATH}/tmk_core/protocol
+  ${QMK_QUANTUM_PATH}/nvm
 
   ${QMK_QUANTUM_PATH}
   ${QMK_QUANTUM_PATH}/logging
@@ -61,10 +76,12 @@ set(QMK_INC_DIR
 )
 
 set(QMK_DEFINES
-  VIA_ENABLE
-  RAW_ENABLE
-  DYNAMIC_KEYMAP_ENABLE
+  # VIA / Vial 은 06단계에서 켠다 (VIA_ENABLE / RAW_ENABLE / DYNAMIC_KEYMAP_ENABLE)
+  QMK_ENABLE
   EXTRAKEY_ENABLE
+  # MOUSE_ENABLE    : 마우스 리포트 자체 (패스스루 · 마우스키 공통)
+  # MOUSEKEY_ENABLE : 키로 마우스를 조작하는 기능
+  MOUSE_ENABLE
   MOUSEKEY_ENABLE
   NKRO_ENABLE
   GRAVE_ESC_ENABLE
@@ -73,3 +90,17 @@ set(QMK_DEFINES
   QMK_KEYMAP_CONFIG_H="${QMK_PORT_PATH}/config.h"
   KEYMAP_C="${QMK_PORT_PATH}/keymap.c"
 )
+
+
+# ★ led.h 이름 충돌
+#
+# upstream 의 tmk_core/protocol/host.h 는 led_t 를 쓰고, 그건 quantum/led.h 에 있다.
+# 그런데 우리 include 경로에는 common/hw/include/led.h (baram 의 ledOn/ledOff)가
+# 먼저 있어서 QMK 소스가 그걸 집는다.
+#
+# 타깃 전체의 순서를 바꾸면 반대로 우리 코드가 QMK 의 led.h 를 집는다.
+# include 경로 순서로는 풀 수 없어서, QMK 소스에만 quantum/led.h 를 강제로 먼저 넣는다.
+# 그 헤더는 <stdint.h> / <stdbool.h> 만 쓰는 독립 헤더라 안전하다.
+# (이후 "led.h" 가 baram 것으로 잡혀도 led_t 는 이미 정의된 뒤다)
+set_source_files_properties(${QMK_SRC_FILES} PROPERTIES
+  COMPILE_OPTIONS "-include;${QMK_QUANTUM_PATH}/led.h")

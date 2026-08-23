@@ -14,6 +14,8 @@
 
 static uint16_t matrix[LINK_MATRIX_ROWS];
 static bool     is_changed = false;
+static uint32_t set_count = 0;
+static uint32_t key_count = 0;
 
 
 
@@ -39,6 +41,8 @@ void linkSetKeyboardReport(const uint8_t *p_report, uint8_t len)
 
   if (len < 8) return;
 
+  set_count++;
+
   // 모디파이어. 비트 위치가 usage 0xE0~0xE7 에 대응한다.
   for (int i=0; i<8; i++)
   {
@@ -60,6 +64,7 @@ void linkSetKeyboardReport(const uint8_t *p_report, uint8_t len)
     next[usage >> 4] |= (1U << (usage & 0x0F));
   }
 
+  key_count = 0;
   for (int i=0; i<LINK_MATRIX_ROWS; i++)
   {
     if (matrix[i] != next[i])
@@ -67,8 +72,12 @@ void linkSetKeyboardReport(const uint8_t *p_report, uint8_t len)
       matrix[i]  = next[i];
       is_changed = true;
     }
+    for (int b=0; b<16; b++) if (next[i] & (1U<<b)) key_count++;
   }
 }
+
+uint32_t linkGetSetCount(void) { return set_count; }
+uint32_t linkGetKeyCount(void) { return key_count; }
 
 uint16_t linkGetRow(uint8_t row)
 {

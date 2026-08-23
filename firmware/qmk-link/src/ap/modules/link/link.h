@@ -34,6 +34,8 @@ uint16_t linkGetRow(uint8_t row);
 
 // 리포트가 들어와 비트맵이 바뀌었나 (matrix_scan 의 changed 반환용)
 bool     linkIsChanged(void);
+uint32_t linkGetSetCount(void);
+uint32_t linkGetKeyCount(void);
 void     linkClearChanged(void);
 
 
