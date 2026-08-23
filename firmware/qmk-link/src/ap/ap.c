@@ -231,7 +231,8 @@ static void cliKey(cli_args_t *args)
       cliPrintf("PC 로 보내기 (IF0 키보드)\n");
       cliPrintf("  호출 %d  보냄 %d  같아서 건너뜀 %d\n",
                 st.try_cnt, st.sent_cnt, st.same_cnt);
-      cliPrintf("  not ready %d   전송실패 %d\n", st.busy_cnt, st.fail_cnt);
+      cliPrintf("  not ready %d   전송실패 %d   나중에보냄 %d   보류 %d\n",
+                st.busy_cnt, st.fail_cnt, st.retry_cnt, st.pending);
       cliPrintf("  ready %d  mounted %d  suspend %d\n",
                 st.is_ready, st.is_mount, st.is_susp);
     }
@@ -290,6 +291,11 @@ static void cliKey(cli_args_t *args)
 void cliLoopIdle(void)
 {
   usbUpdate();
+
+#ifdef _USE_HW_USB
+  // 엔드포인트가 바빠서 못 보낸 키 리포트를 마저 보낸다.
+  usbdHidUpdate();
+#endif
 
 #ifdef _USE_HW_USBH
   updateKeyboard();

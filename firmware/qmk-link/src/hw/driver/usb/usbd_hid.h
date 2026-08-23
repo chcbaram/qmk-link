@@ -44,6 +44,8 @@ typedef struct
   uint32_t busy_cnt;
   uint32_t sent_cnt;
   uint32_t fail_cnt;
+  uint32_t retry_cnt;
+  bool     pending;
   bool     is_ready;
   bool     is_mount;
   bool     is_susp;
@@ -53,6 +55,10 @@ void usbdHidGetKbdStat(usbd_hid_kbd_stat_t *p_stat);
 
 
 bool usbdHidInit(void);
+
+// ★ 메인 루프에서 계속 부른다 (ap.c 의 cliLoopIdle).
+//   엔드포인트가 바빠서 못 보낸 키 리포트를 여기서 마저 보낸다.
+void usbdHidUpdate(void);
 
 // 호스트가 붙어서 리포트를 받을 준비가 됐나
 bool usbdHidIsReady(uint8_t itf);

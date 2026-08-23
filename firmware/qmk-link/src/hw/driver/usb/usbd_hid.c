@@ -41,6 +41,19 @@ static volatile uint32_t kbd_same_cnt = 0;   // 섀도와 같아 건너뜀
 static volatile uint32_t kbd_busy_cnt = 0;   // tud_hid_n_ready 가 false
 static volatile uint32_t kbd_sent_cnt = 0;   // tud_hid_n_report 성공
 static volatile uint32_t kbd_fail_cnt = 0;   // tud_hid_n_report 실패
+static volatile uint32_t kbd_retry_cnt = 0;  // 보류분을 나중에 보낸 횟수
+
+// ★ 못 보낸 리포트는 버리지 않고 들고 있는다.
+//
+//   엔드포인트가 바쁘면(raw HID 가 몰릴 때 실제로 생긴다 — 실측 not ready 13)
+//   예전에는 그대로 버렸다. QMK 는 재시도하지 않으므로 그 키 이벤트는 영영
+//   사라진다. 눌림이 유실되면 안 눌린 것이 되고, 뗌이 유실되면 PC 에 키가
+//   눌린 채로 남는다.
+//
+//   키보드 리포트는 "지금 눌린 상태" 라 최신 것만 있으면 된다.
+//   그래서 큐가 아니라 한 칸이면 충분하다.
+static uint8_t kbd_pending[8];
+static bool    kbd_pending_valid = false;
 
 // raw HID 수신 큐. 호스트 -> 우리 방향만 큐를 탄다 (usbd_hid.h 주석 참고).
 #define HID_RAW_QUEUE_MAX   8
@@ -49,17 +62,19 @@ static volatile uint32_t raw_rx_count   = 0;
 static volatile uint32_t raw_rd_count   = 0;
 static volatile uint32_t raw_drop_count = 0;
 
-bool usbdHidSendKeyboard(const uint8_t *p_report)
+/*
+ * 보류 중인 리포트를 내보낸다. 메인 루프가 계속 부른다 (usbdHidUpdate).
+ *
+ * ★ 섀도는 실제로 나간 뒤에 갱신한다.
+ *
+ *   먼저 갱신하면 전송이 실패했을 때 "이미 보냈다" 고 기억해서 같은 리포트를
+ *   영영 다시 안 보낸다.
+ */
+static bool usbdHidFlushKeyboard(void)
 {
   bool ret;
 
-  kbd_try_cnt++;
-
-  if (kbd_shadow_valid && memcmp(kbd_shadow, p_report, 8) == 0)
-  {
-    kbd_same_cnt++;
-    return true;
-  }
+  if (kbd_pending_valid != true) return true;
 
   if (tud_hid_n_ready(HID_ITF_KEYBOARD) != true)
   {
@@ -68,24 +83,47 @@ bool usbdHidSendKeyboard(const uint8_t *p_report)
   }
 
   // 리포트 ID 를 안 쓰므로 0 을 넘긴다. 8바이트가 그대로 나간다.
-  ret = tud_hid_n_report(HID_ITF_KEYBOARD, 0, p_report, 8);
+  ret = tud_hid_n_report(HID_ITF_KEYBOARD, 0, kbd_pending, 8);
 
-  // ★ 섀도는 실제로 나간 뒤에 갱신한다.
-  //
-  //   먼저 갱신하면 전송이 실패했을 때 "이미 보냈다" 고 기억해서 같은 리포트를
-  //   영영 다시 안 보낸다. 키가 눌린 채로 남거나 아예 안 눌린 것이 된다.
-  if (ret == true)
-  {
-    memcpy(kbd_shadow, p_report, 8);
-    kbd_shadow_valid = true;
-    kbd_sent_cnt++;
-  }
-  else
+  if (ret != true)
   {
     kbd_fail_cnt++;
+    return false;
   }
 
-  return ret;
+  memcpy(kbd_shadow, kbd_pending, 8);
+  kbd_shadow_valid  = true;
+  kbd_pending_valid = false;
+  kbd_sent_cnt++;
+
+  return true;
+}
+
+void usbdHidUpdate(void)
+{
+  if (kbd_pending_valid == true)
+  {
+    if (usbdHidFlushKeyboard() == true) kbd_retry_cnt++;
+  }
+}
+
+bool usbdHidSendKeyboard(const uint8_t *p_report)
+{
+  kbd_try_cnt++;
+
+  if (kbd_shadow_valid && memcmp(kbd_shadow, p_report, 8) == 0)
+  {
+    kbd_same_cnt++;
+    return true;
+  }
+
+  // 앞의 보류분을 먼저 내보낸다. 중간 상태를 건너뛰지 않으려는 것이다.
+  usbdHidFlushKeyboard();
+
+  memcpy(kbd_pending, p_report, 8);
+  kbd_pending_valid = true;
+
+  return usbdHidFlushKeyboard();
 }
 
 void usbdHidGetKbdStat(usbd_hid_kbd_stat_t *p_stat)
@@ -94,7 +132,9 @@ void usbdHidGetKbdStat(usbd_hid_kbd_stat_t *p_stat)
   p_stat->same_cnt = kbd_same_cnt;
   p_stat->busy_cnt = kbd_busy_cnt;
   p_stat->sent_cnt = kbd_sent_cnt;
-  p_stat->fail_cnt = kbd_fail_cnt;
+  p_stat->fail_cnt  = kbd_fail_cnt;
+  p_stat->retry_cnt = kbd_retry_cnt;
+  p_stat->pending   = kbd_pending_valid;
   p_stat->is_ready = tud_hid_n_ready(HID_ITF_KEYBOARD);
   p_stat->is_mount = tud_mounted();
   p_stat->is_susp  = tud_suspended();
@@ -216,7 +256,8 @@ void tud_mount_cb(void)
   //   호스트가 새로 붙었으면 저쪽은 아무 키도 안 눌린 상태로 안다.
   //   우리 섀도가 옛 내용을 들고 있으면 "같으니 안 보낸다" 로 첫 리포트를
   //   통째로 삼킨다.
-  kbd_shadow_valid = false;
+  kbd_shadow_valid  = false;
+  kbd_pending_valid = false;
 
 #ifdef QMK_ENABLE
   usb_device_state_set_configuration(true, 1);
