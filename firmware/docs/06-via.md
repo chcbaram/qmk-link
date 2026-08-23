@@ -309,7 +309,39 @@ wish-he 도 `QMK > Key Handling > 컨트롤` 3단이다. VIA 에 넣어 봐야 �
 우리 `matrix.c` 는 `debounce()` 를 아예 부르지 않는다 (원본 키보드가 이미 했다).
 그 메뉴를 두면 아무것도 하지 않는 스위치가 된다. wish-he 와 같은 이유다.
 
-### 6. bootloader_jump
+### 6. Test Matrix — `VIA_INSECURE` 를 켠다
+
+**★ 이게 없으면 upstream `via.c` 가 매트릭스 조회에 무조건 0 을 넣는다.**
+
+```c
+case id_switch_matrix_state: {
+#if defined(VIA_INSECURE)
+    matrix_row_t value = matrix_get_row(row + offset);
+#elif defined(SECURE_ENABLE)
+    ... secure_is_unlocked() 일 때만 ...
+#else
+    matrix_row_t value = 0;      // <- 기본값. 기능이 있는 척하고 영영 0 이다
+#endif
+```
+
+**이 프로젝트에서는 특히 쓸모가 크다.** 꽂은 키보드가 어떤 HID usage 를 보내는지
+VIA 에서 바로 보인다 — 좌표가 곧 usage 라 눌린 키가 배열에서 그대로 반짝인다.
+이게 없으면 CLI `qmk matrix` 로만 알 수 있어서 시리얼을 안 붙이는 사용자는 방법이 없다.
+
+대가는 raw HID 를 여는 앱이 눌린 키를 읽을 수 있다는 것이다. QMK 가 기본으로 막아
+둔 이유가 그것이다. 이 보드는 그 위험보다 "어떤 usage 가 오는지 알아야 한다" 는
+쪽이 크다고 보고 켰다.
+
+응답 형식 (직접 두드려 볼 때 헷갈린다):
+
+```
+요청   [0] 0x02(id_get_keyboard_value)  [1] 0x03  [2] offset
+응답   [0] 0x02  [1] 0x03  [2] offset(에코)  [3..] 행마다 2바이트, 큰 자리 먼저
+```
+
+`MATRIX_COLS` 가 16 이라 한 요청에 `28/2 = 14` 행씩 온다 → offset 0 과 14 로 두 번.
+
+### 7. bootloader_jump
 
 **★ `id_bootloader_jump` 는 upstream `via.c` 에 구현이 없다.**
 `via.h` 에 enum(0x0B) 만 있고 switch 에 case 가 없다 — 키보드 쪽에서 처리하라는 뜻이다.
@@ -320,7 +352,7 @@ wish-he 도 `QMK > Key Handling > 컨트롤` 3단이다. VIA 에 넣어 봐야 �
 
 `VIA_EEPROM_ALLOW_RESET` 도 켰다 — 앱의 "Reset EEPROM" 이 살아난다.
 
-### 7. QMK 자동 시작
+### 8. QMK 자동 시작
 
 **05단계까지는 `qmk start` 로만 켰다.** 이식 중에 `qmkInit()` 안에서 죽으면
 USB 가 통째로 안 올라와 BOOTSEL 로만 되살릴 수 있어서였다.

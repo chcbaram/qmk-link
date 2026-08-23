@@ -53,6 +53,24 @@
 //   나머지는 eeconfig · VIA user data · 매크로 버퍼가 나눠 쓴다
 //
 // Vial 트리는 같은 크기를 0x1F4000 에 따로 갖는다. 섞이면 안 된다.
+// VIA 앱의 Key Tester > Test Matrix 를 살린다.
+//
+// ★ 이게 없으면 upstream via.c 가 매트릭스 조회에 무조건 0 을 넣는다.
+//   (id_switch_matrix_state 의 #else 가지 — 실측으로 확인했다)
+//   기능이 있는 것처럼 보이는데 영영 아무것도 안 뜬다.
+//
+// ★ 이 프로젝트에서는 특히 쓸모가 크다.
+//
+//   꽂은 키보드가 어떤 HID usage 를 보내는지 VIA 에서 바로 보인다.
+//   좌표가 곧 usage 라 눌린 키가 배열에서 그대로 반짝인다.
+//   이게 없으면 CLI `qmk matrix` 로만 알 수 있어서, 시리얼 터미널을 붙이지
+//   않는 사용자는 방법이 없다.
+//
+// 대가는 raw HID 를 여는 앱이 눌린 키를 읽을 수 있다는 것이다.
+// QMK 가 기본으로 막아 둔 이유가 그것이다. 이 보드는 그 위험보다
+// "어떤 usage 가 오는지 알아야 한다" 는 쪽이 크다고 보고 켠다.
+#define VIA_INSECURE
+
 // VIA 앱의 "Reset EEPROM" 버튼을 살린다.
 // 키맵이 꼬였을 때 CLI 없이 되돌릴 수 있는 길이 하나 더 생긴다.
 #define VIA_EEPROM_ALLOW_RESET

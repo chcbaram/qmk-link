@@ -13,6 +13,12 @@
 | [07 VIAL](07-vial.md) | ⬜ | `qmk/vial/` 트리 추가, `-DKEY_PROTOCOL=vial` + vial.json | Vial 앱 인식 · 편집 |
 | [08 마감](08-finalize.md) | ⬜ | WS2812 상태 인디케이터 · USB suspend/resume · VID/PID · 허브 | |
 
+### 마감(08) 이후에 할 것
+
+| 항목 | 왜 | 무엇을 해야 하나 |
+|---|---|---|
+| **EEPROM 을 wear leveling 으로** | 지금은 저장 1회 = 섹터 소거 1회다. **수명은 문제가 아니다** (섹터당 10만 회 / 하루 10번 저장이면 27년). 진짜 구멍은 **소거 → 기록 사이 45ms** 다. 그때 전원이 끊기면 섹터가 빈 채로 남아 키맵이 기본값으로 돌아간다. QMK 의 wear leveling 은 append 로그라 이 창이 없다 | `upstream.json` 의 sparse 에 `drivers` 추가 → `quantum/wear_leveling/wear_leveling.c` 와 `drivers/eeprom/eeprom_wear_leveling.c` 는 그대로 쓰고, backing store 7함수(`backing_store_init/unlock/erase/write/write_bulk/read/lock`)를 우리 `hw/driver/flash.c` 위에 새로 쓴다. `port/platforms/eeprom.c` 는 걷어낸다. **via·vial 두 트리가 같은 backing store 를 쓰므로 07단계 뒤에 한 번에 한다.**<br>★ `wear_leveling_rp2040_flash.c` 는 못 가져온다 — RP2040 의 SSI 레지스터를 직접 두드린다 |
+
 ---
 
 ## 왜 이 순서인가
