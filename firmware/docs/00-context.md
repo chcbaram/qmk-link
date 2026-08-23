@@ -39,7 +39,8 @@ PC 에는 **VIA / Vial 로 편집 가능한 키보드**로 보이게 한다.
 | **완료** | **09-2-4 PID 전환** — VIA 도 정의를 자동으로 고른다 (`0x5400` + SLOT) |
 | **완료** | **09-3 키맵 프로파일** — **SLOT 이 곧 프로파일.** 키보드마다 키맵이 따로다 |
 
-**릴리스** : [v1.0.0](https://github.com/chcbaram/qmk-link/releases/tag/v1.0.0) — `.uf2` 두 개 첨부.
+**릴리스** : **[v1.1.0](https://github.com/chcbaram/qmk-link/releases/tag/v1.1.0)** — 09단계 전부.
+[v1.0.0](https://github.com/chcbaram/qmk-link/releases/tag/v1.0.0) 은 08단계까지.
 **웹 마법사** : <https://chcbaram.github.io/qmk-link/>
 
 실측: via FLASH 122,764 B / vial 141,164 B, RAM 238~258 KB / 512 KB (copy_to_ram).
@@ -54,7 +55,7 @@ RAM 이 커진 것은 EEPROM 섀도가 16KB → 80KB 가 됐기 때문이다 (�
 - HHKB Lite 2 를 USB-A 에 꽂고 타이핑하면 QMK 를 거쳐 PC 에 입력된다
 - **QMK 는 부팅 때 자동으로 올라온다** (`apInit()`). `qmk start` 는 이제 재기동용이다
 - VIA 프로토콜 응답 — version 13, layer count 8, 키맵 읽기/쓰기
-- 키맵이 **내장 플래시에 저장되어 재부팅을 넘는다** (0x1F0000, 16KB)
+- 키맵이 **내장 플래시에 저장되어 재부팅을 넘는다** (via `0x1A0000` / vial `0x1B4000`, 각 80KB)
 - VIA 커스텀 메뉴 6개 — 탭텀 / hold-okp / permissive / retro / NKRO / 패스스루
 - VIA 의 bootloader 버튼 → BOOTSEL
 - VIA 의 Key Tester > Test Matrix — 누른 키의 usage 가 배열에서 반짝인다
@@ -99,6 +100,8 @@ BOOTSEL 진입 경로 (전부 실기 확인):
 | `~/hdd/git/wish-he/firmware/wish-he` | **USB descriptor 인터페이스 배치** (`usb_desc.h` 주석에 IF0 함정)과 **QMK 출력 드라이버 연결** (`src/ap/modules/qmk/port/driver_usb.c` — `host_driver_t`, `keyboard_protocol_get()` 함정, 전송 정책). 05단계 참고 구현 |
 | `~/hdd/git/convex/firmware/convex-qmk` | **마우스 · consumer · system 을 한 인터페이스에 리포트 ID 로 담는 구성**. `src/hw/driver/usb/usb_hid/usbd_hid.c` |
 | `~/hdd/git/baram-kbd-tester` | USB **호스트** 쪽 관례. `src/hw/driver/usbh/` 배치 |
+| `~/hdd/git/vial-qmk` | 프리셋 원본. `web/tools/gen_presets.py` 가 여기서 좌표+키맵을 뽑는다. baram 키보드도 `keyboards/baram/` 에 들어가 있다 (F1-40 = `geon/f1_40/staggered`) |
+| `~/hdd/git/baram-qmk-8k/src/ap/modules/qmk/keyboards/baram/45k/json` | **BARAM 45K 프리셋의 출처.** `keyboard.json` 은 폭(w)이 빠진 매트릭스 표라 못 쓴다 — VIA 정의(`*.JSON`)를 쓴다 |
 
 ---
 
@@ -282,6 +285,9 @@ void apMain(void)
 | **백그라운드 처리는 `delay()` 에 태운다** | `bsp.c` 의 `delay()` 가 `cliLoopIdle()` 을 돌린다 (NU87-TinyDK 관례). 그래야 기존 코드를 안 고치고도 USB 가 계속 돈다. 한때 `cliDelay()` 를 새로 만들고 `cliKeepLoop()` 을 고쳤다가, 이 관례를 따르는 쪽으로 되돌렸다 |
 | **CRLF 는 지원하지 않는다** | `CLI_KEY_ENTER` 는 CR 만 본다. 호스트 도구가 CR 만 보내면 된다. LF 무시를 넣어 봤지만 정작 `cliKeepLoop()` 중단은 못 고쳐서 되돌렸다 |
 | **리셋 더블클릭은 SDK 라이브러리로** | RP2350 은 RUN 리셋 때 RAM 전원이 내려간다(실측). SRAM · watchdog scratch · POWMAN scratch 전부 지워진다. RP2350 전용 `POWMAN_CHIP_RESET.DOUBLE_TAP` 비트를 `pico_bootsel_via_double_reset` 이 쓴다 |
+| **SLOT 이 곧 키맵 프로파일** | 개념을 둘로 늘리지 않는다. `[SLOT 추가]` 하면 배열과 키맵이 같이 생기고, 새 SLOT 은 쓰던 키맵을 물려받는다. `kbd_sel_t` 의 `profile` 바이트는 남겨 뒀지만 안 쓴다 |
+| **EEPROM 을 저장소 *아래*로** | 프로파일 17벌이면 트리당 80KB 다. 저장소 위(`0x1F0000`)에서 키우면 선택 표와 부딪히고, 저장소를 옮기면 담아 둔 배열이 날아간다. 아래(`0x1A0000`/`0x1B4000`)로 내리면 저장소·선택 표 주소가 그대로다 |
+| **키맵 프로파일은 `eeprom.c` 에서 주소만 옮긴다** | `nvm_dynamic_keymap.c` 를 복사해 오는 대신 `eeprom_read_block`/`write_block` 에서 옮긴다. upstream 을 안 건드리고 트리당 파일 한 벌만 본다 |
 | **VID/PID = `0483:5305`** | VID 는 baram 키보드 공통(0x0483). PID 는 안 겹치는 값 — 5200 hs-k / 5201 45k-hs / 5207 qmk-8k / 5211 convex / 5220 Lucky65 / 5230 hola-mini / 5300 esp32-qmk / 5301 qmk-h7s / **5304 wish-he** 다음 |
 | **변환기는 키보드가 보내는 것만 받는다** | HHKB 의 Fn 은 리포트에 안 나온다. 조합의 결과 키코드만 온다. Fn 을 레이어 키로 쓸 수 없다 → [04-usb-device-hid.md](04-usb-device-hid.md#알아-둘-것--변환기의-근본적인-제약) |
 | **부트 키보드는 IF0 이어야 한다** | 일부 BIOS 가 IF0 만 본다 (wish-he 의 `usb_desc.h` 에 기록된 함정). 04단계에서 CDC 를 뒤로 밀고 키보드를 IF0 으로 옮긴다 |
@@ -359,93 +365,54 @@ void apMain(void)
 | ~~EEPROM 이 RAM / 쓰기 vs core1~~ ✅ | — | 06단계에서 해결. `flash_safe_execute()` + 지연 플러시. 실측 41ms 정지, 견딜 만하다 |
 | ~~hola-mini 포트 ↔ QMK 0.33.13 API 차이~~ ✅ | — | hola-mini 가 이식한 QMK 는 0.33.13 보다 한참 이전이다. `keycodes.h` 재편 · `keyboard.c` 스캔 흐름 · `eeconfig` 레이아웃 등에서 차이가 날 수 있다. 착수 시 **먼저 컴파일 가능 여부부터 확인**하고, 차이가 크면 QMK 리비전을 내릴지 포트를 올릴지 정한다 |
 | ~~sparse-checkout 범위~~ ✅ | — | `quantum/` 만으로 부족하면 `sparse-checkout set` 에 경로를 추가한다. `keyboards/` 만 빠지면 크기는 여전히 작다 |
-| **VIA 웹앱 실물** | 07단계 전 | 프로토콜은 hidapi 로 전부 확인했지만 `keyboards/qmk-link/layout-via.json` 을 앱 Design 탭에 넣어 그림이 제대로 나오는지는 미확인 |
-| **키보드마다 다른 레이아웃/키맵** | 09단계 | 검토 끝났다 → [09-keyboard-profile.md](09-keyboard-profile.md). 핵심: Vial 은 정의를 장치에서 읽어가고 VIA 는 안 읽는다. 키맵 전환은 보드가 결정하므로 **둘 다 된다** |
+| **VIA 웹앱 실물** | 07단계 전 | 프로토콜은 hidapi 로 전부 확인했지만 `layout-via.json` 을 앱 Design 탭에 넣어 그림이 제대로 나오는지는 아직 미확인 (PID 전환까지 얹혀 있으니 같이 본다) |
+| ~~키보드마다 다른 레이아웃/키맵~~ ✅ | 09단계 | 끝났다. **SLOT 이 곧 프로파일** — 배열도 키맵도 SLOT 단위로 갈린다 → [09-keyboard-profile.md](09-keyboard-profile.md) |
 | Windows / Linux 에서 `flash.py` | 해당 OS 실기가 있을 때 | macOS 에서만 검증했다. `setup-windows.md` · `setup-linux.md` 도 미검증이다 |
 
 ---
 
-## 09단계 이어서 — 이 순서로 한다
+## 다음에 할 것
+
+**09단계까지 전부 끝났고 v1.1.0 으로 배포했다.** 급한 것은 없다.
+아래는 "필요해지면" 목록이다 — 필요해지기 전에 만들지 않는다.
 
 ### 지금 보드에 올라가 있는 것
 
-**vial 펌웨어** + SLOT 0 에 HHKB Lite 2 레이아웃(63키). 확인 방법:
+**via 펌웨어** · SLOT 0 = HHKB Lite 2 (적용 중) · SLOT 1 = 같은 키보드의 변형본.
 
 ```bash
 cd firmware/qmk-link
-python3 tools/kbd_upload.py list
+python3 tools/kbd_upload.py list          # SLOT · 적용 중 · PID
 ```
 
-### 끝난 것 ① PID 전환 — VIA 를 위한 것이다 ✅
+CLI 로 더 보려면 → 아래 "CLI 로 상태 보기".
 
-Vial 은 정의를 장치에서 읽어가서 이미 자동이었다. **VIA 는 정의를 VID/PID 로
-찾으므로** 늘 `0483:5305` 하나면 VIA 안에 정의가 한 벌만 남았다.
-이제 SLOT 마다 PID 를 다르게 보고한다 (`0x5400` + SLOT).
+### 되돌릴지 정해야 할 것
 
-| | |
-|---|---|
-| `hw/driver/usb/usbd_desc.c` | `desc_device` 를 `const` 에서 뺐다. `usbdDescSetProductId()` |
-| `hw/driver/usb/usb.c` | `usbSetProductId()` — 끊고 100ms 뒤 붙인다. **논블로킹** |
-| `ap/ap.c` | `updateProductId()` — 고른 SLOT 이 바뀌면 부른다. `qmkUpdate()` **다음**이다 |
-| `link_cmd.c/h` | INFO 버전 3 — `[28]` 지금 SLOT, `[29..30]` 지금 PID |
-| `firm-sdk/tools/flash.py` | `FW_PID_LIST` 로 범위 매칭 |
-| `tools/kbd_upload.py` | `list` 에 지금 SLOT/PID 표시. put 뒤 재열거 안내 · close 예외 무시 |
-| 웹 마법사 | **저장 SLOT** 고르는 칸. 내보내는 JSON 의 `productId` 를 맞춰 준다 |
+`875c76f` **[실험] 줄을 클릭하면 편집** — `[편집]` 버튼을 없애고 SLOT 줄 전체를
+클릭 대상으로 바꿨다. 써 보고 아니다 싶으면 `git revert 875c76f` 하나로 돌아간다.
+(적용은 라디오, 편집은 줄 — 위험한 쪽을 작은 과녁으로 둔 것이 요지다)
 
-세 가지 함정 (전부 조용히 틀린다):
-
-- **PID 는 열거할 때 한 번만 읽힌다.** descriptor 값만 바꾸면 아무 일도 안 일어난다
-- **끊는 사이를 `delay()` 로 세면 안 된다.** `delay()` → `cliLoopIdle()` → 여기로 다시 온다
-- **`qmkUpdate()` 다음에 본다.** 담자마자 SLOT 이 바뀌는데 COMMIT 응답은 그 안에서 나간다
-
-★ VIA 트리에서도 SLOT 에 뭔가를 담아야 PID 가 바뀐다. 담는 파일은 두 트리 모두
-`layout-vial.json` 이고, VIA 트리는 내용을 안 쓰고 **머리말의 vid/pid 만** 본다.
-
-### 끝난 것 ③ 키맵 프로파일 (09-3) ✅
-
-**SLOT 이 곧 프로파일이다** — 프로파일 0 = SLOT 없음, 1~16 = SLOT 0~15.
+### 필요해지면
 
 | | |
 |---|---|
-| `hw_def.h` | 플래시 지도를 다시 잡았다. EEPROM 을 저장소 **아래**로 (`0x1A0000` / `0x1B4000`, 각 80KB) |
-| `keyboards/qmk-link/config.h` | `DYNAMIC_KEYMAP_EEPROM_ADDR` · `..._MAX_ADDR` 을 못 박고 `TOTAL_EEPROM_BYTE_COUNT` 81920 |
-| `port/platforms/eeprom.c` | `kmRemap()` — 키맵 구간이면 주소만 옮긴다. **upstream 을 안 건드린다** |
-| `qmk.c` / `ap.c` | 적용 SLOT 이 바뀌면 프로파일도 바뀐다. 눌린 키·레이어를 비운다 |
-| `link_cmd.c` | 빈 칸에 처음 담을 때 쓰던 키맵을 베낀다 (`kbdStoreReselect()` **앞**) |
+| VIA 커스텀 메뉴에 **프로파일 수동 선택** | 지금은 SLOT 이 프로파일을 정한다. 사람이 따로 고르고 싶어지면 `kbd_sel_t` 의 `profile` 바이트를 쓴다 (비워 뒀다) |
+| **product string 해시로 키보드 식별** | 읽는 것은 이미 된다(`0x09 HOST_INFO`). 표시에만 쓴다. vid/pid 가 겹치는 싸구려 키보드를 만나면 `kbdStoreSelect(vid,pid,hash)` 에 해시를 넣는다 |
+| **매크로 · 탭댄스도 프로파일마다** | 지금은 키맵만 갈린다. 나머지는 공유다. 같은 방식(`kmRemap` 구간 추가)으로 늘릴 수 있다 |
+| SLOT 이름을 **키보드 이름으로 자동** | 마법사가 이미 채워 주지만 손으로 고칠 수 있다 |
 
-★ **`nvm_dynamic_keymap.c` 를 복사해 오지 않았다.** 키맵 접근이 전부
-`eeprom_read_block`/`eeprom_write_block` 을 지나므로 거기서 주소만 옮기면 된다.
+### 못 하는 것 (재검토 불필요)
 
-★ `MAX_ADDR` 을 안 박으면 매크로 영역이 EEPROM 끝까지 잡혀 **프로파일을 덮어쓴다.**
+- **Vial 매트릭스 테스터** — `(cols/8+1)*rows <= 28` 을 16x16(48)이 넘어 vial-qmk 가
+  그 코드를 빼고 빌드한다. 잠금 해제와 무관하고 배열을 줄여도 안 된다
+  (좌표가 곧 usage 라 16x16 이어야 한다). 마법사의 "지금 눌린 키" 로 대신한다
+- **원본 키보드의 Fn** — 조합의 결과 키코드만 USB 로 온다
 
-★ `dynamic_keymap_reset()` 은 한 벌만 채운다. 매직(주소 512)을 두고
-**없으면 전 벌을 채운다** 로 통일했다 (`eepromProfileEnsure`).
+### 실기로 못 잰 것 (장비 없음)
 
-→ 자세한 것은 [09-keyboard-profile.md](09-keyboard-profile.md#3단계--키보드별-키맵-프로파일--완료)
-
-### 남은 것 ① VIA 커스텀 메뉴에 프로파일 수동 선택 (선택)
-
-지금은 SLOT 이 프로파일을 정한다. 사람이 "이 키보드는 저 키맵을 쓴다" 고 따로
-고르고 싶어지면 그때 만든다 — `kbd_sel_t` 에 `profile` 바이트를 비워 뒀다.
-필요해지기 전에는 만들지 않는다.
-
-### 끝난 것 ② 웹에서 담기 · 지우기 ✅ — 파이썬 없이 된다
-
-Vial 은 정의를 **LZMA 로 압축된 상태**로 읽어가는데 브라우저에는 인코더가 없다
-(`CompressionStream` 은 deflate/gzip 뿐). **압축을 안 하는 것으로 풀었다** —
-`.xz` 는 "압축 안 한 LZMA2 청크" 를 규격으로 허용한다.
-
-풀사이즈 정의가 minify 1,486 B → 무압축 xz 1,548 B (파이썬 LZMA 는 556 B).
-SLOT 이 8,144 B 라 세 배 가까이 남는다. `web/xz.js`, 60줄.
-
-★ 블록 헤더의 크기 바이트는 **`실제크기/4 - 1`** 이다. `-1` 을 빠뜨리면
-"Corrupt input data" 만 나온다.
-
-★ 담고 나면 보드가 PID 를 바꾸며 재열거한다 → **브라우저는 다른 장치로 본다.**
-전에 허락한 PID 면 `getDevices()` 로 조용히 다시 잡히고, 처음 보는 PID 면
-[보드 연결] 을 한 번 눌러야 한다. 브라우저 규칙이라 우회할 수 없다.
-
-`tools/kbd_upload.py` 는 그대로 둔다 — 파일을 그대로 담거나 꺼낼 때 쓴다.
+미디어키(Consumer 인터페이스가 있는 키보드 없음) · 키보드 두 대 동시 ·
+suspend 소등 · 마우스 패스스루 · BIOS 화면 · Windows/Linux 의 `flash.py`.
 
 ---
 
@@ -491,6 +458,10 @@ python3 tools/kbd_upload.py get 0 back.json
 python3 tools/kbd_upload.py erase 0
 ```
 
+**웹 마법사로 다 된다** — 파이썬 도구는 파일을 그대로 담고 꺼낼 때 쓴다.
+`http://localhost:8000` 또는 <https://chcbaram.github.io/qmk-link/>
+① 보드 연결 → ② 담긴 것(트리) → ③ 배열+마법사 → ④ 보드에 저장
+
 ```bash
 cd web
 python3 -m http.server 8000            # WebHID 는 file:// 로 안 된다
@@ -507,7 +478,9 @@ python3 tools/gen_presets.py > presets.js   # vial-qmk 경로가 필요하다
 | `key info` | 키 입력 경로 진단. **`mounted`/`drop` 으로는 안 보이는 고장을 여기서 본다** |
 | `qmk info` · `qmk matrix` | QMK 상태 · 눌린 usage |
 | `qmk eeprom` | 키맵 저장 상태 |
-| `kbd info` · `kbd erase n` | 레이아웃 저장소 |
+| `kbd info` | 레이아웃 저장소 · 지금 적용 SLOT · 가려진 SLOT |
+| `kbd sel n\|auto` | 쓸 SLOT 을 고정한다 (프로파일도 같이 바뀐다) |
+| `kbd erase n` | SLOT 지우기 |
 | `usbh info` · `flash info` | USB 호스트 · 플래시 |
 
 ---
