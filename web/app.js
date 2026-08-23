@@ -823,6 +823,25 @@ function startWizard() {
 
 function skip() { if (cursor >= 0) { cursor++; next(); } }
 
+/*
+ * 배운 것을 전부 되돌린다. **배열(KLE)은 그대로 둔다** — 자리는 남기고
+ * 채워 넣은 usage 만 비운다. 다른 키보드로 같은 배열을 다시 배울 때 쓴다.
+ */
+function clearAll() {
+  if (!keys.length) { log('먼저 배열을 읽는다.'); return; }
+
+  const n = keys.filter(k => k.usage !== null).length;
+
+  if (n === 0) { log('이미 다 비어 있다.'); return; }
+  if (!confirm(`배운 키 ${n}개를 모두 지운다. 배열은 그대로 둔다.`)) return;
+
+  keys.forEach(k => { k.usage = null; });
+  cursor = -1;
+  render();
+  refreshUi();
+  log(`${n}개를 지웠다. [마법사 시작] 으로 다시 배운다.`);
+}
+
 // 잘못 배운 자리를 되돌린다. 커서는 그대로 둬서 바로 다시 누를 수 있게 한다.
 function clearCur() {
   if (cursor < 0 || cursor >= keys.length) { log('먼저 자리를 고른다 (키를 클릭).'); return; }
@@ -1257,6 +1276,7 @@ $('load').onclick = loadKle;
 $('start').onclick = startWizard;
 $('skip').onclick = skip;
 $('clear').onclick = clearCur;
+$('clearAll').onclick = clearAll;
 $('assign').onclick = manualAssign;
 $('manual').onkeydown = (e) => { if (e.key === 'Enter') manualAssign(); };
 $('editBadge').onclick = () => { editSlot = -1; refreshUi(); log('고치던 SLOT 을 놓았다 — 이제 새로 만든다.'); };
