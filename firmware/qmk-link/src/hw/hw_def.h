@@ -6,7 +6,14 @@
 
 
 #define _DEF_FIRMWATRE_VERSION    "V260823R2"
+// ★ 이름 뒤에 트리를 붙인다 (KEY_PROTOCOL_NAME 은 CMake 가 준다).
+//   USB 제품 이름이 "QMK-LINK VIA" / "QMK-LINK VIAL" 로 갈려서
+//   지금 어느 펌웨어가 올라가 있는지 OS 에서 바로 보인다.
+#ifdef KEY_PROTOCOL_NAME
+#define _DEF_BOARD_NAME           "QMK-LINK " KEY_PROTOCOL_NAME
+#else
 #define _DEF_BOARD_NAME           "QMK-LINK"
+#endif
 
 
 //-- USB

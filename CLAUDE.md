@@ -40,6 +40,10 @@ USB-A 에 꽂은 일반 키보드를 QMK 로 처리해 PC 에는 VIA / Vial 키�
 - 기능 on/off 는 프로젝트의 `src/hw/hw_def.h` 의 `_USE_HW_*` 로 한다.
   드라이버는 그 매크로로 자기 자신을 감싼다
 - 핀 상수는 `src/bsp/board/qmk_link.h` 에만 둔다. 드라이버에 숫자를 박지 않는다
+- **`via` 와 `vial` 두 트리가 있다.** 공용은 `keyboards/qmk-link/` 와
+  `ap/modules/{link,qmk/qmk.c}` 다. 트리 고유 설정은 각 트리의 `config.h` 에 둔다
+  - ★ `port/platforms/eeprom.c` 의 `EE_FLASH_BEGIN` 은 트리마다 다르다
+    (`HW_FLASH_E2P_VIA_BEGIN` / `..._VIAL_BEGIN`). 복사해 오면 두 펌웨어가 섞인다
 - **키보드 배열은 `keyboards/qmk-link/layout-kle.json` 하나만 손으로 고친다.**
   `tools/gen_keymap.py` 가 `layout-via.json` 을 만든다 (wish-he 관례).
   KLE 범례는 주소가 아니라 **키 이름**이다 — 주소를 손으로 적으면 반드시 어긋난다
@@ -55,10 +59,20 @@ USB-A 에 꽂은 일반 키보드를 QMK 로 처리해 PC 에는 VIA / Vial 키�
 
 ```bash
 cd firmware/qmk-link
+
+# VIA (기본)
 cmake -S . -B build
 cmake --build build -j16
-python3 ../firm-sdk/tools/flash.py build/src/qmk-link.uf2
+python3 ../firm-sdk/tools/flash.py build/src/qmk-link-via.uf2
+
+# Vial
+cmake -S . -B build-vial -DKEY_PROTOCOL=vial
+cmake --build build-vial -j16
+python3 ../firm-sdk/tools/flash.py build-vial/src/qmk-link-vial.uf2
 ```
+
+산출물 이름에 트리가 붙는다. USB 제품 이름도 `QMK-LINK VIA` / `QMK-LINK VIAL` 로
+갈리므로 지금 어느 펌웨어가 올라가 있는지 바로 보인다.
 
 - `PICO_SDK_PATH` 환경변수를 쓰지 않는다. CMakeLists 가 서브모듈 경로를 직접 지정한다
 - 서브모듈은 `--recursive` 로 받지 않는다 (무선용까지 받아 338MB 가 된다).

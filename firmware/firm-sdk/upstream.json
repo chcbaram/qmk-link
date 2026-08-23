@@ -7,6 +7,23 @@
     "sparse 에 적은 경로만 워킹트리에 풀린다. qmk_firmware 는 전체 히스토리가 524MB 인데",
     "quantum/ 만 받으면 5MB 안팎이다. 헤더가 부족하면 sparse 에 경로를 추가하면 된다."
   ],
+  "vial-qmk": {
+    "_comment": [
+      "vial-qmk 는 릴리스 태그가 없다. vial 브랜치로 관리하며 주기적으로 QMK 를 머지한다.",
+      "브랜치명을 그대로 두면 재현성이 없으므로 커밋 SHA 를 박는다.",
+      "",
+      "QMK 베이스는 우리가 05단계에서 이식한 0.33.13 과 사실상 같다 — 확인했다:",
+      "  host_driver_t 에 send_raw_hid 있음 / usb_device_state 있음 / quantum/nvm 있음",
+      "그래서 port/ 를 거의 그대로 옮길 수 있다."
+    ],
+    "url": "https://github.com/vial-kb/vial-qmk.git",
+    "rev": "dd43959ae5c08d8a28d38a1acf7b04e86b14a344",
+    "sparse": [
+      "quantum",
+      "tmk_core",
+      "platforms"
+    ]
+  },
   "qmk_firmware": {
     "url": "https://github.com/qmk/qmk_firmware.git",
     "rev": "0.33.13",

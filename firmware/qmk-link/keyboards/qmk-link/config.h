@@ -9,7 +9,7 @@
 //
 // HID usage 는 0x00~0xFF 라 이 크기면 전부 담긴다.
 
-#define KBD_NAME                    "QMK-LINK"
+#define KBD_NAME                    _DEF_BOARD_NAME
 
 #define USB_VID                     HW_USB_VID
 #define USB_PID                     HW_USB_PID
@@ -23,29 +23,14 @@
 
 #define DYNAMIC_KEYMAP_LAYER_COUNT  8
 
-// 탭홀드 — 값 자체는 VIA 커스텀 메뉴에서 바꾼다 (port/via_port.c)
+// ★ 탭홀드 옵션은 트리마다 다르다 — 여기 두지 않는다.
 //
-// ★ *_PER_KEY 가 없으면 QMK 가 get_*() 를 아예 부르지 않는다.
-//   action_tapping.c / action.c 가 컴파일 상수로 굳혀 버려서, 메뉴를 만들어 놓고도
-//   슬라이더가 아무 일도 하지 않는 상태가 된다.
-#define TAPPING_TERM                200
-#define TAPPING_TERM_PER_KEY
-#define QUICK_TAP_TERM_PER_KEY
-#define HOLD_ON_OTHER_KEY_PRESS_PER_KEY
-#define PERMISSIVE_HOLD_PER_KEY
-#define RETRO_TAPPING_PER_KEY
-
-// 탭홀드 — 값 자체는 VIA 커스텀 메뉴에서 바꾼다 (port/via_port.c)
+//   via  : *_PER_KEY 를 켜고 우리 커스텀 메뉴가 값을 준다 (port/via_port.c)
+//   vial : Vial 이 자기 UI 를 갖고 있다. *_PER_KEY 를 켜면 vial.c 의
+//          get_tapping_term() 과 우리 것이 겹친다
 //
-// ★ *_PER_KEY 가 없으면 QMK 가 get_*() 를 아예 부르지 않는다.
-//   action_tapping.c / action.c 가 컴파일 상수로 굳혀 버려서, 메뉴를 만들어 놓고도
-//   슬라이더가 아무 일도 하지 않는 상태가 된다.
+//   TAPPING_TERM 기본값만 공용으로 둔다.
 #define TAPPING_TERM                200
-#define TAPPING_TERM_PER_KEY
-#define HOLD_ON_OTHER_KEY_PRESS_PER_KEY
-#define PERMISSIVE_HOLD_PER_KEY
-#define RETRO_TAPPING_PER_KEY
-#define QUICK_TAP_TERM_PER_KEY
 
 // eeprom — 내장 플래시 0x1F0000 부터 16KB (hw_def.h 의 HW_FLASH_E2P_VIA_*)
 //

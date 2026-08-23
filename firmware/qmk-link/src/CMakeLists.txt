@@ -23,6 +23,13 @@ add_executable(${PRJ_NAME}
 
 target_compile_definitions(${PRJ_NAME} PRIVATE ${QMK_DEFINES})
 
+# ★ 어느 트리로 구웠는지 이름에 드러낸다.
+#   USB 제품 이름과 앱에 뜨는 이름이 "QMK-LINK VIA" / "QMK-LINK VIAL" 로 갈린다.
+#   두 펌웨어를 번갈아 구울 때 지금 뭐가 올라가 있는지 바로 보인다.
+string(TOUPPER ${KEY_PROTOCOL} KEY_PROTOCOL_UPPER)
+target_compile_definitions(${PRJ_NAME} PRIVATE
+  KEY_PROTOCOL_NAME="${KEY_PROTOCOL_UPPER}")
+
 target_include_directories(${PRJ_NAME} PUBLIC
   .
   ap

@@ -136,14 +136,12 @@ void via_init_kb(void)
 //   지금은 키에 상관없이 같은 값을 준다 (키별 설정은 UI 를 만들 자리가 없다).
 //
 
-#ifdef TAPPING_TERM_PER_KEY
 uint16_t get_tapping_term(uint16_t keycode, keyrecord_t *record)
 {
   (void)keycode;
   (void)record;
   return cfg.tapping_term;
 }
-#endif
 
 /*
  * ★ 퀵탭텀도 같이 따라가게 한다.
@@ -152,41 +150,33 @@ uint16_t get_tapping_term(uint16_t keycode, keyrecord_t *record)
  *   200 으로 굳는다. 사용자가 탭텀을 150 으로 내려도 퀵탭텀은 200 으로 남아
  *   원래 지키려던 "퀵탭텀 <= 탭텀" 이 깨진다 (wish-he 에서 겪은 것).
  */
-#ifdef QUICK_TAP_TERM_PER_KEY
 uint16_t get_quick_tap_term(uint16_t keycode, keyrecord_t *record)
 {
   (void)keycode;
   (void)record;
   return cfg.tapping_term;
 }
-#endif
 
-#ifdef HOLD_ON_OTHER_KEY_PRESS_PER_KEY
 bool get_hold_on_other_key_press(uint16_t keycode, keyrecord_t *record)
 {
   (void)keycode;
   (void)record;
   return cfg.hold_okp != 0;
 }
-#endif
 
-#ifdef PERMISSIVE_HOLD_PER_KEY
 bool get_permissive_hold(uint16_t keycode, keyrecord_t *record)
 {
   (void)keycode;
   (void)record;
   return cfg.permissive_hold != 0;
 }
-#endif
 
-#ifdef RETRO_TAPPING_PER_KEY
 bool get_retro_tapping(uint16_t keycode, keyrecord_t *record)
 {
   (void)keycode;
   (void)record;
   return cfg.retro_tapping != 0;
 }
-#endif
 
 
 //-- VIA 커스텀 메뉴

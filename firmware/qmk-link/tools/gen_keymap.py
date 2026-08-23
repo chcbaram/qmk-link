@@ -4,7 +4,10 @@ KLE 레이아웃 하나를 단일 진실 원본으로 삼아 VIA 정의 JSON 을
 
     keyboards/<모델>/layout-kle.json   <- 손으로 편집하는 건 이것 하나
     keyboards/<모델>/menus.json        <- 커스텀 메뉴 (손으로 씀)
-       └──▶ keyboards/<모델>/layout-via.json   VIA 앱에 넣는 정의 (생성물)
+       ├──▶ keyboards/<모델>/layout-via.json   VIA 앱에 넣는 정의
+       ├──▶ keyboards/<모델>/vial.json         Vial 정의 (사람이 읽는 원본)
+       └──▶ keyboards/<모델>/vial_generated_keyboard_definition.h
+                                                Vial 이 장치에서 내주는 압축본
 
 ★ 이 보드의 매트릭스 좌표는 HID usage 다.
 
@@ -25,6 +28,7 @@ KLE 레이아웃 하나를 단일 진실 원본으로 삼아 VIA 정의 JSON 을
 
 import argparse
 import json
+import lzma
 import sys
 from pathlib import Path
 
@@ -197,7 +201,7 @@ def build(kle_doc, menus_doc, name):
         sys.exit("layout-kle.json 의 키 이름을 고쳐라 (usage 표는 이 스크립트 안에 있다)")
 
     via = {
-        "name": name,
+        "name": name + " VIA",
         "vendorId": VID,
         "productId": PID,
         "matrix": {"rows": ROWS, "cols": COLS},
@@ -208,6 +212,53 @@ def build(kle_doc, menus_doc, name):
         via["menus"] = menus_doc["menus"]
 
     return via, seen
+
+
+def build_vial(via):
+    """
+    VIA 정의에서 Vial 정의를 만든다. 배열은 같은 KLE 에서 나온 것을 그대로 쓴다.
+
+    다른 점은 두 가지뿐이다.
+      - lighting 이 필수다 (안 켜므로 none)
+      - menus 는 넣지 않는다. Vial 은 QMK 설정 UI 를 자기가 갖고 있다
+    """
+    vial = {
+        "name":      via["name"].replace(" VIA", " VIAL"),
+        "vendorId":  via["vendorId"],
+        "productId": via["productId"],
+        "lighting":  "none",
+        "matrix":    via["matrix"],
+        "layouts":   via["layouts"],
+    }
+    return vial
+
+
+def gen_vial_header(vial):
+    """
+    vial-qmk 의 util/vial_generate_definition.py 와 같은 일을 한다.
+    json 을 최소화하고 LZMA 로 압축해 C 배열로 박는다.
+
+    ★ Vial 앱은 이 배열을 **장치에서 읽어간다** (vial.c 의 vial_get_size / vial_get_def).
+      VIA 는 이 통로가 없어 앱이 자기 저장소에서 정의를 찾는다.
+      09단계에서 키보드마다 다른 정의를 내주려는 근거가 이것이다.
+    """
+    data = json.dumps(vial, separators=(",", ":")).strip()
+    blob = lzma.compress(data.encode("utf-8"))
+
+    out = ["#pragma once",
+           "",
+           "// tools/gen_keymap.py 가 만든다. 손으로 고치지 않는다.",
+           "// 원본은 keyboards/<모델>/layout-kle.json 이다.",
+           "",
+           "static const unsigned char keyboard_definition[] PROGMEM = {"]
+    body = ", ".join("0x{:02X}".format(b) for b in blob)
+    # 한 줄이 너무 길면 읽기 어렵다. 16개씩 끊는다.
+    arr = ["0x{:02X}".format(b) for b in blob]
+    lines = ["    " + ", ".join(arr[i:i+16]) for i in range(0, len(arr), 16)]
+    out.append(",\n".join(lines))
+    out.append("};")
+    out.append("")
+    return "\n".join(out), len(data), len(blob)
 
 
 def show_rows(kle):
@@ -264,6 +315,19 @@ def main():
     if menus:
         n = sum(len(g["content"]) for m in menus["menus"] for g in m["content"])
         print("  커스텀 메뉴 %d 개 / 컨트롤 %d 개 포함" % (len(menus["menus"]), n))
+
+    # ── Vial ────────────────────────────────────────────────
+    vial = build_vial(via)
+    vial_path = d / "vial.json"
+    vial_path.write_text(json.dumps(vial, indent=2, ensure_ascii=False) + "\n")
+
+    hdr, raw_len, blob_len = gen_vial_header(vial)
+    hdr_path = d / "vial_generated_keyboard_definition.h"
+    hdr_path.write_text(hdr)
+
+    print("%s" % vial_path.relative_to(ROOT))
+    print("%s  (json %d B -> LZMA %d B)"
+          % (hdr_path.relative_to(ROOT), raw_len, blob_len))
 
 
 if __name__ == "__main__":

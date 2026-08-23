@@ -223,7 +223,7 @@ static void cliCmd(cli_args_t *args)
     }
 
     cliPrintf("size      : %d B  @ 0x%06X\n",
-              TOTAL_EEPROM_BYTE_COUNT, (unsigned)HW_FLASH_E2P_VIA_BEGIN);
+              TOTAL_EEPROM_BYTE_COUNT, (unsigned)eepromGetBase());
     cliPrintf("섀도      : %s\n",
               eepromIsInit() ? "읽어 둠" : "미초기화 (qmk start 전)");
     cliPrintf("dirty     : 0x%X\n", (unsigned)eepromGetDirtyMask());
@@ -232,7 +232,7 @@ static void cliCmd(cli_args_t *args)
     cliPrintf("eeconfig  : %s\n", eeconfig_is_enabled() ? "enabled" : "disabled");
 
     eeprom_read_block(shadow, (const void *)0, sizeof(shadow));
-    flashRead(HW_FLASH_E2P_VIA_BEGIN, onflash, sizeof(onflash));
+    flashRead(eepromGetBase(), onflash, sizeof(onflash));
 
     cliPrintf("shadow    : ");
     for (int i=0; i<32; i++) cliPrintf("%02X ", shadow[i]);

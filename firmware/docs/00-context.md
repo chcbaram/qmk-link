@@ -32,9 +32,10 @@ PC 에는 **VIA / Vial 로 편집 가능한 키보드**로 보이게 한다.
 | **완료** | **04 HID DEVICE** — HID kbd/extra/raw + CDC 복합. 패스스루로 PC 타이핑 확인 |
 | **완료** | **05 QMK** — QMK 0.33.13 이식. `link/` 가상 매트릭스, QMK 거쳐 PC 입력 확인 |
 | **완료** | **06 VIA** — flash EEPROM, raw HID, dynamic keymap, 커스텀 메뉴. 전부 실기 확인 |
-| **다음** | **07 VIAL** — `qmk/vial/` 트리 추가, `-DKEY_PROTOCOL=vial` |
+| **완료** | **07 VIAL** — vial 트리. 장치가 정의를 내주는 것까지 확인 |
+| **다음** | **08 마감** — LED 인디케이터 · suspend/resume · 허브 · 미디어키 |
 
-06 단계 실측: FLASH 109,548 B / 2 MB (5.22%), RAM 59,992 B / 512 KB (11.44%).
+실측: via FLASH 111,256 B / vial 114,224 B, RAM 152~155 KB / 512 KB (copy_to_ram).
 `0483:5305 QMK-LINK` 로 열거된다 — HID(keyboard / extra / raw) + CDC 복합 장치.
 `clk_sys` 는 CLI 에서 120,000,000 Hz 확인.
 
@@ -47,6 +48,7 @@ PC 에는 **VIA / Vial 로 편집 가능한 키보드**로 보이게 한다.
 - VIA 커스텀 메뉴 6개 — 탭텀 / hold-okp / permissive / retro / NKRO / 패스스루
 - VIA 의 bootloader 버튼 → BOOTSEL
 - VIA 의 Key Tester > Test Matrix — 누른 키의 usage 가 배열에서 반짝인다
+- **Vial 트리** — `-DKEY_PROTOCOL=vial`. 장치가 자기 정의를 내준다 (552 B, LZMA)
 
 **진단은 CLI `key info`** 로 한다. 이 단계의 고장들은 `mounted` / `drop` 으로는
 안 보였다 → [06-via.md](06-via.md#진단-도구--key-info)
@@ -109,7 +111,7 @@ git -C firmware/firm-sdk/pico-sdk submodule update --init lib/tinyusb
 ```bash
 cmake -S . -B build                                     # configure
 cmake --build build -j16                                # build
-python3 ../firm-sdk/tools/flash.py build/src/qmk-link.uf2   # download
+python3 ../firm-sdk/tools/flash.py build/src/qmk-link-via.uf2   # download
 python3 ../firm-sdk/tools/flash.py --list                   # 볼륨/포트 확인
 
 arm-none-eabi-size -A build/src/qmk-link.elf                          # 크기
@@ -269,6 +271,9 @@ void apMain(void)
 | **EEPROM 은 flash + RAM 섀도 + 지연 플러시** | 소거·기록 중 XIP 가 멈추는데 core1 이 PIO USB 를 돈다. `flash_safe_execute()` 로 core1 을 세운다. **실측 소거 30ms + 기록 10ms = 41ms 동안 USB 호스트가 통째로 멈춘다.** 6회 연속에도 키보드가 살아 있어 진입을 확정했다. 지연 플러시가 핵심 — VIA 는 키 하나에 바이트 쓰기가 수백 번 온다 → [06-via.md](06-via.md#1-eeprom-을-flash-로--이-단계의-핵심-리스크였다) |
 | **VIA 와 Vial EEPROM 을 떼어 놓는다** | `0x1F0000` / `0x1F4000`, 각 16KB. 같은 보드에 두 펌웨어를 번갈아 구울 수 있는데 영역을 공유하면 상대가 남긴 바이트를 자기 레이아웃으로 읽는다. 매직이 우연히 맞으면 초기화도 안 되고 엉뚱한 키맵이 나온다 |
 | **`flash.h` 는 wish-he 인터페이스 그대로** | 주소는 **플래시 오프셋**이다. rp2040 계열 `flash.c` 는 반대로 XIP 절대주소를 받으므로 그쪽 코드를 베껴 올 때 주의. 영역 가드는 rp2040_fw 의 `flash_tbl` 을 참고하되 "겹치면 통과" 가 아니라 "완전히 들어가야 통과" 로 좁혔다 |
+| **트리는 `config.h` 와 EEPROM 영역만 가른다** | vial-qmk 의 QMK 베이스가 0.33.13 과 사실상 같아서(`host_driver_t`·`usb_device_state`·`quantum/nvm` 모두 동일) `port/` 929줄이 거의 그대로 옮겨갔다. ★ `port/platforms/eeprom.c` 의 `EE_FLASH_BEGIN` 을 안 바꾸면 두 펌웨어가 조용히 섞인다 → [07-vial.md](07-vial.md) |
+| **Vial 의 `BUILD_ID` 는 고정한다** | vial-qmk 는 이걸 빌드마다 난수로 만든다. 그러면 다시 구울 때마다 EEPROM 이 무효가 되어 키맵이 초기화된다. `0x00514C4B`("QLK") 로 박고 EEPROM 배치를 바꿀 때만 올린다 |
+| **탭홀드 주인이 트리마다 다르다** | via 는 우리 커스텀 메뉴(`*_PER_KEY`), vial 은 Vial 자신. `*_PER_KEY` 를 vial 에 두면 `vial.c` 의 `get_tapping_term()` 과 겹치고, upstream 의 `#endif` 중첩 실수까지 밟는다 |
 | **키보드 정의는 `keyboards/qmk-link/`** | wish-he 관례. **`layout-kle.json` 하나만 손으로 편집**하고 `tools/gen_keymap.py` 가 `layout-via.json` 을 만든다. KLE 범례는 주소가 아니라 **키 이름**이다 — 주소를 손으로 적으면 반드시 어긋난다 |
 | **VIA 배열은 풀사이즈 + 서랍** | 매트릭스 좌표가 HID usage 라 **그림은 물리 PCB 가 아니다.** TKL/65%/60% 는 풀사이즈의 부분집합이라 그대로 덮이고, ISO Enter 도 ANSI Enter 도 `0x28` 이라 **레이아웃 옵션이 필요 없다.** ANSI 에 없는 usage(F13~F24 / ISO·JIS / 편집·미디어)는 아래에 서랍으로 붙인다. **그림에 없는 키도 동작한다** — 못 고칠 뿐이다 |
 | **VIA 커스텀 메뉴는 메뉴 > 그룹 > 컨트롤 3단** | `menus[i].content[]` 에 컨트롤을 바로 넣으면 VIA 가 정의를 통째로 거부한다(`must NOT have additional properties`). 앱에 넣어 봐야 아는 실수라 `gen_keymap.py` 가 검사한다 |

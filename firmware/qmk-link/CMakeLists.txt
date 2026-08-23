@@ -1,30 +1,46 @@
 cmake_minimum_required(VERSION 3.13)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "")
 
-# 프로젝트 이름은 최종 출력 파일 이름으로 사용된다.
-#
-set(PRJ_NAME qmk-link)
-
-# 키 프로토콜 트리 선택 (5~7단계에서 사용한다)
-#   via  : qmk_firmware  기반
+# 키 프로토콜 트리 선택
+#   via  : qmk_firmware  기반  (기본)
 #   vial : vial-qmk      기반
 #
+#   cmake -S . -B build       -DKEY_PROTOCOL=via
+#   cmake -S . -B build-vial  -DKEY_PROTOCOL=vial
+set(KEY_PROTOCOL "via" CACHE STRING "key protocol tree: via | vial")
+
+if (NOT KEY_PROTOCOL STREQUAL "via" AND NOT KEY_PROTOCOL STREQUAL "vial")
+  message(FATAL_ERROR "KEY_PROTOCOL 은 via 또는 vial 이어야 한다: ${KEY_PROTOCOL}")
+endif()
+
+# 프로젝트 이름은 최종 출력 파일 이름으로 사용된다.
+# 두 산출물을 섞어 굽지 않도록 프로토콜을 붙인다.
+set(PRJ_NAME qmk-link-${KEY_PROTOCOL})
+
 # 키보드 정의 폴더 (wish-he 관례).
 # 배열 KLE / VIA 메뉴 / config.h / keymap.c 가 여기 모여 있다.
 # via · vial 두 트리가 같은 것을 본다.
 set(QMK_BOARD_PATH ${CMAKE_CURRENT_LIST_DIR}/keyboards/qmk-link)
 
-set(KEY_PROTOCOL "via" CACHE STRING "key protocol tree: via | vial")
-
 # QMK / Vial 원본. firm-sdk/upstream.json 이 리비전을 고정하고
 # firm-sdk/tools/fetch_upstream.py 가 받아온다 (저장소에 넣지 않는다).
-set(QMK_UPSTREAM_PATH ${CMAKE_CURRENT_LIST_DIR}/../firm-sdk/upstream/qmk_firmware)
+#
+# ★ 트리마다 원본이 다르다. vial-qmk 는 QMK 의 포크다.
+#   (베이스는 사실상 같다 — host_driver_t · usb_device_state · quantum/nvm 모두 동일)
+if (KEY_PROTOCOL STREQUAL "vial")
+  set(QMK_UPSTREAM_NAME vial-qmk)
+else()
+  set(QMK_UPSTREAM_NAME qmk_firmware)
+endif()
+set(QMK_UPSTREAM_PATH ${CMAKE_CURRENT_LIST_DIR}/../firm-sdk/upstream/${QMK_UPSTREAM_NAME})
 
 if (NOT EXISTS ${QMK_UPSTREAM_PATH}/quantum)
   message(FATAL_ERROR
-    "QMK 원본이 없다. 먼저 받아온다:\n"
+    "${QMK_UPSTREAM_NAME} 원본이 없다. 먼저 받아온다:\n"
     "  python3 firm-sdk/tools/fetch_upstream.py")
 endif()
+
+message(STATUS "key protocol : ${KEY_PROTOCOL}  (upstream: ${QMK_UPSTREAM_NAME})")
 
 # SDK 는 firm-sdk 서브모듈을 쓴다. 환경변수 PICO_SDK_PATH 에 의존하지 않는다.
 #

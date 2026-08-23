@@ -44,14 +44,16 @@
 #endif
 
 /*
- * ★ VIA 트리는 VIA 자리에 쓴다.
+ * ★ Vial 트리는 Vial 자리에 쓴다.
  *
- *   Vial 트리는 자기 port/platforms/eeprom.c 에서 HW_FLASH_E2P_VIAL_BEGIN 을
- *   쓴다. 같은 보드에 두 펌웨어를 번갈아 구워도 서로의 바이트를 읽지 않게
- *   아예 다른 섹터에 둔다 (hw_def.h 의 배치 참고).
+ *   via 트리는 HW_FLASH_E2P_VIA_BEGIN 을 쓴다. 같은 보드에 두 펌웨어를 번갈아
+ *   구워도 서로의 바이트를 읽지 않게 아예 다른 섹터에 둔다 (hw_def.h 의 배치).
+ *
+ *   ★ 이 줄을 via 에서 복사해 온 채로 두면 두 펌웨어가 같은 영역을 쓰면서
+ *     조용히 섞인다. eeconfig 매직이 우연히 맞으면 초기화도 안 된다.
  */
-#define EE_FLASH_BEGIN   HW_FLASH_E2P_VIA_BEGIN
-#define EE_FLASH_SIZE    HW_FLASH_E2P_VIA_SIZE
+#define EE_FLASH_BEGIN   HW_FLASH_E2P_VIAL_BEGIN
+#define EE_FLASH_SIZE    HW_FLASH_E2P_VIAL_SIZE
 
 #define EE_SECTOR_SIZE   HW_FLASH_SECTOR_SIZE
 #define EE_SECTOR_CNT    (TOTAL_EEPROM_BYTE_COUNT / EE_SECTOR_SIZE)

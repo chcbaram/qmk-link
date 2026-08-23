@@ -1,7 +1,12 @@
-# QMK (VIA 트리)
+# QMK (Vial 트리)
 #
-# quantum 은 upstream 을 그대로 쓴다 (firm-sdk/upstream/qmk_firmware).
+# quantum 은 upstream 을 그대로 쓴다 (firm-sdk/upstream/vial-qmk).
 # 우리 저장소에는 port 레이어와 키보드 정의만 있다.
+#
+# ★ vial-qmk 는 QMK 의 포크지만 베이스는 사실상 같다 — 확인했다:
+#     host_driver_t 에 send_raw_hid 있음 / usb_device_state 있음 / quantum/nvm 있음
+#   그래서 via 트리의 port/ 를 거의 그대로 옮겼다.
+#   갈리는 것은 config.h(UID·unlock 조합)와 eeprom 영역뿐이다.
 
 set(QMK_PORT_PATH     ${CMAKE_CURRENT_LIST_DIR})
 set(QMK_QUANTUM_PATH  ${QMK_UPSTREAM_PATH}/quantum)
@@ -31,10 +36,13 @@ file(GLOB QMK_SRC_FILES CONFIGURE_DEPENDS
   ${QMK_QUANTUM_PATH}/nvm/eeprom/nvm_dynamic_keymap.c
   ${QMK_QUANTUM_PATH}/nvm/eeprom/nvm_via.c
 
-  # VIA — raw HID 프로토콜과 동적 키맵
+  # VIA — raw HID 프로토콜과 동적 키맵. Vial 은 이 위에 얹힌다.
   ${QMK_QUANTUM_PATH}/via.c
   ${QMK_QUANTUM_PATH}/dynamic_keymap.c
   ${QMK_QUANTUM_PATH}/raw_hid.c
+
+  # Vial
+  ${QMK_QUANTUM_PATH}/vial.c
 
   ${QMK_QUANTUM_PATH}/quantum.c
   ${QMK_QUANTUM_PATH}/keyboard.c
@@ -59,6 +67,9 @@ file(GLOB QMK_SRC_FILES CONFIGURE_DEPENDS
 )
 
 set(QMK_INC_DIR
+  # vial.c 가 vial_generated_keyboard_definition.h 를 찾는 자리
+  ${QMK_BOARD_PATH}
+
   ${CMAKE_CURRENT_SOURCE_DIR}/ap/modules/link
   ${CMAKE_CURRENT_SOURCE_DIR}/ap/modules/qmk
 
@@ -94,6 +105,9 @@ set(QMK_DEFINES
   RAW_ENABLE
   DYNAMIC_KEYMAP_ENABLE
   VIA_ENABLE
+
+  # Vial 은 VIA 위에 얹힌다. VIA_ENABLE 이 같이 켜져 있어야 한다.
+  VIAL_ENABLE
   EXTRAKEY_ENABLE
   # MOUSE_ENABLE    : 마우스 리포트 자체 (패스스루 · 마우스키 공통)
   # MOUSEKEY_ENABLE : 키로 마우스를 조작하는 기능
@@ -103,7 +117,9 @@ set(QMK_DEFINES
   GRAVE_ESC_ENABLE
 
   QMK_KEYBOARD_H="quantum.h"
-  # 트리의 config.h 가 공용 config.h 를 include 한다.
+
+  # ★ 트리의 config.h 가 공용 config.h 를 include 한다.
+  #   Vial 고유 설정(UID · unlock 조합)만 트리 쪽에 둔다.
   QMK_KEYMAP_CONFIG_H="${QMK_PORT_PATH}/config.h"
   QMK_BOARD_CONFIG_H="${QMK_BOARD_PATH}/config.h"
   KEYMAP_C="${QMK_BOARD_PATH}/keymap.c"
