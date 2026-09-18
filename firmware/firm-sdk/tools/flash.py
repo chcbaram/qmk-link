@@ -39,15 +39,16 @@ BOOTROM_VID = 0x2E8A
 BOOTROM_PID_RP2350 = 0x000F
 
 # 실행 중인 펌웨어의 CDC 포트.
-# 04단계에서 VID/PID 를 0483:5305 로 바꿨다 (다른 baram 키보드와 안 겹치는 값).
+# 04단계에서 VID/PID 를 0483:5305 로 바꿨다가, WISH61-HE 와 부딪혀 0x5306 으로 옮겼다
+# (firmware/qmk-link/src/hw/hw_def.h 의 ★ 주석).
 FW_VID = 0x0483
-FW_PID = 0x5305
+FW_PID = 0x5306
 
 # ★ PID 는 하나가 아니다.
 #
 #   09단계부터 꽂힌 키보드의 레이아웃 칸에 따라 0x5400 + 칸 을 보고한다
 #   (VIA 가 정의를 VID/PID 로 찾기 때문이다 → firmware/docs/09-keyboard-profile.md).
-#   0x5305 하나만 보고 찾으면 레이아웃을 담아 둔 보드를 못 찾는다.
+#   0x5306 하나만 보고 찾으면 레이아웃을 담아 둔 보드를 못 찾는다.
 FW_PID_LIST = [FW_PID] + list(range(0x5400, 0x5410))
 
 # INFO_UF2.TXT 의 Board-ID 에 이 문자열이 들어가면 우리 대상으로 본다
@@ -161,13 +162,34 @@ def pick_port(explicit=None):
                 return explicit
         return explicit          # 목록에 없어도 사용자가 지정했으면 그대로 쓴다
 
-    # VID/PID 가 정확히 맞는 것을 먼저 고른다.
-    for dev, _, vid, pid in ports:
-        if vid == FW_VID and pid in FW_PID_LIST:
-            return dev
-    for dev, _, vid, _ in ports:
-        if vid == FW_VID:
-            return dev
+    # ★ 후보가 둘 이상이면 고르지 않는다.
+    #
+    #   VID 0x0483 은 baram 키보드가 다 같이 쓴다. 예전에 qmk-link 와
+    #   WISH61-HE 가 PID 까지 같아서, 둘을 같이 꽂은 채 구우면 **엉뚱한 보드**에
+    #   1200bps touch 가 갔다 (그 보드가 BOOTSEL 로 넘어간다).
+    #   PID 는 옮겼지만, 같은 보드를 두 대 꽂는 경우가 남는다.
+    #   말없이 하나 고르는 대신 목록을 보여주고 --port 를 요구한다.
+    exact = [dev for dev, _, vid, pid in ports
+             if vid == FW_VID and pid in FW_PID_LIST]
+    if len(exact) == 1:
+        return exact[0]
+    if len(exact) > 1:
+        print("보드로 보이는 포트가 여럿이다. --port 로 지정한다:")
+        for dev, desc, vid, pid in ports:
+            if dev in exact:
+                print("  %s  %04X:%04X  %s" % (dev, vid or 0, pid or 0, desc))
+        return None
+
+    same_vid = [(dev, desc, pid) for dev, desc, vid, pid in ports if vid == FW_VID]
+    if len(same_vid) == 1:
+        dev, desc, pid = same_vid[0]
+        print("PID 가 목록에 없다 (%04X %s). 그래도 VID 가 맞아 이 포트를 쓴다." % (pid or 0, desc))
+        return dev
+    if len(same_vid) > 1:
+        print("baram VID(0483) 포트가 여럿이다. --port 로 지정한다:")
+        for dev, desc, pid in same_vid:
+            print("  %s  %04X:%04X  %s" % (dev, FW_VID, pid or 0, desc))
+        return None
     return None
 
 

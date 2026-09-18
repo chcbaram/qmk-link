@@ -21,11 +21,18 @@
 // 다른 baram 키보드와 겹치지 않는 값.
 //   0x5200 hs-k / 0x5201 45k-hs / 0x5207 qmk-8k / 0x5211 convex
 //   0x5220 Lucky65 / 0x5230 hola-mini / 0x5300 esp32-qmk / 0x5301 qmk-h7s
-//   0x5304 wish-he  <- 직전 최신
+//   0x5304 WISH60-HE / 0x5305 WISH61-HE  <- 직전 최신
+//
+// ★ 한때 0x5305 를 썼다가 0x5306 으로 옮겼다.
+//
+//   WISH61-HE 가 나중에 0x5305 를 가져가면서 부딪혔다. 둘을 같이 꽂으면
+//   flash.py 가 엉뚱한 보드에 1200bps touch 를 보내고, kbd_upload.py 의
+//   레이아웃 명령이 WISH61-HE 로 갈 수 있었다. VIA 도 정의를 잘못 고른다.
+//   **새 보드를 만들 때는 여기 목록을 먼저 갱신한다.**
 //
 #define _USE_HW_USB
 #define      HW_USB_VID             0x0483
-#define      HW_USB_PID             0x5305
+#define      HW_USB_PID             0x5306
 
 // ★ vial 트리는 시리얼 번호가 매직으로 시작해야 한다.
 //

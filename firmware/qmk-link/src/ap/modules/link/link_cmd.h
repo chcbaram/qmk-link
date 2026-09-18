@@ -122,7 +122,7 @@
 #define LINK_TREE_VIAL        1
 
 // ★ 저장된 키보드마다 PID 를 다르게 보고한다 (VIA 가 정의를 자동으로 고르게).
-//   0x5400 + 슬롯. 다른 baram 키보드(0x5200~0x5305)와 겹치지 않는 블록이다.
+//   0x5400 + 슬롯. 다른 baram 키보드(0x5200~0x5306)와 겹치지 않는 블록이다.
 //   → firmware/docs/09-keyboard-profile.md
 #define LINK_PID_BASE         0x5400
 

@@ -54,7 +54,7 @@ if (tud_suspended() == true) return LED_ST_SUSPEND;   /* 최우선 */
 서스펜드 중에는 키 반짝임도 하지 않는다. 자는 PC 옆에서 혼자 빛나지 않게,
 그리고 서스펜드 전류를 줄이기 위해서다.
 
-### 4. VID / PID 확정 — `0483:5305`
+### 4. VID / PID 확정 — `0483:5306`
 
 **네 곳이 일치해야 한다.** 하나라도 어긋나면 VIA/Vial 이 장치를 못 찾거나
 `flash.py` 가 엉뚱한 보드를 리셋한다.
@@ -70,7 +70,7 @@ if (tud_suspended() == true) return LED_ST_SUSPEND;   /* 최우선 */
 
 ★ **09단계에서 PID 가 고정이 아니게 됐다.** 꽂힌 키보드의 레이아웃 SLOT 에 따라
 `0x5400`+SLOT 으로 바꿔 보고한다 (VIA 가 정의를 VID/PID 로 찾기 때문이다).
-`0x5305` 는 담아 둔 것이 없을 때의 값이다. **PID 로 장치를 찾는 코드는 범위로
+`0x5306` 은 담아 둔 것이 없을 때의 값이다. **PID 로 장치를 찾는 코드는 범위로
 봐야 한다** — `flash.py` 의 `FW_PID_LIST` → [09-keyboard-profile.md](09-keyboard-profile.md)
 
 ### 5. 허브 — 이미 켜져 있다

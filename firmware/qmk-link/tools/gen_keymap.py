@@ -36,7 +36,7 @@ ROOT = Path(__file__).resolve().parent.parent
 BOARDS = ROOT / "keyboards"
 DEFAULT_BOARD = "qmk-link"
 
-VID, PID = "0x0483", "0x5305"
+VID, PID = "0x0483", "0x5306"
 ROWS, COLS = 16, 16
 
 

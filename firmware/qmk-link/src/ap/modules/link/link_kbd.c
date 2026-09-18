@@ -34,7 +34,7 @@ bool linkKbdInit(void)
 //
 // ★ VIA 를 위한 것이다.
 //
-//   VIA 는 정의를 VID/PID 로 찾는다. 우리가 늘 0x5305 하나면 VIA 안에 정의가
+//   VIA 는 정의를 VID/PID 로 찾는다. 우리가 늘 0x5306 하나면 VIA 안에 정의가
 //   한 벌만 남아서, 키보드를 바꿔 꽂을 때마다 Design 탭에 JSON 을 다시 넣어야
 //   한다. 칸마다 PID 를 달리 보고하면 VIA 가 알아서 고른다.
 //
@@ -43,7 +43,7 @@ bool linkKbdInit(void)
 //   Vial 앱을 새로 열어야 배열이 바뀐다.
 //
 // ★ 칸이 없으면 원래 PID 로 돌아온다. 그래야 저장한 게 없을 때 늘 같은
-//   0483:5305 로 보이고, flash.py 나 도구가 헤매지 않는다.
+//   0483:5306 으로 보이고, flash.py 나 도구가 헤매지 않는다.
 void linkKbdApplySlot(void)
 {
   static int slot_pre = -2;          /* -1 도 유효한 값이라 -2 로 시작한다 */

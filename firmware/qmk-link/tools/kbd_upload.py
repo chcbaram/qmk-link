@@ -48,8 +48,8 @@ REPORT_LEN = 32
 #   raw HID 를 갖고 있어서, VID 만 걸러면 그쪽을 열고 "모르는 명령(0xFF)" 을
 #   받는다. 실제로 그것 때문에 "칸이 비었다" 는 엉뚱한 답을 봤다.
 #
-#   0x5305 는 지금 PID, 0x5400~0x540F 는 저장된 레이아웃마다 바뀌는 PID 다.
-PID_LIST = [0x5305] + list(range(0x5400, 0x5410))
+#   0x5306 은 지금 PID, 0x5400~0x540F 는 저장된 레이아웃마다 바뀌는 PID 다.
+PID_LIST = [0x5306] + list(range(0x5400, 0x5410))
 
 CMD = 0xA0
 INFO, PRESSED, SLOT_INFO, SLOT_READ, SLOT_BEGIN, SLOT_DATA, SLOT_COMMIT, SLOT_ERASE = range(8)

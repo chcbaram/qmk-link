@@ -1,7 +1,7 @@
 {
   "name": "QMK-LINK VIAL",
   "vendorId": "0x0483",
-  "productId": "0x5305",
+  "productId": "0x5306",
   "lighting": "none",
   "matrix": {
     "rows": 16,

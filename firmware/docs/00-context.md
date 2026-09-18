@@ -45,9 +45,9 @@ PC 에는 **VIA / Vial 로 편집 가능한 키보드**로 보이게 한다.
 
 실측: via FLASH 122,764 B / vial 141,164 B, RAM 238~258 KB / 512 KB (copy_to_ram).
 RAM 이 커진 것은 EEPROM 섀도가 16KB → 80KB 가 됐기 때문이다 (키맵 프로파일 17벌).
-`0483:5305 QMK-LINK` 로 열거된다 — HID(keyboard / extra / raw) + CDC 복합 장치.
+`0483:5306 QMK-LINK` 로 열거된다 — HID(keyboard / extra / raw) + CDC 복합 장치.
 ★ 09단계부터 **PID 가 고정이 아니다.** 꽂힌 키보드의 레이아웃 SLOT 에 따라
-`0x5400`+SLOT 으로 바뀐다. 담아 둔 것이 없을 때만 `0x5305` 다.
+`0x5400`+SLOT 으로 바뀐다. 담아 둔 것이 없을 때만 `0x5306` 다.
 `clk_sys` 는 CLI 에서 120,000,000 Hz 확인.
 
 **지금 동작하는 것**
@@ -91,8 +91,11 @@ Vial 앱 인식(시리얼에 매직) · 매크로/탭댄스 리포트 유실(HID
 보드 위에서는 CLI `key sim` 이 가상 키를 넣고 QMK 가 만든 리포트를 보여준다
 (호스트로는 안 내보낸다).
 
-★ `flash.py` 가 포트를 잘못 고를 수 있다 — `WISH61-HE` 도 `0483:5305` 라
-같이 꽂혀 있으면 그쪽으로 1200bps touch 가 간다. `--port` 로 지정한다.
+★ **PID 를 `0x5305` → `0x5306` 으로 옮겼다** (2026-09-19). WISH61-HE 가
+`0x5305` 를 가져가면서 부딪혔다 — 같이 꽂으면 `flash.py` 가 엉뚱한 보드에
+1200bps touch 를 보내고 `kbd_upload.py` 명령도 그쪽으로 갈 수 있었다.
+`flash.py` 는 후보가 여럿이면 말없이 고르지 않고 `--port` 를 요구하게 바꿨다.
+**v1.1.0 까지 쓰던 사람은 VIA 정의를 다시 넣어야 한다.**
 
 BOOTSEL 진입 경로 (전부 실기 확인):
 1. `flash.py` 의 CDC 1200bps touch — 버튼 없이 굽는다
@@ -313,7 +316,7 @@ void apMain(void)
 | **SLOT 이 곧 키맵 프로파일** | 개념을 둘로 늘리지 않는다. `[SLOT 추가]` 하면 배열과 키맵이 같이 생기고, 새 SLOT 은 쓰던 키맵을 물려받는다. `kbd_sel_t` 의 `profile` 바이트는 남겨 뒀지만 안 쓴다 |
 | **EEPROM 을 저장소 *아래*로** | 프로파일 17벌이면 트리당 80KB 다. 저장소 위(`0x1F0000`)에서 키우면 선택 표와 부딪히고, 저장소를 옮기면 담아 둔 배열이 날아간다. 아래(`0x1A0000`/`0x1B4000`)로 내리면 저장소·선택 표 주소가 그대로다 |
 | **키맵 프로파일은 `eeprom.c` 에서 주소만 옮긴다** | `nvm_dynamic_keymap.c` 를 복사해 오는 대신 `eeprom_read_block`/`write_block` 에서 옮긴다. upstream 을 안 건드리고 트리당 파일 한 벌만 본다 |
-| **VID/PID = `0483:5305`** | VID 는 baram 키보드 공통(0x0483). PID 는 안 겹치는 값 — 5200 hs-k / 5201 45k-hs / 5207 qmk-8k / 5211 convex / 5220 Lucky65 / 5230 hola-mini / 5300 esp32-qmk / 5301 qmk-h7s / **5304 wish-he** 다음 |
+| **VID/PID = `0483:5306`** | VID 는 baram 키보드 공통(0x0483). PID 는 안 겹치는 값 — 5200 hs-k / 5201 45k-hs / 5207 qmk-8k / 5211 convex / 5220 Lucky65 / 5230 hola-mini / 5300 esp32-qmk / 5301 qmk-h7s / 5304 WISH60-HE / **5305 WISH61-HE** 다음. ★ 처음엔 5305 를 썼는데 WISH61-HE 와 부딪혀 5306 으로 옮겼다 (2026-09-19). 새 보드는 이 목록을 먼저 갱신한다 |
 | **변환기는 키보드가 보내는 것만 받는다** | HHKB 의 Fn 은 리포트에 안 나온다. 조합의 결과 키코드만 온다. Fn 을 레이어 키로 쓸 수 없다 → [04-usb-device-hid.md](04-usb-device-hid.md#알아-둘-것--변환기의-근본적인-제약) |
 | **부트 키보드는 IF0 이어야 한다** | 일부 BIOS 가 IF0 만 본다 (wish-he 의 `usb_desc.h` 에 기록된 함정). 04단계에서 CDC 를 뒤로 밀고 키보드를 IF0 으로 옮긴다 |
 | **HID 리포트 ID 는 QMK 값** | mouse 2 / system 3 / consumer 4 / NKRO 6. `qmk/port/protocol/report.h` 와 어긋나면 05단계에서 곤란해진다 |
