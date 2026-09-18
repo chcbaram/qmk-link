@@ -11,6 +11,12 @@ USB-A 에 꽂힌 아무 키보드나 받아서 QMK 의 키 처리(레이어 · �
 PC 에는 **VIA / Vial 로 편집 가능한 키보드**로 보이게 한다.
 Type-C 쪽에 CDC 도 얹어 CLI · 디버그 · 펌웨어 업데이트를 처리한다.
 
+### 설정은 브라우저에서 — <https://chcbaram.github.io/qmk-link/>
+
+**배열 마법사.** 꽂은 키보드의 키를 눌러 배열을 만들고 보드에 담는다.
+설치할 것도, 내려받을 파일도 없다 (WebHID 를 쓰므로 Chrome · Edge).
+담아 두면 그 키보드를 꽂을 때마다 **제 배열과 제 키맵**으로 자동 전환된다.
+
 ---
 
 ## 보드 — RP2350-USB-A
@@ -43,7 +49,9 @@ Type-C 쪽에 CDC 도 얹어 CLI · 디버그 · 펌웨어 업데이트를 처�
 | [06 VIA](firmware/docs/06-via.md) | ✅ 완료 |
 | [07 VIAL](firmware/docs/07-vial.md) | ✅ 완료 |
 | [08 마감](firmware/docs/08-finalize.md) | ✅ 완료 |
-| [09 키보드 프로파일](firmware/docs/09-keyboard-profile.md) | ⬜ 검토 완료 |
+| [09 키보드 프로파일](firmware/docs/09-keyboard-profile.md) | ✅ 완료 |
+
+보고된 문제와 그 원인·수정은 [`firmware/docs/issues/`](firmware/docs/issues/README.md).
 
 전체 계획: [`firmware/docs/roadmap.md`](firmware/docs/roadmap.md)
 
@@ -109,6 +117,15 @@ OS 별 picotool 바이너리가 필요 없다. `flash.py` 하나로 macOS / Wind
 2. Type-C 를 PC 에 연결한다 — LED 가 **초록**이면 둘 다 붙은 것이다
 3. 그대로 타이핑된다. 설정 없이 동작한다
 
+### 배열 만들기 — <https://chcbaram.github.io/qmk-link/>
+
+담아 둔 것이 없으면 **풀사이즈 한 벌**로 보인다. 동작에는 문제가 없지만
+편집 화면에 없는 키가 섞인다. 마법사로 그 키보드의 배열을 만들어 담으면
+화면이 실제 키보드와 같아지고, 키맵도 그 키보드 전용으로 갈린다.
+
+키보드 16대까지 담긴다. 꽂는 대로 자동으로 바뀐다.
+CLI 로 보려면 `kbd`, 파일로 넣고 빼려면 [`tools/kbd_upload.py`](firmware/qmk-link/tools/kbd_upload.py).
+
 ### 키맵 편집
 
 | | |
@@ -120,7 +137,9 @@ Vial 은 편집 전에 **잠금 해제**가 필요하다 — **좌우 Shift 를 
 
 ### 배열에 대해
 
-배열은 **풀사이즈로 그려져 있다.** 이 보드의 매트릭스 좌표가 HID usage 라
+담아 둔 것이 없을 때의 기본 배열은 **풀사이즈로 그려져 있다.**
+(마법사로 담으면 그 키보드의 배열이 대신 쓰인다.)
+이 보드의 매트릭스 좌표가 HID usage 라
 (`row = usage>>4`, `col = usage&0xF`) TKL · 75% · 65% · 60% 는 전부 그 부분집합이다.
 ISO Enter 든 ANSI Enter 든 같은 `0x28` 이라 레이아웃 옵션도 필요 없다.
 
