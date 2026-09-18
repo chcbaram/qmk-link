@@ -233,7 +233,26 @@ const uint8_t *tud_descriptor_configuration_cb(uint8_t index)
 
 //-- String Descriptor
 //
-static char serial_str[2 * PICO_UNIQUE_BOARD_ID_SIZE_BYTES + 1];
+/*
+ * ★ 시리얼 번호 — 앞에 접두어가 붙을 수 있다 (hw_def.h 의 HW_USB_SERIAL_PREFIX).
+ *
+ *   vial 트리는 "vial:f64c2b3c:" 로 시작해야 Vial 데스크톱 앱이 장치를 찾는다.
+ *   뒤에는 칩 고유 ID 를 그대로 붙여 여러 대를 구분할 수 있게 둔다.
+ *
+ *   ★ 길이가 빠듯하다. string descriptor 는 desc_str 크기에 묶여
+ *     최대 31 글자다 — "vial:f64c2b3c:"(14) + 고유 ID(16) = 30 이라 겨우 들어간다.
+ *     접두어를 늘리면 조용히 잘리고, 그러면 매직은 남아도 기기 구분이 깨진다.
+ *     아래 _Static_assert 가 그때 빌드를 세운다.
+ */
+#ifdef HW_USB_SERIAL_PREFIX
+#define SERIAL_PREFIX     HW_USB_SERIAL_PREFIX
+#else
+#define SERIAL_PREFIX     ""
+#endif
+
+#define SERIAL_STR_LEN    (sizeof(SERIAL_PREFIX) - 1 + 2 * PICO_UNIQUE_BOARD_ID_SIZE_BYTES)
+
+static char serial_str[SERIAL_STR_LEN + 1];
 
 static const char *string_desc_arr[] =
 {
@@ -249,6 +268,10 @@ static const char *string_desc_arr[] =
 };
 
 static uint16_t desc_str[32];
+
+// 시리얼이 잘리면 매직만 남고 고유 ID 가 사라진다. 빌드 때 잡는다.
+_Static_assert(SERIAL_STR_LEN <= (sizeof(desc_str)/sizeof(desc_str[0]) - 1),
+               "USB 시리얼 번호가 string descriptor 에 안 들어간다");
 
 const uint16_t *tud_descriptor_string_cb(uint8_t index, uint16_t langid)
 {
@@ -303,7 +326,13 @@ void usbdDescInit(void)
 {
   // 보드마다 다른 시리얼 번호를 쓴다.
   // 여러 대를 꽂았을 때 호스트가 구분할 수 있어야 한다.
-  pico_get_unique_board_id_string(serial_str, sizeof(serial_str));
+  //
+  // vial 트리는 앞에 매직이 붙는다 (위 ★ 주석). 고유 ID 는 그 뒤에 쓴다.
+  const uint8_t prefix_len = sizeof(SERIAL_PREFIX) - 1;
+
+  memcpy(serial_str, SERIAL_PREFIX, prefix_len);
+  pico_get_unique_board_id_string(&serial_str[prefix_len],
+                                  sizeof(serial_str) - prefix_len);
 }
 
 #endif

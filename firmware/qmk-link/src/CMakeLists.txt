@@ -36,6 +36,13 @@ string(TOUPPER ${KEY_PROTOCOL} KEY_PROTOCOL_UPPER)
 target_compile_definitions(${PRJ_NAME} PRIVATE
   KEY_PROTOCOL_NAME="${KEY_PROTOCOL_UPPER}")
 
+# ★ hw 층에게 "지금 vial 트리다" 를 알린다.
+#   USB 시리얼 번호에 Vial 매직을 붙이는 데 쓴다 (hw_def.h 의 HW_USB_SERIAL_PREFIX).
+#   QMK 의 VIAL_ENABLE 을 hw 가 직접 보면 계층이 깨지므로 이름을 따로 둔다.
+if(KEY_PROTOCOL STREQUAL "vial")
+  target_compile_definitions(${PRJ_NAME} PRIVATE KEY_PROTOCOL_VIAL)
+endif()
+
 target_include_directories(${PRJ_NAME} PUBLIC
   .
   ap

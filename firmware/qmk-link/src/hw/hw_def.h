@@ -27,6 +27,22 @@
 #define      HW_USB_VID             0x0483
 #define      HW_USB_PID             0x5305
 
+// ★ vial 트리는 시리얼 번호가 매직으로 시작해야 한다.
+//
+//   Vial 데스크톱 앱(hidapi)은 시리얼에 이 문자열이 들어 있는 장치만
+//   Vial 키보드로 본다. 없으면 VID/PID 가 via-stack 목록에 있어야 하는데
+//   우리 PID 는 거기 없어서 목록에 아예 안 뜬다 — 웹(WebHID)은 시리얼을
+//   못 읽어 usage page 로 고르므로 그쪽만 됐던 것이다.
+//
+//   vial-qmk 는 빌드 때 이 값을 박는다 (builddefs/build_vial.mk).
+//   Vial 은 **포함 여부**만 보므로 뒤에 칩 고유 ID 를 붙여 기기 구분을 살린다.
+//
+//   ★ 매크로 이름은 hw 층의 것이다. usbd_desc.c 가 VIAL_ENABLE(QMK 매크로)을
+//     직접 보면 계층이 깨진다. CMake 가 KEY_PROTOCOL_NAME 처럼 내려준다.
+#ifdef KEY_PROTOCOL_VIAL
+#define      HW_USB_SERIAL_PREFIX   "vial:f64c2b3c:"
+#endif
+
 //-- FLASH
 //
 // W25Q16JV = 2MB. 끝 64KB 를 데이터 영역으로 예약한다 (펌웨어는 여기까지 오지 않는다).
