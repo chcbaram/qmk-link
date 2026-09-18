@@ -165,21 +165,31 @@ Type-C 의 CDC 포트로 붙는다 (115200). **엔터는 `\r` 만** — `\r\n` �
 |---|---|
 | `qmk info` / `qmk matrix` | QMK 상태 · 눌린 usage 보기 |
 | `qmk eeprom` | 키맵 저장 상태 |
+| `kbd info` / `kbd sel` / `kbd erase` | 담아 둔 배열(SLOT) 목록 · 고르기 · 지우기 |
 | `key info` | 키 입력 경로 진단 (리포트가 어디서 막히는지) |
-| `usbh info` | USB 호스트 · 꽂힌 키보드 |
+| `key sim tap <usage>` | 가상 키를 넣고 QMK 가 만든 리포트를 본다 (호스트로는 안 나간다) |
+| `usbh info` / `usbh dump` | USB 호스트 · 꽂힌 키보드 |
+| `usb info` | PC 쪽 연결 · 지금 보고 중인 PID |
 | `flash info` / `flash test` | 플래시 |
 | `reset boot` | BOOTSEL 진입 |
+
+`help` 로 전체 목록을 본다.
 
 ---
 
 ## 구조
 
 ```
+hardware/           회로도
+web/                배열 마법사 (GitHub Pages 로 배포)
 firmware/
-├── docs/           설계 · 로드맵 · 개발환경 문서
+├── docs/           설계 · 로드맵 · 개발환경 문서 (issues/ 포함)
 ├── firm-sdk/       외부 SDK (pico-sdk 2.3.0) + 파이썬 도구
 └── qmk-link/       펌웨어 프로젝트
-    └── src/        main → bsp → hw → ap
+    ├── src/        main → bsp → hw → ap
+    ├── keyboards/  배열 정의 (layout-kle.json 하나만 손으로 고친다)
+    ├── tools/      gen_keymap.py · kbd_upload.py
+    └── test/       호스트에서 도는 시뮬레이션 (make)
 ```
 
 이어서 작업하려면 [`firmware/docs/00-context.md`](firmware/docs/00-context.md) 부터 읽는다.
