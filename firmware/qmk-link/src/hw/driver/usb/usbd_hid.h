@@ -35,6 +35,10 @@ enum
 #define HID_NKRO_REPORT_LEN   (1 + HID_NKRO_KEY_BYTES)  // 모디파이어 + 비트맵
 #define HID_RAW_REPORT_LEN    32
 
+// 못 보낸 리포트를 쌓아 두는 큐의 깊이 (usbd_hid.c 의 ★ 주석 참고)
+#define USBD_HID_KBD_QUEUE_MAX    16
+#define USBD_HID_EXTRA_QUEUE_MAX  16
+
 
 // 진단용 — PC 로 나가는 키보드 리포트가 어디서 막히는지 본다.
 typedef struct
@@ -45,29 +49,46 @@ typedef struct
   uint32_t sent_cnt;
   uint32_t fail_cnt;
   uint32_t retry_cnt;
-  bool     pending;
+  uint32_t wait_cnt;      // 큐가 꽉 차 기다린 횟수
+  uint32_t over_cnt;      // 기다려도 안 빠져 마지막 칸을 덮은 횟수
+  uint8_t  depth;         // 지금 큐에 쌓인 개수
+  uint8_t  depth_max;     // 지금까지 최대
   bool     is_ready;
   bool     is_mount;
   bool     is_susp;
 } usbd_hid_kbd_stat_t;
 
+// 진단용 — IF1(Extra) 큐. NKRO · 마우스 · 컨슈머 · 시스템이 같이 탄다.
+typedef struct
+{
+  uint32_t try_cnt;
+  uint32_t sent_cnt;
+  uint32_t busy_cnt;
+  uint32_t fail_cnt;
+  uint32_t wait_cnt;
+  uint32_t over_cnt;
+  uint8_t  depth;
+  uint8_t  depth_max;
+} usbd_hid_extra_stat_t;
+
 void usbdHidGetKbdStat(usbd_hid_kbd_stat_t *p_stat);
+void usbdHidGetExtraStat(usbd_hid_extra_stat_t *p_stat);
 
 
 bool usbdHidInit(void);
 
 // ★ 메인 루프에서 계속 부른다 (ap.c 의 cliLoopIdle).
-//   엔드포인트가 바빠서 못 보낸 키 리포트를 여기서 마저 보낸다.
+//   큐에 쌓인 리포트를 엔드포인트가 빌 때마다 하나씩 꺼내 보낸다.
 void usbdHidUpdate(void);
 
 // 호스트가 붙어서 리포트를 받을 준비가 됐나
 bool usbdHidIsReady(uint8_t itf);
 
-// boot keyboard 리포트 8바이트를 그대로 보낸다.
-// 직전과 같으면 아무것도 하지 않는다 (아래 주석 참고).
+// boot keyboard 리포트 8바이트를 큐에 넣는다 (usbd_hid.c 의 ★ 주석 참고).
+// 직전에 **큐에 넣은 것**과 같으면 아무것도 하지 않는다.
 bool usbdHidSendKeyboard(const uint8_t *p_report);
 
-// IF1(Extra) 로 보낸다. 첫 바이트가 리포트 ID 다.
+// IF1(Extra) 로 보낸다. 첫 바이트가 리포트 ID 다. 이쪽도 큐를 탄다.
 // QMK 의 report_nkro_t / report_mouse_t / report_extra_t 를 그대로 넘긴다.
 bool usbdHidSendExtra(const uint8_t *p_report, uint16_t len);
 

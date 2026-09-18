@@ -310,16 +310,28 @@ static void cliCmd(cli_args_t *args)
     cliPrintf("link set     : %d\n", linkGetSetCount());
 
     {
-      usbd_hid_kbd_stat_t st;
+      usbd_hid_kbd_stat_t   st;
+      usbd_hid_extra_stat_t ex;
 
       usbdHidGetKbdStat(&st);
       cliPrintf("PC 로 보내기 (IF0 키보드)\n");
       cliPrintf("  호출 %d  보냄 %d  같아서 건너뜀 %d\n",
                 st.try_cnt, st.sent_cnt, st.same_cnt);
-      cliPrintf("  not ready %d   전송실패 %d   나중에보냄 %d   보류 %d\n",
-                st.busy_cnt, st.fail_cnt, st.retry_cnt, st.pending);
+      cliPrintf("  not ready %d   전송실패 %d   나중에보냄 %d\n",
+                st.busy_cnt, st.fail_cnt, st.retry_cnt);
+      cliPrintf("  큐 %d/%d  최대 %d  기다림 %d  넘침 %d\n",
+                st.depth, USBD_HID_KBD_QUEUE_MAX, st.depth_max,
+                st.wait_cnt, st.over_cnt);
       cliPrintf("  ready %d  mounted %d  suspend %d\n",
                 st.is_ready, st.is_mount, st.is_susp);
+
+      usbdHidGetExtraStat(&ex);
+      cliPrintf("PC 로 보내기 (IF1 NKRO·마우스·미디어)\n");
+      cliPrintf("  호출 %d  보냄 %d  not ready %d  전송실패 %d\n",
+                ex.try_cnt, ex.sent_cnt, ex.busy_cnt, ex.fail_cnt);
+      cliPrintf("  큐 %d/%d  최대 %d  기다림 %d  넘침 %d\n",
+                ex.depth, USBD_HID_EXTRA_QUEUE_MAX, ex.depth_max,
+                ex.wait_cnt, ex.over_cnt);
     }
 
     dumpReport("last ok  ", &kbd_last_ok);
