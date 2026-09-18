@@ -117,13 +117,14 @@ OS 별 picotool 바이너리가 필요 없다. `flash.py` 하나로 macOS / Wind
 2. Type-C 를 PC 에 연결한다 — LED 가 **초록**이면 둘 다 붙은 것이다
 3. 그대로 타이핑된다. 설정 없이 동작한다
 
-### 배열 만들기 — <https://chcbaram.github.io/qmk-link/>
+### 배열 만들기
 
 담아 둔 것이 없으면 **풀사이즈 한 벌**로 보인다. 동작에는 문제가 없지만
 편집 화면에 없는 키가 섞인다. 마법사로 그 키보드의 배열을 만들어 담으면
 화면이 실제 키보드와 같아지고, 키맵도 그 키보드 전용으로 갈린다.
 
-키보드 16대까지 담긴다. 꽂는 대로 자동으로 바뀐다.
+[**배열 마법사**](https://chcbaram.github.io/qmk-link/) 에서 만든다. 키보드 16대까지
+담기고 꽂는 대로 자동으로 바뀐다.
 CLI 로 보려면 `kbd`, 파일로 넣고 빼려면 [`tools/kbd_upload.py`](firmware/qmk-link/tools/kbd_upload.py).
 
 ### 키맵 편집
