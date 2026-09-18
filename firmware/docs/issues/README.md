@@ -5,7 +5,7 @@
 
 | 문서 | 상태 | 한 줄 |
 |---|---|---|
-| [001-vial-app-macro-tapdance.md](001-vial-app-macro-tapdance.md) | ⬜ 분석 완료 · 미수정 | Vial 앱 인식 안 됨 · 매크로 / 탭댄스 다중 키 유실 |
+| [001-vial-app-macro-tapdance.md](001-vial-app-macro-tapdance.md) | 🟨 수정 완료 · 실기 확인 대기 | Vial 앱 인식 안 됨 · 매크로 / 탭댄스 다중 키 유실 |
 
 ## 규칙
 
