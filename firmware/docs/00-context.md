@@ -79,6 +79,12 @@ RAM 이 커진 것은 EEPROM 섀도가 16KB → 80KB 가 됐기 때문이다 (�
 suspend 소등, 마우스 패스스루, BIOS 화면, Windows / Linux
 → [08-finalize.md](08-finalize.md#미검증--장비환경이-없어서-못-잰-것)
 
+**★ 지금 손에 들고 있는 것 — [이슈 001](issues/001-vial-app-macro-tapdance.md) 실기 확인**
+(2026-09-19). 코드는 고쳤고 **아직 실기에서 재현도 확인도 안 했다.**
+Vial 앱 인식(시리얼에 매직) · 매크로/탭댄스 리포트 유실(HID 리포트 큐) ·
+`qmkUpdate()` 재진입 가드. 문서의 "검증" 절차를 밟아야 닫힌다.
+**vial 트리는 USB 시리얼 번호가 바뀌었다** — `vial:f64c2b3c:<칩고유ID>`.
+
 BOOTSEL 진입 경로 (전부 실기 확인):
 1. `flash.py` 의 CDC 1200bps touch — 버튼 없이 굽는다
 2. Key2(Reset) 빠르게 두 번 — `pico_bootsel_via_double_reset`
