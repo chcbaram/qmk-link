@@ -48,6 +48,10 @@ void    qmkProfileCopyTo(uint8_t profile);
 // 메인 루프에서 부른다. QMK 가 안 올라왔으면 아무것도 안 한다.
 void qmkUpdate(void);
 
+// qmkUpdate() 안인가. QMK 가 wait_ms() 로 delay() 를 타면 cliLoopIdle() 이
+// 돌아 여기로 되돌아온다. 그때 건드리면 안 되는 것을 이걸로 막는다.
+bool qmkIsBusy(void);
+
 
 #ifdef __cplusplus
  }

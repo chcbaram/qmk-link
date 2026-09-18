@@ -87,6 +87,13 @@ void cliLoopIdle(void)
   //   레이아웃을 담는 우리 raw HID 명령이 거기서 처리되고, 담자마자
   //   kbdStoreReselect() 로 칸이 바뀐다. 응답은 이미 나간 뒤라 여기서 끊어도
   //   업로드 도구가 답을 놓치지 않는다.
-  linkKbdApplySlot();
+  //
+  // ★ QMK 안에서 되돌아온 길이면 건너뛴다.
+  //
+  //   wait_ms() -> delay() -> cliLoopIdle() 로 keyboard_task() 한가운데서
+  //   여기 올 수 있다. 이 함수는 qmkSetProfile() 로 clear_keyboard() ·
+  //   layer_clear() 를 부른다 — 탭댄스가 판정 중인 키와 레이어가 날아간다.
+  //   칸이 바뀌는 건 키보드를 꽂거나 뺄 때뿐이라 한 루프 미뤄도 된다.
+  if (qmkIsBusy() != true) linkKbdApplySlot();
 #endif
 }
