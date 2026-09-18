@@ -1,0 +1,5 @@
+build/
+
+# 저장소 루트의 .gitignore 가 CMake 때문에 Makefile 을 막는다.
+# 여기 Makefile 은 손으로 쓴 것이라 되살린다.
+!Makefile
