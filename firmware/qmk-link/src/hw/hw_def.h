@@ -5,7 +5,11 @@
 #include "bsp.h"
 
 
-#define _DEF_FIRMWATRE_VERSION    "V260823R3"
+// V<YYMMDD>R<n> — 날짜가 바뀌면 R1 부터 (다른 baram 프로젝트 관례).
+// ★ 펌웨어를 바꾸면 여기도 올린다. 웹 마법사와 부팅 로그가 이 값을 보여준다
+//   (link_cmd.c 의 버전 응답 · hw.c 의 Booting 로그).
+//   v1.1.0 은 이걸 안 올리고 나갔다 — 09단계 내내 V260823R3 로 남아 있었다.
+#define _DEF_FIRMWATRE_VERSION    "V260919R1"
 // ★ 이름 뒤에 트리를 붙인다 (KEY_PROTOCOL_NAME 은 CMake 가 준다).
 //   USB 제품 이름이 "QMK-LINK VIA" / "QMK-LINK VIAL" 로 갈려서
 //   지금 어느 펌웨어가 올라가 있는지 OS 에서 바로 보인다.
