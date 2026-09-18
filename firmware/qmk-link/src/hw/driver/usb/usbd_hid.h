@@ -69,10 +69,53 @@ typedef struct
   uint32_t over_cnt;
   uint8_t  depth;
   uint8_t  depth_max;
+  bool     is_ready;      // 엔드포인트가 지금 비어 있나
 } usbd_hid_extra_stat_t;
 
 void usbdHidGetKbdStat(usbd_hid_kbd_stat_t *p_stat);
 void usbdHidGetExtraStat(usbd_hid_extra_stat_t *p_stat);
+
+//-- 출력 기록 (trace)
+//
+// ★ PC 로 **실제로 나간** 리포트만 남긴다.
+//
+//   보드에서 매크로 · 탭댄스를 시험할 때 "무엇이 나갔나" 를 PC 쪽에서 따로
+//   들여다보지 않아도 되게 하는 것이다. `key tap` 으로 가상 키를 넣고
+//   여기를 보면 QMK 가 만든 리포트 열이 그대로 보인다.
+//   (호스트에서 도는 큐 시뮬레이션은 test/ 에 따로 있다)
+#define USBD_HID_TRACE_MAX    64
+
+// 리포트가 어느 지점을 지났나. 둘을 나란히 봐야 **어디서** 사라졌는지 안다.
+enum
+{
+  USBD_HID_STAGE_REQ = 0,   // QMK 가 보내 달라고 한 것 (큐에 들어가기 직전)
+  USBD_HID_STAGE_TX,        // 엔드포인트로 실제 나간 것
+};
+
+typedef struct
+{
+  uint32_t time_ms;
+  uint8_t  stage;        // USBD_HID_STAGE_*
+  uint8_t  itf;          // HID_ITF_KEYBOARD / HID_ITF_EXTRA
+  uint8_t  id;           // 리포트 ID (키보드는 0)
+  uint8_t  len;
+  uint8_t  data[8];
+} usbd_hid_trace_t;
+
+void     usbdHidTraceSet(bool enable);   // 켜면 먼저 비운다
+bool     usbdHidTraceIsOn(void);
+uint32_t usbdHidTraceCount(void);        // 기록된 개수
+uint32_t usbdHidTraceDropped(void);      // 자리가 없어 못 남긴 개수
+bool     usbdHidTraceGet(uint32_t index, usbd_hid_trace_t *p_item);
+
+// ★ 호스트로 실제 내보낼 것인가. **기본은 켜짐**이다 (평상시 키보드니까).
+//
+//   끄면 QMK 가 만든 리포트를 trace 에만 남기고 PC 로는 안 보낸다.
+//   CLI 로 가상 키를 주입해 시험할 때 쓴다 — 주입한 키는 진짜 키와 구별이
+//   안 되므로 그대로 호스트에 입력된다. 시험을 걸어 놓고 손을 떼면 그 키가
+//   지금 열려 있는 아무 창에나 쏟아진다 (wish-he 의 `keys inject live` 관례).
+void     usbdHidSetOutput(bool enable);
+bool     usbdHidGetOutput(void);
 
 
 bool usbdHidInit(void);

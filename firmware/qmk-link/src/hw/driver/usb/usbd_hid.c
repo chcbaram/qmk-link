@@ -112,6 +112,41 @@ static volatile uint32_t extra_wait_cnt = 0;
 static volatile uint32_t extra_over_cnt = 0;
 static volatile uint8_t  extra_depth_max = 0;
 
+// 출력 기록 — PC 로 실제로 나간 리포트 (usbd_hid.h 의 ★ 주석 참고).
+//
+// 평소에는 꺼 둔다. 켜야만 기록해서 일반 타이핑에 부담을 주지 않는다.
+static usbd_hid_trace_t  trace_buf[USBD_HID_TRACE_MAX];
+static volatile uint32_t trace_wr    = 0;
+static volatile uint32_t trace_drop  = 0;
+static volatile bool     trace_on    = false;
+
+static bool              out_enable  = true;
+
+static void usbdHidTraceAdd(uint8_t stage, uint8_t itf, uint8_t id,
+                            const uint8_t *p_data, uint8_t len)
+{
+  usbd_hid_trace_t *p_item;
+
+  if (trace_on != true) return;
+
+  if (trace_wr >= USBD_HID_TRACE_MAX)
+  {
+    // ★ 오래된 것을 밀어내지 않는다. 실험은 **앞쪽**이 중요하다 —
+    //   매크로가 시작할 때 뭐가 나갔는지를 보려는 것이다.
+    trace_drop++;
+    return;
+  }
+
+  p_item = &trace_buf[trace_wr];
+  p_item->time_ms = millis();
+  p_item->stage   = stage;
+  p_item->itf     = itf;
+  p_item->id      = id;
+  p_item->len     = (len > sizeof(p_item->data)) ? sizeof(p_item->data) : len;
+  memcpy(p_item->data, p_data, p_item->len);
+  trace_wr++;
+}
+
 // raw HID 수신 큐. 호스트 -> 우리 방향만 큐를 탄다 (usbd_hid.h 주석 참고).
 #define HID_RAW_QUEUE_MAX   8
 static uint8_t           raw_queue[HID_RAW_QUEUE_MAX][HID_RAW_REPORT_LEN];
@@ -148,6 +183,9 @@ static bool usbdHidFlushKeyboard(void)
     return false;
   }
 
+  usbdHidTraceAdd(USBD_HID_STAGE_TX, HID_ITF_KEYBOARD, 0,
+                  kbd_queue[kbd_rd % KBD_QUEUE_MAX], 8);
+
   kbd_rd++;
   kbd_sent_cnt++;
 
@@ -176,6 +214,9 @@ static bool usbdHidFlushExtra(void)
     extra_fail_cnt++;
     return false;
   }
+
+  usbdHidTraceAdd(USBD_HID_STAGE_TX, HID_ITF_EXTRA, p_item->id,
+                  p_item->data, p_item->len);
 
   extra_rd++;
   extra_sent_cnt++;
@@ -249,6 +290,12 @@ bool usbdHidSendKeyboard(const uint8_t *p_report)
   memcpy(kbd_shadow, p_report, 8);
   kbd_shadow_valid = true;
 
+  usbdHidTraceAdd(USBD_HID_STAGE_REQ, HID_ITF_KEYBOARD, 0, p_report, 8);
+
+  // 시험 중에는 여기서 끊는다 (usbd_hid.h 의 usbdHidSetOutput 주석).
+  // 큐는 아예 안 건드린다 — 시험 모드가 큐 동작을 바꾸면 시험의 뜻이 없어진다.
+  if (out_enable != true) return true;
+
   if (usbdHidKbdIsFull() == true)
   {
     kbd_wait_cnt++;
@@ -305,6 +352,48 @@ void usbdHidGetExtraStat(usbd_hid_extra_stat_t *p_stat)
   p_stat->over_cnt  = extra_over_cnt;
   p_stat->depth     = (uint8_t)(extra_wr - extra_rd);
   p_stat->depth_max = extra_depth_max;
+  p_stat->is_ready  = tud_hid_n_ready(HID_ITF_EXTRA);
+}
+
+void usbdHidTraceSet(bool enable)
+{
+  // ★ 켤 때만 비운다.
+  //
+  //   끌 때도 비우면 실험이 끝나고 덤프하려는 순간 기록이 사라진다.
+  //   실제로 그렇게 짰다가 "나간 리포트가 없다" 만 보고 한참 헤맸다.
+  if (enable == true)
+  {
+    trace_wr   = 0;
+    trace_drop = 0;
+  }
+
+  trace_on = enable;
+}
+
+bool     usbdHidTraceIsOn(void)    { return trace_on; }
+bool     usbdHidGetOutput(void)    { return out_enable; }
+uint32_t usbdHidTraceCount(void)   { return trace_wr; }
+uint32_t usbdHidTraceDropped(void) { return trace_drop; }
+
+void usbdHidSetOutput(bool enable)
+{
+  // ★ 끌 때 큐를 비운다. 끄기 직전에 큐에 남은 리포트가 나중에 켰을 때
+  //   뜬금없이 나가면 안 된다.
+  if (enable != true)
+  {
+    kbd_rd   = kbd_wr;
+    extra_rd = extra_wr;
+  }
+
+  out_enable = enable;
+}
+
+bool usbdHidTraceGet(uint32_t index, usbd_hid_trace_t *p_item)
+{
+  if (index >= trace_wr) return false;
+
+  *p_item = trace_buf[index];
+  return true;
 }
 
 /*
@@ -325,6 +414,10 @@ bool usbdHidSendExtra(const uint8_t *p_report, uint16_t len)
 
   data_len = (uint8_t)(len - 1);
   if (data_len > EXTRA_DATA_MAX) data_len = EXTRA_DATA_MAX;
+
+  usbdHidTraceAdd(USBD_HID_STAGE_REQ, HID_ITF_EXTRA, p_report[0], &p_report[1], data_len);
+
+  if (out_enable != true) return true;
 
   if (usbdHidExtraIsFull() == true)
   {

@@ -293,6 +293,101 @@ static void dumpReport(const char *p_name, const usbh_hid_report_t *p_report)
   cliPrintf("\n");
 }
 
+
+/*
+ * 가상 키 주입 — 보드 위에서 매크로 · 탭댄스를 시험한다.
+ *
+ * ★ 호스트로는 내보내지 않는다. 기록만 한다.
+ *
+ *   주입한 키는 진짜 키와 구별이 안 되므로 그대로 PC 에 입력된다. 시험을 걸어
+ *   놓고 손을 떼면 그 키가 **지금 열려 있는 아무 창에나 쏟아진다.**
+ *   (wish-he 의 `keys inject live` 가 같은 이유로 기본을 꺼 둔다)
+ *
+ *   그래서 이 프로젝트는 플래그를 두지 않는다. **명령 하나가 곧 실험 하나**이고
+ *   끝나면 스스로 원복한다 — "꺼 놓은 걸 잊어서 키보드가 안 먹는" 상태 자체가
+ *   생기지 않는다. 종단간으로 보고 싶으면 진짜 키를 누르면 된다.
+ *
+ * ★ 큐는 안 거친다.
+ *
+ *   출력을 끊으면 엔드포인트가 안 바쁘므로 큐가 차지 않는다. 즉 여기서 보는 건
+ *   **QMK 가 무슨 리포트를 만들어 내는가** 다. 큐 자체는 test/ 의 호스트
+ *   시뮬레이션이 실제 타이밍으로 본다. 둘이 각자 다른 것을 본다.
+ */
+#define SIM_INSTANCE     (LINK_SOURCE_MAX - 1)   /* 진짜 키보드와 안 겹치게 끝칸 */
+
+static void simInject(const uint8_t *p_report)
+{
+  linkSetKeyboardReport(SIM_INSTANCE, p_report, 8);
+}
+
+static void simDump(void)
+{
+  usbd_hid_trace_t item;
+  uint32_t         cnt = usbdHidTraceCount();
+  uint32_t         t0  = 0;
+
+  if (cnt == 0)
+  {
+    cliPrintf("  나간 리포트가 없다 — 그 자리가 빈 키이거나 QMK 가 꺼져 있다\n");
+    return;
+  }
+
+  usbdHidTraceGet(0, &item);
+  t0 = item.time_ms;
+
+  cliPrintf("  %-3s %-7s %-5s %-4s %s\n", "#", "시각", "단계", "IF", "리포트");
+  for (uint32_t i=0; i<cnt; i++)
+  {
+    if (usbdHidTraceGet(i, &item) != true) break;
+
+    cliPrintf("  %-3d +%-6d %-5s IF%-2d ",
+              (int)i, (int)(item.time_ms - t0),
+              item.stage == USBD_HID_STAGE_REQ ? "요청" : "전송",
+              item.itf);
+
+    if (item.itf == HID_ITF_KEYBOARD)
+    {
+      cliPrintf("mods %02X  keys", item.data[0]);
+      for (int k=2; k<8; k++) cliPrintf(" %02X", item.data[k]);
+    }
+    else
+    {
+      cliPrintf("id %d  ", item.id);
+      for (int k=0; k<item.len && k<8; k++) cliPrintf("%02X ", item.data[k]);
+    }
+    cliPrintf("\n");
+  }
+
+  if (usbdHidTraceDropped() > 0)
+    cliPrintf("  ★ 자리가 없어 %d 개를 못 남겼다 (USBD_HID_TRACE_MAX)\n",
+              (int)usbdHidTraceDropped());
+}
+
+// 실험 한 번 — 주입하고, 가라앉기를 기다리고, 기록을 보여주고, 원복한다.
+static void simRun(const uint8_t *p_down, uint16_t hold_ms, uint16_t settle_ms)
+{
+  uint8_t up[8];
+
+  memset(up, 0, sizeof(up));
+
+  usbdHidSetOutput(false);        // 호스트로 안 나간다. 기록만
+  usbdHidTraceSet(true);
+
+  simInject(p_down);
+  delay(hold_ms);                 // delay() 가 cliLoopIdle() 을 돌린다 — QMK 가 돈다
+  simInject(up);
+  delay(settle_ms);               // 탭댄스 타임아웃 · 매크로가 끝날 시간
+
+  usbdHidTraceSet(false);
+
+  simDump();
+
+  // ★ 원복 전에 QMK 가 들고 있는 키를 확실히 뗀다.
+  simInject(up);
+  delay(10);
+  usbdHidSetOutput(true);
+}
+
 static void cliCmd(cli_args_t *args)
 {
   bool ret = false;
@@ -329,9 +424,9 @@ static void cliCmd(cli_args_t *args)
       cliPrintf("PC 로 보내기 (IF1 NKRO·마우스·미디어)\n");
       cliPrintf("  호출 %d  보냄 %d  not ready %d  전송실패 %d\n",
                 ex.try_cnt, ex.sent_cnt, ex.busy_cnt, ex.fail_cnt);
-      cliPrintf("  큐 %d/%d  최대 %d  기다림 %d  넘침 %d\n",
+      cliPrintf("  큐 %d/%d  최대 %d  기다림 %d  넘침 %d  ready %d\n",
                 ex.depth, USBD_HID_EXTRA_QUEUE_MAX, ex.depth_max,
-                ex.wait_cnt, ex.over_cnt);
+                ex.wait_cnt, ex.over_cnt, ex.is_ready);
     }
 
     dumpReport("last ok  ", &kbd_last_ok);
@@ -381,10 +476,46 @@ static void cliCmd(cli_args_t *args)
     ret = true;
   }
 
+  /*
+   * key sim — 가상 키를 넣고 QMK 가 만든 리포트를 본다 (위 ★ 주석).
+   */
+  if (args->argc >= 2 && args->isStr(0, "sim"))
+  {
+    uint8_t  report[8];
+    uint16_t hold_ms = 50;
+
+    memset(report, 0, sizeof(report));
+
+    if (args->argc >= 3 && args->isStr(1, "tap"))
+    {
+      report[2] = (uint8_t)args->getData(2);
+      if (args->argc >= 4) hold_ms = (uint16_t)args->getData(3);
+
+      cliPrintf("가상 키 usage 0x%02X 를 %d ms 누른다 — 호스트로는 안 나간다\n",
+                report[2], hold_ms);
+      simRun(report, hold_ms, 400);
+      ret = true;
+    }
+
+    if (args->argc >= 3 && args->isStr(1, "report"))
+    {
+      // 모디파이어 조합 · 롤오버용. boot 리포트 8바이트를 그대로 준다.
+      for (int i=0; i<8 && (i+2) < args->argc; i++)
+        report[i] = (uint8_t)args->getData(i+2);
+
+      cliPrintf("가상 리포트를 %d ms 넣는다 — 호스트로는 안 나간다\n", hold_ms);
+      simRun(report, hold_ms, 400);
+      ret = true;
+    }
+  }
+
   if (ret == false)
   {
     cliPrintf("key info\n");
     cliPrintf("key watch\n");
+    cliPrintf("key sim tap <usage> [hold_ms]      가상 키 하나 (예: key sim tap 0x04)\n");
+    cliPrintf("key sim report <8바이트> [..]      mods 포함 리포트를 그대로\n");
+    cliPrintf("  ★ 호스트로는 안 나간다. QMK 가 만든 리포트만 기록해 보여준다\n");
   }
 }
 #endif
