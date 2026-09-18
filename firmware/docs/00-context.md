@@ -83,7 +83,16 @@ suspend 소등, 마우스 패스스루, BIOS 화면, Windows / Linux
 (2026-09-19). 코드는 고쳤고 **아직 실기에서 재현도 확인도 안 했다.**
 Vial 앱 인식(시리얼에 매직) · 매크로/탭댄스 리포트 유실(HID 리포트 큐) ·
 `qmkUpdate()` 재진입 가드. 문서의 "검증" 절차를 밟아야 닫힌다.
-**vial 트리는 USB 시리얼 번호가 바뀌었다** — `vial:f64c2b3c:<칩고유ID>`.
+**vial 트리는 USB 시리얼 번호가 바뀌었다** — `vial:f64c2b3c:<칩고유ID>` (실기 확인함).
+
+**보드 없이 / 손 안 대고 시험하는 길이 생겼다** —
+[`firmware/qmk-link/test/`](../qmk-link/test/README.md) 는 펌웨어의 `usbd_hid.c` 를
+호스트에서 그대로 컴파일해 리포트 큐를 돌린다 (`make`, `make rev REV=<커밋>`).
+보드 위에서는 CLI `key sim` 이 가상 키를 넣고 QMK 가 만든 리포트를 보여준다
+(호스트로는 안 내보낸다).
+
+★ `flash.py` 가 포트를 잘못 고를 수 있다 — `WISH61-HE` 도 `0483:5305` 라
+같이 꽂혀 있으면 그쪽으로 1200bps touch 가 간다. `--port` 로 지정한다.
 
 BOOTSEL 진입 경로 (전부 실기 확인):
 1. `flash.py` 의 CDC 1200bps touch — 버튼 없이 굽는다
