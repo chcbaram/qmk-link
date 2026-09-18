@@ -28,6 +28,7 @@ RP2350-USB-A 보드로 만드는 **USB 키보드 변환기** 펌웨어 문서다
 | [roadmap.md](roadmap.md) | 전체 단계와 진행 상태, 왜 이 순서인지 |
 | [hardware.md](hardware.md) | 핀 배정과 회로도 검증 근거. **코드에서 핀 만지기 전에 필수** |
 | [usb-stack.md](usb-stack.md) | USB 이중 역할 · 클럭 · descriptor · 펌웨어 업데이트. 02~04단계 근거 |
+| [issues/](issues/README.md) | 사용자 보고 이슈의 원인 분석과 수정 계획 |
 
 ### 개발환경 구축
 
